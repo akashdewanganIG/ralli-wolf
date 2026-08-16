@@ -1,0 +1,271 @@
+"use client";
+
+import { useState } from "react";
+import { Button } from "@repo/ui/components/ui/button";
+import Link from "next/link";
+import { Alert } from "@repo/ui/components/ui/alert";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+import {
+  PageHeader,
+  Panel,
+  StatCard,
+  SimpleTable,
+  ErrorBanner,
+  EmptyState,
+} from "@/components/supply-chain/shared";
+import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
+import {
+  useInventoryDashboard,
+  useInventoryMutations,
+  useStockAlerts,
+  useWarehouses,
+} from "@/hooks/useSupplyChain";
+import { formatMoney, formatQuantity, humanizeEnum } from "@/lib/utils/decimal";
+import { SeverityBadge } from "@/components/supply-chain/shared";
+
+export default function InventoryDashboardPage() {
+  const [warehouseId, setWarehouseId] = useState<number | undefined>(undefined);
+  const { data, isLoading, error } = useInventoryDashboard({ warehouseId });
+  const { alerts, isLoading: alertsLoading } = useStockAlerts({
+    status: "OPEN",
+    limit: 8,
+    warehouseId,
+  });
+  const { warehouses, isLoading: warehousesLoading } = useWarehouses({
+    limit: 1,
+  });
+  const { evaluateAlerts } = useInventoryMutations();
+
+  const dashboard = data?.data;
+  const needsSetup = !warehousesLoading && warehouses.length === 0;
+
+  return (
+    <ProtectedRoute>
+      <div className="space-y-5 p-4">
+        <PageHeader
+          title="Inventory"
+          subtitle="Monitor live stock, availability, and value across locations."
+          actions={
+            <>
+              <WarehouseFilter
+                value={warehouseId}
+                onChange={setWarehouseId}
+                className="w-full sm:w-56"
+              />
+              <Button
+                type="button"
+                onClick={() => evaluateAlerts.mutate({ warehouseId })}
+                disabled={evaluateAlerts.isPending}
+                variant="outline"
+                className="px-3 whitespace-nowrap"
+              >
+                {evaluateAlerts.isPending ? "Checking…" : "Run reorder check"}
+              </Button>
+            </>
+          }
+        />
+
+        <ErrorBanner error={error} />
+        <ErrorBanner error={evaluateAlerts.error} />
+
+        {evaluateAlerts.isSuccess && evaluateAlerts.data && (
+          <Alert tone="info" title="Reorder evaluation complete">
+            Evaluated {evaluateAlerts.data.data.evaluatedRules} reorder rule(s):{" "}
+            {evaluateAlerts.data.data.raised} alert(s) raised,{" "}
+            {evaluateAlerts.data.data.resolved} resolved,{" "}
+            {evaluateAlerts.data.data.requisitionsCreated} purchase
+            requisition(s) created automatically.
+          </Alert>
+        )}
+
+        {needsSetup ? (
+          <EmptyState
+            title="No warehouse configured yet"
+            description="Inventory needs at least one warehouse with a storage zone and bins before stock can be received. Nothing here is pre-filled with sample data — set up your real locations to begin."
+            action={
+              <Button asChild>
+                <Link href="/warehouse">Set up warehouses</Link>
+              </Button>
+            }
+          />
+        ) : (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <StatCard
+                label="Stock value"
+                value={
+                  isLoading ? "—" : formatMoney(dashboard?.totalStockValue)
+                }
+                hint={`${dashboard?.distinctItems ?? 0} distinct item(s)`}
+                href="/inventory/valuation"
+              />
+              <StatCard
+                label="Available quantity"
+                value={
+                  isLoading ? "—" : formatQuantity(dashboard?.availableQuantity)
+                }
+                hint={`${formatQuantity(dashboard?.reservedQuantity)} reserved`}
+                href="/inventory/stock"
+              />
+              <StatCard
+                label="Open alerts"
+                value={isLoading ? "—" : (dashboard?.openAlerts ?? 0)}
+                hint={
+                  dashboard?.alertsBySeverity?.CRITICAL
+                    ? `${dashboard.alertsBySeverity.CRITICAL} critical`
+                    : "No critical alerts"
+                }
+                tone={
+                  dashboard?.alertsBySeverity?.CRITICAL
+                    ? "critical"
+                    : dashboard?.openAlerts
+                      ? "warning"
+                      : "positive"
+                }
+                href="/inventory/alerts"
+              />
+              <StatCard
+                label="Lots expiring in 30 days"
+                value={isLoading ? "—" : (dashboard?.lotsExpiringSoon ?? 0)}
+                hint="FEFO picking uses these first"
+                tone={dashboard?.lotsExpiringSoon ? "warning" : "neutral"}
+                href="/inventory/stock"
+              />
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-3">
+              <Panel
+                title="Movement summary"
+                description={
+                  dashboard
+                    ? `${dashboard.movementCount} ledger entries in the selected period`
+                    : undefined
+                }
+                className="lg:col-span-2"
+              >
+                <div className="mb-4 grid gap-4 sm:grid-cols-2">
+                  <StatCard
+                    label="Value received"
+                    value={formatMoney(dashboard?.inboundValue)}
+                    tone="positive"
+                  />
+                  <StatCard
+                    label="Value issued"
+                    value={formatMoney(dashboard?.outboundValue)}
+                    tone="info"
+                  />
+                </div>
+                <SimpleTable
+                  isLoading={isLoading}
+                  rows={dashboard?.movementsByType ?? []}
+                  keyOf={row => row.movementType}
+                  empty="No stock has moved in this period yet."
+                  columns={[
+                    {
+                      header: "Movement type",
+                      cell: row => humanizeEnum(row.movementType),
+                    },
+                    {
+                      header: "Entries",
+                      align: "right",
+                      cell: row => row.count,
+                    },
+                    {
+                      header: "Quantity",
+                      align: "right",
+                      cell: row => formatQuantity(row.quantity),
+                    },
+                  ]}
+                />
+              </Panel>
+
+              <Panel
+                title="Alerts needing attention"
+                actions={
+                  <Link
+                    href="/inventory/alerts"
+                    className="text-xs font-medium text-primary hover:underline"
+                  >
+                    View all
+                  </Link>
+                }
+              >
+                {alertsLoading ? (
+                  <div className="space-y-2">
+                    {Array.from({ length: 4 }).map((_, index) => (
+                      <div
+                        key={index}
+                        className="h-12 animate-pulse rounded bg-muted"
+                      />
+                    ))}
+                  </div>
+                ) : alerts.length === 0 ? (
+                  <p className="py-4 text-center text-sm text-muted-foreground">
+                    Nothing is below its threshold right now.
+                  </p>
+                ) : (
+                  <ul className="space-y-3">
+                    {alerts.map(alert => (
+                      <li
+                        key={alert.id}
+                        className="border-b pb-3 last:border-0 last:pb-0"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">
+                              {alert.product.code}
+                            </p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              {alert.message}
+                            </p>
+                          </div>
+                          <SeverityBadge severity={alert.severity} />
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Panel>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                {
+                  href: "/inventory/stock",
+                  label: "Stock positions",
+                  hint: "On hand, reserved and available",
+                },
+                {
+                  href: "/inventory/movements",
+                  label: "Stock ledger",
+                  hint: "Every posted movement",
+                },
+                {
+                  href: "/inventory/reorder-rules",
+                  label: "Reorder policies",
+                  hint: "Safety stock and reorder points",
+                },
+                {
+                  href: "/inventory/counts",
+                  label: "Stock counts",
+                  hint: "Cycle counting and variance posting",
+                },
+              ].map(link => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="rounded-lg border p-4 shadow-sm transition-shadow hover:shadow-md"
+                >
+                  <p className="text-sm font-medium">{link.label}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {link.hint}
+                  </p>
+                </Link>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </ProtectedRoute>
+  );
+}

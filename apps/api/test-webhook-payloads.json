@@ -1,0 +1,57 @@
+{
+  "form_submission_example": {
+    "form_submission": {
+      "name": "John Doe",
+      "email": "john.doe@example.com",
+      "phone": "+1234567890",
+      "company": "Acme Corp",
+      "message": "Interested in your services"
+    },
+    "campaign": {
+      "name": "Summer Campaign 2024",
+      "id": "camp_123"
+    },
+    "landing_page": {
+      "name": "Landing Page 1",
+      "url": "https://example.com/landing"
+    }
+  },
+  "lead_object_example": {
+    "lead": {
+      "name": "Jane Smith",
+      "email": "jane.smith@example.com",
+      "phone": "+0987654321",
+      "status": "Qualified"
+    },
+    "campaign": {
+      "name": "Product Launch",
+      "id": "camp_456"
+    }
+  },
+  "direct_fields_example": {
+    "name": "Bob Johnson",
+    "email": "bob.johnson@example.com",
+    "phone_number": "+1122334455",
+    "source": "Website Form",
+    "campaign": {
+      "name": "Newsletter Signup",
+      "id": "camp_789"
+    }
+  },
+  "custom_fields_example": {
+    "custom_fields": {
+      "first_name": "Alice",
+      "last_name": "Williams",
+      "email": "alice.williams@example.com",
+      "telephone": "+5566778899"
+    },
+    "campaign": {
+      "name": "Lead Generation",
+      "id": "camp_101"
+    }
+  },
+  "minimal_example": {
+    "email": "minimal@example.com",
+    "name": "Minimal User"
+  }
+}

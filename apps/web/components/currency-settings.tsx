@@ -1,0 +1,122 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { CheckCircle2, Loader2 } from "lucide-react";
+import { Label } from "@repo/ui/components/ui/label";
+import { Alert } from "@repo/ui/components/ui/alert";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@repo/ui/components/ui/select";
+
+import { useCurrency } from "@/contexts/CurrencyContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { useUpdateGlobalSetting } from "@/hooks/useSettings";
+import { settingsService } from "@/lib/api/services";
+import { toast } from "@/lib/toast";
+import { Skeleton } from "@/components/skeletons";
+
+interface CurrencyOption {
+  code: string;
+  name: string;
+  symbol: string;
+}
+
+export default function CurrencySettings() {
+  const [currencies, setCurrencies] = useState<CurrencyOption[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const { currency, updateCurrency } = useCurrency();
+  const { user } = useAuth();
+  const { mutateAsync: updateSetting, isPending } = useUpdateGlobalSetting();
+  const canManageWorkspace = user?.role?.toUpperCase() === "ADMIN";
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchCurrencies = async () => {
+      try {
+        const availableCurrencies = await settingsService.getCurrencies();
+        if (isMounted) setCurrencies(availableCurrencies);
+      } catch {
+        if (isMounted) setLoadError(true);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    fetchCurrencies();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleCurrencyChange = async (newCurrency: string) => {
+    if (newCurrency === currency) return;
+
+    try {
+      await updateSetting({ key: "defaultCurrency", value: newCurrency });
+      const selected = currencies.find(option => option.code === newCurrency);
+      await updateCurrency(newCurrency, selected?.symbol);
+      toast.success("Workspace currency updated");
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Unable to update currency";
+      toast.error(message);
+    }
+  };
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-[minmax(0,22rem)_1fr] sm:items-end sm:gap-8">
+      <div className="space-y-2">
+        <Label htmlFor="workspace-currency">Workspace currency</Label>
+        {isLoading ? (
+          <Skeleton className="h-10 w-full rounded-lg" />
+        ) : loadError ? (
+          <Alert tone="error">Currencies could not be loaded.</Alert>
+        ) : (
+          <Select
+            value={currency}
+            onValueChange={handleCurrencyChange}
+            disabled={isPending || !canManageWorkspace}
+          >
+            <SelectTrigger
+              id="workspace-currency"
+              aria-label="Workspace currency"
+            >
+              <SelectValue placeholder="Select a currency" />
+            </SelectTrigger>
+            <SelectContent>
+              {currencies.map(option => (
+                <SelectItem key={option.code} value={option.code}>
+                  {option.code} · {option.name} ({option.symbol})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+
+      <div className="flex items-start gap-2 text-xs leading-5 text-muted-foreground sm:pb-2">
+        {isPending ? (
+          <Loader2 className="mt-0.5 size-3.5 shrink-0 animate-spin text-primary" />
+        ) : (
+          <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-success" />
+        )}
+        <span>
+          {isPending
+            ? "Saving your selection…"
+            : canManageWorkspace
+              ? "Applied to prices, quotes and reports."
+              : "Only a system administrator can change this workspace setting."}
+        </span>
+      </div>
+    </div>
+  );
+}

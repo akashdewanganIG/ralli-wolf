@@ -1,0 +1,83 @@
+.paginationBtn {
+  display: flex;
+  justify-content: center;
+  gap: 0.375rem;
+  align-items: center;
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  font-size: 0.75rem;
+  background-color: #ebeded;
+  backdrop-filter: blur(12px);
+  font-weight: 600;
+  isolation: isolate;
+  border-color: #374151;
+  position: relative;
+  z-index: 10;
+  padding: 0.375rem 0.75rem;
+  overflow: hidden;
+  border: 1.5px solid;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+  color: #111827;
+}
+
+.paginationBtn:hover:not(:disabled) {
+  background-color: #7c86ff;
+  color: #111827;
+  border-color: #374151;
+}
+
+.paginationBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.paginationBtn.active {
+  background-color: #7c86ff;
+  color: #111827;
+  border-color: #374151;
+}
+
+.iconCircle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background-color: #7c86ff;
+  color: #111827;
+}
+
+.paginationBtn:disabled .iconCircle {
+  background-color: #9ca3af;
+  opacity: 0.5;
+}
+
+.pageNumber {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 2rem;
+  height: 2rem;
+  font-size: 0.75rem;
+  background-color: white;
+  border: 1.5px solid #374151;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  color: #111827;
+  font-weight: 600;
+}
+
+.pageNumber:hover {
+  background-color: #7c86ff;
+  border-color: #374151;
+}
+
+.pageNumber.active {
+  background-color: #7c86ff;
+  color: #111827;
+  border-color: #374151;
+}
+

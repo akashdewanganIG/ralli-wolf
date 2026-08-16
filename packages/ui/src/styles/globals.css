@@ -1,0 +1,500 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@source "../../../apps/web/**/*.{js,ts,jsx,tsx}";
+@source "../**/*.{js,ts,jsx,tsx}";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* Body / UI text */
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-geist-mono);
+  /* Headings / display */
+  --font-display: var(--font-jakarta);
+  --max-width-screen-3xl: 1920px;
+
+  /* -------- Ralli Wolf brand palette (legacy token names remain aliases) -------- */
+  --brand-indigo: #182230;
+  --brand-teal: #ed1c24;
+  --brand-turquoise: #f04438;
+  --brand-mint: #d1fadf;
+  --brand-soft-white: #f8fafc;
+  --brand-pale-aqua: #fff1f2;
+  --brand-lavender: #f4f3ff;
+  --brand-stone: #667085;
+  --brand-cool-grey: #e4e7ec;
+  --brand-amber: #ffb020; /* Amber        — warnings, notifications */
+  --brand-coral: #ff7a59; /* Coral        — errors, urgent */
+  --brand-purple: #6c5ce7; /* Purple       — opportunities, highlights */
+  --brand-sky: #00b7ff; /* Sky Blue     — insights, analytics */
+  --brand-lime: #7ed957; /* Lime         — new, fresh, growth */
+
+  /* One neutral scale across legacy gray/slate utilities. */
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f2f4f7;
+  --color-gray-200: #e4e7ec;
+  --color-gray-300: #d0d5dd;
+  --color-gray-400: #98a2b3;
+  --color-gray-500: #667085;
+  --color-gray-600: #475467;
+  --color-gray-700: #344054;
+  --color-gray-800: #182230;
+  --color-gray-900: #101828;
+  --color-gray-950: #0c111d;
+  --color-slate-50: #f9fafb;
+  --color-slate-100: #f2f4f7;
+  --color-slate-200: #e4e7ec;
+  --color-slate-300: #d0d5dd;
+  --color-slate-400: #98a2b3;
+  --color-slate-500: #667085;
+  --color-slate-600: #475467;
+  --color-slate-700: #344054;
+  --color-slate-800: #182230;
+  --color-slate-900: #101828;
+  --color-slate-950: #0c111d;
+
+  /* Legacy indigo utilities now resolve to the Ralli Wolf brand ramp. */
+  --color-indigo-50: #fff5f5;
+  --color-indigo-100: #ffe4e6;
+  --color-indigo-200: #fecdd3;
+  --color-indigo-300: #fda4af;
+  --color-indigo-400: #f97066;
+  --color-indigo-500: #f04438;
+  --color-indigo-600: #ed1c24;
+  --color-indigo-700: #c5101b;
+  --color-indigo-800: #a10f18;
+  --color-indigo-900: #7a0710;
+}
+
+:root {
+  color-scheme: light;
+  --background: #f7f8fa;
+  --foreground: #101828;
+  --card: #ffffff;
+  --card-foreground: #101828;
+  --popover: #ffffff;
+  --popover-foreground: #101828;
+  --primary: #ed1c24;
+  --primary-foreground: #ffffff;
+  --secondary: #f2f4f7;
+  --secondary-foreground: #344054;
+  --muted: #f2f4f7;
+  --muted-foreground: #667085;
+  --accent: #fff1f2;
+  --accent-foreground: #b42318;
+  --destructive: hsl(0 84.2% 60.2%);
+  --destructive-foreground: hsl(0 0% 98%);
+  --border: #e4e7ec;
+  --input: #d0d5dd;
+  --ring: #ed1c24;
+  /* Chart tokens.
+     Validated with the data-viz palette checks against this mode's card surface
+     (#ffffff). `--chart-mark` is the single hue for magnitude marks (bars, gauge
+     arcs); `--chart-step-*` is an ordinal ramp, light -> dark, for lifecycle
+     stages. Do not hand-edit a value without re-running the validator: the
+     lightness gaps and the light end's contrast against the surface are what
+     keep the steps distinguishable. */
+  --chart-mark: #2a78d6;
+  --chart-track: #eaecf0;
+  --chart-grid: #e4e7ec;
+  --chart-step-1: #6da7ec;
+  --chart-step-2: #3987e5;
+  --chart-step-3: #256abf;
+  --chart-step-4: #184f95;
+  --chart-step-5: #0d366b;
+  --radius: 0.625rem;
+  --surface: #ffffff;
+  --surface-subtle: #f9fafb;
+  --surface-secondary: #f2f4f7;
+  --text-secondary: #475467;
+  --text-tertiary: #667085;
+  --success: #079455;
+  --success-surface: #ecfdf3;
+  --success-foreground: #067647;
+  --warning: #dc6803;
+  --warning-surface: #fffaeb;
+  --warning-foreground: #b54708;
+  --error: #d92d20;
+  --error-surface: #fef3f2;
+  --error-foreground: #b42318;
+  --info: #175cd3;
+  --info-surface: #eff8ff;
+  --info-foreground: #1849a9;
+  --navbar: #ffffff;
+  --sidebar: #fbfcfe;
+  --sidebar-foreground: #344054;
+  --sidebar-primary: #fff1f2;
+  --sidebar-primary-foreground: #c5101b;
+  --sidebar-accent: #f2f4f7;
+  --sidebar-accent-foreground: #101828;
+  --sidebar-border: #e4e7ec;
+  --sidebar-ring: #ed1c24;
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: #c4c9d1;
+  --scrollbar-thumb-hover: #98a2b3;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: #0b1226; /* deep indigo-black */
+  --foreground: #f7fafc;
+  --card: #0f1b3d; /* Deep Indigo */
+  --card-foreground: #f7fafc;
+  --popover: #0f1b3d;
+  --popover-foreground: #f7fafc;
+  --primary: #f97066;
+  --primary-foreground: #ffffff;
+  --secondary: #16223f;
+  --secondary-foreground: #f7fafc;
+  --muted: #16223f;
+  --muted-foreground: #94a3b8;
+  --accent: #3b1719;
+  --accent-foreground: #f7fafc;
+  --destructive: hsl(0 62.8% 45%);
+  --destructive-foreground: hsl(0 0% 98%);
+  --border: #1e2b4d;
+  --input: #1e2b4d;
+  --ring: #f97066;
+  --surface: #0f1b3d;
+  --surface-subtle: #121f3e;
+  --surface-secondary: #16223f;
+  --text-secondary: #cbd5e1;
+  --text-tertiary: #94a3b8;
+  --success: #32d583;
+  --success-surface: #0d2e24;
+  --success-foreground: #6ce9a6;
+  --warning: #fdb022;
+  --warning-surface: #33270b;
+  --warning-foreground: #fec84b;
+  --error: #f97066;
+  --error-surface: #3b1719;
+  --error-foreground: #fda29b;
+  --info: #53b1fd;
+  --info-surface: #102a56;
+  --info-foreground: #84caff;
+  /* Dark mode is a deliberate re-step from the same ramp, not a flip: the steps
+     are re-chosen so the pale end still reads against the dark card (#0f1b3d). */
+  --chart-mark: #3987e5;
+  --chart-track: #1e2b4d;
+  --chart-grid: #1e2b4d;
+  --chart-step-1: #cde2fb;
+  --chart-step-2: #9ec5f4;
+  --chart-step-3: #6da7ec;
+  --chart-step-4: #3987e5;
+  --chart-step-5: #256abf;
+  --navbar: #0b1226;
+  --sidebar: #101828;
+  --sidebar-foreground: #f2f4f7;
+  --sidebar-primary: #3b1719;
+  --sidebar-primary-foreground: #fda29b;
+  --sidebar-accent: #1d2939;
+  --sidebar-accent-foreground: #f7fafc;
+  --sidebar-border: #1e2b4d;
+  --sidebar-ring: #f97066;
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: #344054;
+  --scrollbar-thumb-hover: #475467;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-surface: var(--surface);
+  --color-surface-subtle: var(--surface-subtle);
+  --color-surface-secondary: var(--surface-secondary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  --color-success: var(--success);
+  --color-success-surface: var(--success-surface);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-surface: var(--warning-surface);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-error: var(--error);
+  --color-error-surface: var(--error-surface);
+  --color-error-foreground: var(--error-foreground);
+  --color-info: var(--info);
+  --color-info-surface: var(--info-surface);
+  --color-info-foreground: var(--info-foreground);
+  --color-chart-mark: var(--chart-mark);
+  --color-chart-track: var(--chart-track);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-step-1: var(--chart-step-1);
+  --color-chart-step-2: var(--chart-step-2);
+  --color-chart-step-3: var(--chart-step-3);
+  --color-chart-step-4: var(--chart-step-4);
+  --color-chart-step-5: var(--chart-step-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-navbar: var(--navbar);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+
+  /* Ralli Wolf brand colors exposed as Tailwind utilities. */
+  --color-brand-indigo: var(--brand-indigo);
+  --color-brand-teal: var(--brand-teal);
+  --color-brand-turquoise: var(--brand-turquoise);
+  --color-brand-mint: var(--brand-mint);
+  --color-brand-soft-white: var(--brand-soft-white);
+  --color-brand-pale-aqua: var(--brand-pale-aqua);
+  --color-brand-lavender: var(--brand-lavender);
+  --color-brand-stone: var(--brand-stone);
+  --color-brand-cool-grey: var(--brand-cool-grey);
+  --color-brand-amber: var(--brand-amber);
+  --color-brand-coral: var(--brand-coral);
+  --color-brand-purple: var(--brand-purple);
+  --color-brand-sky: var(--brand-sky);
+  --color-brand-lime: var(--brand-lime);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Ralli Wolf type pairing: Plus Jakarta Sans for headings, Inter for body */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family:
+      var(--font-display), var(--font-sans), ui-sans-serif, system-ui,
+      sans-serif;
+  }
+
+  /* https://tailwindcss.com/docs/upgrade-guide#buttons-use-the-default-cursor */
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--primary) 18%, transparent);
+    color: var(--foreground);
+  }
+
+  /* Compact, theme-aware scrollbars for application panels and menus. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+  }
+
+  *::-webkit-scrollbar-thumb {
+    min-height: 40px;
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: var(--scrollbar-thumb);
+    background-clip: padding-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+.app-content {
+  min-width: 0;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+/* Shared application rhythm. Existing pages inherit one responsive content gutter. */
+.app-content > :where(.p-4, .p-5, .p-6) {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 100rem;
+  padding: 1.25rem 1rem 2rem;
+}
+
+.app-content > :where(.container, .container.mx-auto) {
+  max-width: 100%;
+}
+
+.app-page {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 100rem;
+  padding: 1.25rem 1rem 2rem;
+}
+
+/* Dashboard composition follows a deliberate 20px section rhythm while
+   retaining the shared responsive page gutter. */
+.dashboard-page {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 100rem;
+  /* The trailing gutter only needs to clear the last card, not a full screen of
+     air; the sides stay generous so content never runs into the viewport edge. */
+  padding: 1rem 1rem 1.5rem;
+}
+
+.app-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.app-content :where([data-slot="button"], [data-slot="input"]) svg {
+  stroke-width: 1.8;
+}
+
+/* Compatibility layer for older module screens that still render native controls. */
+.app-content :where(button, a).rounded-md.bg-primary {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: var(--radius);
+  padding-block: 0;
+  transition-property:
+    background-color, border-color, color, box-shadow, opacity;
+  transition-duration: 150ms;
+}
+
+.app-content :where(button, a).rounded-md.border {
+  min-height: 2.5rem;
+  border-radius: var(--radius);
+  background-color: var(--surface);
+  padding-block: 0;
+  transition-property:
+    background-color, border-color, color, box-shadow, opacity;
+  transition-duration: 150ms;
+}
+
+/* Older screens use native controls; keep their keyboard focus as visible as
+   the shared component library without overriding component-level rings. */
+.app-content :where(a[href], button:not([data-slot="button"])):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 24%, transparent);
+}
+
+/* A button label always reads on one line; the control grows, the text never wraps. */
+.app-content
+  :where(button, a):where(
+    .rounded,
+    .rounded-md,
+    .rounded-lg,
+    .rounded-xl,
+    .rounded-full
+  ):where(.bg-primary, .border, .bg-secondary, .bg-surface) {
+  white-space: nowrap;
+}
+
+.app-content :where(input, select, textarea).rounded-md {
+  border-radius: var(--radius);
+}
+
+.app-content
+  :where(
+    input:not([data-slot]):not([type="checkbox"]):not([type="radio"]):not(
+        [type="range"]
+      ):not([type="file"]):not([type="hidden"]),
+    select:not([data-slot]),
+    textarea:not([data-slot])
+  ) {
+  min-height: 2.5rem;
+  border-color: var(--input);
+  border-radius: var(--radius);
+  background-color: var(--surface);
+  font-size: 0.875rem;
+  transition-property: background-color, border-color, box-shadow, color;
+  transition-duration: 150ms;
+}
+
+.app-content
+  :where(
+    input:not([data-slot]):not([type="checkbox"]):not([type="radio"]):not(
+        [type="range"]
+      ):not([type="file"]):not([type="hidden"]),
+    select:not([data-slot]),
+    textarea:not([data-slot])
+  ):focus-visible {
+  border-color: var(--ring);
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 20%, transparent);
+}
+
+.app-content .rounded-md.border.border-blue-200.bg-blue-50 {
+  border-color: color-mix(in srgb, var(--info) 20%, transparent);
+  border-radius: var(--radius);
+  background: var(--info-surface);
+  color: var(--info-foreground);
+}
+
+@media (min-width: 640px) {
+  .app-content > :where(.p-4, .p-5, .p-6),
+  .app-page,
+  .dashboard-page {
+    padding-inline: 1.5rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .app-content > :where(.p-4, .p-5, .p-6),
+  .app-page,
+  .dashboard-page {
+    padding-inline: 2rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

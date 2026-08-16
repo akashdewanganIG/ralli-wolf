@@ -1,0 +1,202 @@
+"use client";
+
+import { useState } from "react";
+import { Button } from "@repo/ui/components/ui/button";
+import { Input } from "@repo/ui/components/ui/input";
+import { useRouter } from "next/navigation";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+import {
+  ErrorBanner,
+  FilterBar,
+  Field,
+  PageHeader,
+  Pager,
+  Panel,
+  SelectField,
+  SimpleTable,
+  StatusBadge,
+} from "@/components/supply-chain/shared";
+import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
+import { useInventoryMutations, useStockCounts } from "@/hooks/useSupplyChain";
+import { formatDateTime, humanizeEnum } from "@/lib/utils/decimal";
+
+export default function StockCountsPage() {
+  const router = useRouter();
+  const [page, setPage] = useState(1);
+  const [filterWarehouseId, setFilterWarehouseId] = useState<
+    number | undefined
+  >(undefined);
+  const [status, setStatus] = useState("");
+  const [showForm, setShowForm] = useState(false);
+
+  const [warehouseId, setWarehouseId] = useState<number | undefined>(undefined);
+  const [countType, setCountType] = useState("CYCLE");
+  const [notes, setNotes] = useState("");
+
+  const { counts, pagination, isLoading, error } = useStockCounts({
+    page,
+    limit: 25,
+    warehouseId: filterWarehouseId,
+    status: status || undefined,
+  });
+  const { createCount } = useInventoryMutations();
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!warehouseId) return;
+    createCount.mutate(
+      { warehouseId, countType, notes: notes || undefined },
+      {
+        onSuccess: result => {
+          setShowForm(false);
+          setNotes("");
+          const created = result.data as { id: number };
+          router.push(`/inventory/counts/${created.id}`);
+        },
+      }
+    );
+  };
+
+  return (
+    <ProtectedRoute>
+      <div className="space-y-5 p-4">
+        <PageHeader
+          title="Stock counts"
+          subtitle="Plan, record, and post physical stock counts."
+          actions={
+            <Button
+              type="button"
+              onClick={() => setShowForm(current => !current)}
+              className="px-3 whitespace-nowrap"
+            >
+              {showForm ? "Close" : "Start a count"}
+            </Button>
+          }
+        />
+
+        <ErrorBanner error={error} />
+        <ErrorBanner error={createCount.error} />
+
+        {showForm && (
+          <Panel title="Start a count">
+            <form onSubmit={submit} className="grid gap-4 md:grid-cols-3">
+              <Field label="Warehouse" composite>
+                <WarehouseFilter
+                  value={warehouseId}
+                  onChange={setWarehouseId}
+                  allowAll={false}
+                  required
+                />
+              </Field>
+              <Field
+                label="Count type"
+                hint="Cycle counts a subset; full counts everything on hand"
+              >
+                <SelectField
+                  value={countType}
+                  onChange={event => setCountType(event.target.value)}
+                >
+                  <option value="CYCLE">Cycle</option>
+                  <option value="FULL">Full</option>
+                  <option value="SPOT">Spot</option>
+                </SelectField>
+              </Field>
+              <Field label="Notes">
+                <Input
+                  value={notes}
+                  onChange={event => setNotes(event.target.value)}
+                  placeholder="Optional"
+                />
+              </Field>
+              <div className="md:col-span-3">
+                <Button
+                  type="submit"
+                  disabled={!warehouseId || createCount.isPending}
+                >
+                  {createCount.isPending ? "Creating…" : "Create count sheet"}
+                </Button>
+              </div>
+            </form>
+          </Panel>
+        )}
+
+        <Panel
+          actions={
+            <FilterBar>
+              <SelectField
+                className="w-full sm:w-44"
+                value={status}
+                onChange={event => {
+                  setStatus(event.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="">All statuses</option>
+                <option value="IN_PROGRESS">In progress</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="CANCELLED">Cancelled</option>
+              </SelectField>
+              <div className="w-full sm:w-56">
+                <WarehouseFilter
+                  value={filterWarehouseId}
+                  onChange={value => {
+                    setFilterWarehouseId(value);
+                    setPage(1);
+                  }}
+                />
+              </div>
+            </FilterBar>
+          }
+        >
+          <SimpleTable
+            isLoading={isLoading}
+            rows={counts}
+            keyOf={row => row.id}
+            onRowClick={row => router.push(`/inventory/counts/${row.id}`)}
+            empty="No counts yet."
+            columns={[
+              {
+                header: "Count",
+                cell: row => (
+                  <span className="font-mono text-xs text-primary">
+                    {row.countNumber}
+                  </span>
+                ),
+              },
+              { header: "Warehouse", cell: row => row.warehouse?.code ?? "—" },
+              { header: "Type", cell: row => humanizeEnum(row.countType) },
+              {
+                header: "Lines",
+                align: "right",
+                cell: row => row._count?.lines ?? 0,
+              },
+              {
+                header: "Status",
+                cell: row => <StatusBadge status={row.status} />,
+              },
+              { header: "Started", cell: row => formatDateTime(row.startedAt) },
+              {
+                header: "Completed",
+                cell: row => formatDateTime(row.completedAt),
+              },
+              {
+                header: "Counted by",
+                cell: row =>
+                  row.countedBy
+                    ? `${row.countedBy.firstName ?? ""} ${row.countedBy.lastName ?? ""}`.trim() ||
+                      "—"
+                    : "—",
+              },
+            ]}
+          />
+          <Pager
+            page={page}
+            totalPages={pagination?.totalPages}
+            totalItems={pagination?.totalItems}
+            onChange={setPage}
+          />
+        </Panel>
+      </div>
+    </ProtectedRoute>
+  );
+}

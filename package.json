@@ -1,0 +1,43 @@
+{
+  "name": "custom-marketing-crm-suite",
+  "private": true,
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "format": "turbo run format",
+    "format:check": "prettier --check \"**/*.{ts,tsx,md}\"",
+    "check-types": "turbo run check-types",
+    "env:switch:local": "node scripts/switch-env.mjs local",
+    "env:switch:production": "node scripts/switch-env.mjs production",
+    "db:generate": "turbo run prisma:generate",
+    "db:migrate": "turbo run prisma:migrate",
+    "db:deploy": "turbo run prisma:deploy",
+    "db:studio": "turbo run prisma:studio",
+    "db:seed": "turbo run prisma:seed",
+    "db:seed:demo": "npm run prisma:seed:demo -w @repo/db",
+    "db:seed:all-demo": "npm run prisma:seed:all-demo -w @repo/db",
+    "db:verify:all-demo": "npm run prisma:verify:all-demo -w @repo/db",
+    "db:seed:supply-chain": "turbo run prisma:seed:supply-chain",
+    "db:reset": "turbo run prisma:reset",
+    "db:switch:local": "cd packages/db && powershell -ExecutionPolicy Bypass -File switch-db.ps1 local",
+    "db:switch:production": "cd packages/db && powershell -ExecutionPolicy Bypass -File switch-db.ps1 production"
+  },
+  "devDependencies": {
+    "dotenv-cli": "^7.4.2",
+    "prettier": "^3.6.2",
+    "turbo": "^2.5.8",
+    "typescript": "5.9.2"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "packageManager": "npm@11.4.1",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "overrides": {
+    "lightningcss": "1.27.0"
+  }
+}

@@ -1,0 +1,380 @@
+"use client";
+
+import { Badge } from "@repo/ui/components/ui/badge";
+import { Button } from "@repo/ui/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@repo/ui/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@repo/ui/components/ui/dialog";
+import { Input } from "@repo/ui/components/ui/input";
+import { Label } from "@repo/ui/components/ui/label";
+import { ArrowLeft, Ban, CheckCircle, Plus, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { DataTable, TableColumn } from "../../../../components/data-table";
+import apiClient from "../../../../lib/api/client";
+import { toast } from "../../../../lib/toast";
+
+interface OptOut {
+  id: number;
+  phone: string;
+  channel: string;
+  optedOutAt: string;
+  source: string;
+  campaignId?: number;
+  reason?: string;
+  campaign?: {
+    id: number;
+    name: string;
+  };
+}
+
+interface OptOutStats {
+  total: number;
+  byChannel: Array<{
+    channel: string;
+    count: number;
+  }>;
+}
+
+export default function OptOutsPage() {
+  const router = useRouter();
+  const [optOuts, setOptOuts] = useState<OptOut[]>([]);
+  const [stats, setStats] = useState<OptOutStats | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
+  const [totalCount, setTotalCount] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
+  const [selectedOptOut, setSelectedOptOut] = useState<OptOut | null>(null);
+
+  // Form state for adding opt-out
+  const [newOptOut, setNewOptOut] = useState({
+    phone: "",
+    channel: "whatsapp",
+    reason: "",
+  });
+
+  const fetchOptOuts = async () => {
+    try {
+      const skip = (currentPage - 1) * itemsPerPage;
+      const params = new URLSearchParams({
+        skip: skip.toString(),
+        take: itemsPerPage.toString(),
+        sortBy: "optedOutAt",
+        sortOrder: "desc",
+        channel: "whatsapp", // Always filter by WhatsApp
+      });
+
+      if (searchQuery) {
+        params.append("search", searchQuery);
+      }
+
+      const response = await apiClient.get(`/api/whatsapp/optouts?${params}`);
+      const data = response.data;
+
+      setOptOuts(data.data || []);
+      setTotalCount(data.pagination.total);
+    } catch (error) {
+      console.error("Error fetching opt-outs:", error);
+      toast.error(error, "Error");
+    }
+  };
+
+  const fetchStats = async () => {
+    try {
+      const response = await apiClient.get("/api/whatsapp/optouts/stats");
+      setStats(response.data);
+    } catch (error) {
+      console.error("Error fetching stats:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchOptOuts();
+    fetchStats();
+  }, [currentPage, itemsPerPage, searchQuery]);
+
+  const handleAddOptOut = async () => {
+    try {
+      await apiClient.post("/api/whatsapp/optout", newOptOut);
+
+      toast.success("Phone number added to opt-out list");
+      setAddDialogOpen(false);
+      setNewOptOut({ phone: "", channel: "whatsapp", reason: "" });
+      fetchOptOuts();
+      fetchStats();
+    } catch (error) {
+      console.error("Error adding opt-out:", error);
+      toast.error(error, "Error");
+    }
+  };
+
+  const handleRemoveOptOut = async () => {
+    if (!selectedOptOut) return;
+
+    try {
+      await apiClient.delete("/api/whatsapp/optout", {
+        data: {
+          phone: selectedOptOut.phone,
+          channel: selectedOptOut.channel,
+        },
+      });
+
+      toast.success("Opt-out removed successfully");
+      setRemoveDialogOpen(false);
+      setSelectedOptOut(null);
+      fetchOptOuts();
+      fetchStats();
+    } catch (error) {
+      console.error("Error removing opt-out:", error);
+      toast.error(error, "Error");
+    }
+  };
+
+  const handleSearch = () => {
+    setCurrentPage(1);
+    fetchOptOuts();
+  };
+
+  const columns: TableColumn<OptOut>[] = [
+    {
+      key: "phone",
+      label: "Phone Number",
+      render: value => <span className="font-mono text-sm">+{value}</span>,
+    },
+    {
+      key: "optedOutAt",
+      label: "Opted Out Date",
+      render: value => new Date(value).toLocaleString(),
+    },
+    {
+      key: "source",
+      label: "Source",
+      render: value => <Badge variant="outline">{value || "manual"}</Badge>,
+    },
+    {
+      key: "campaign",
+      label: "Campaign",
+      render: (_value, item) =>
+        item.campaign ? (
+          <span className="text-sm text-muted-foreground">
+            {item.campaign.name}
+          </span>
+        ) : (
+          <span className="text-sm text-muted-foreground">-</span>
+        ),
+    },
+    {
+      key: "reason",
+      label: "Reason",
+      render: value => (
+        <span className="text-sm text-muted-foreground max-w-xs truncate">
+          {value || "-"}
+        </span>
+      ),
+    },
+  ];
+
+  const totalPages = Math.ceil(totalCount / itemsPerPage);
+
+  return (
+    <div className="space-y-5 p-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => router.back()}
+          className="gap-2"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </Button>
+      </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+              WhatsApp Opt-Out Management
+            </h1>
+            <Badge variant="secondary" className="text-xs">
+              WhatsApp Only
+            </Badge>
+          </div>
+          <p className="text-muted-foreground">
+            Manage phone numbers that have opted out of WhatsApp communications
+          </p>
+        </div>
+        <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="w-full sm:w-auto">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Opt-Out
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add Phone to WhatsApp Opt-Out List</DialogTitle>
+              <DialogDescription>
+                Manually add a phone number to the WhatsApp opt-out list
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="phone">Phone Number</Label>
+                <Input
+                  id="phone"
+                  placeholder="919876543210"
+                  value={newOptOut.phone}
+                  onChange={e =>
+                    setNewOptOut({ ...newOptOut, phone: e.target.value })
+                  }
+                />
+                <p className="text-sm text-muted-foreground mt-1">
+                  Enter phone number with country code (e.g., 919876543210)
+                </p>
+              </div>
+              <div>
+                <Label htmlFor="reason">Reason (Optional)</Label>
+                <Input
+                  id="reason"
+                  placeholder="Customer request, compliance, etc."
+                  value={newOptOut.reason}
+                  onChange={e =>
+                    setNewOptOut({ ...newOptOut, reason: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setAddDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleAddOptOut}>Add Opt-Out</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Stats Card */}
+      {stats && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              Total WhatsApp Opt-Outs
+            </CardTitle>
+            <Ban className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-4xl font-bold">
+              {stats.byChannel.find(c => c.channel === "whatsapp")?.count ||
+                stats.total}
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Phone numbers that have opted out of WhatsApp communications
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Search */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Search Opt-Outs</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <Label htmlFor="search">Search by Phone Number</Label>
+              <Input
+                id="search"
+                placeholder="Search phone number..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleSearch()}
+              />
+            </div>
+            <Button onClick={handleSearch}>
+              <Search className="h-4 w-4 mr-2" />
+              Search
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Data Table */}
+      <DataTable
+        data={optOuts}
+        columns={columns}
+        title="Opt-Outs"
+        count={totalCount}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        itemsPerPage={itemsPerPage}
+        onPageChange={setCurrentPage}
+        onItemsPerPageChange={value => {
+          setItemsPerPage(value);
+          setCurrentPage(1);
+        }}
+        customActions={item => (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setSelectedOptOut(item);
+              setRemoveDialogOpen(true);
+            }}
+          >
+            <CheckCircle className="h-4 w-4 mr-2" />
+            Remove
+          </Button>
+        )}
+      />
+
+      {/* Remove Opt-Out Dialog */}
+      <Dialog open={removeDialogOpen} onOpenChange={setRemoveDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove Opt-Out</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to remove this phone number from the opt-out
+              list? They will be able to receive communications again.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedOptOut && (
+            <div className="space-y-2">
+              <p>
+                <strong>Phone:</strong> +{selectedOptOut.phone}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                This will remove the phone number from the WhatsApp opt-out
+                list.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setRemoveDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleRemoveOptOut}>Remove Opt-Out</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

@@ -1,0 +1,117 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "ui": "tui",
+  "globalEnv": [
+    "ADMIN_SECRET",
+    "API_URL",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_REGION",
+    "AWS_SECRET_ACCESS_KEY",
+    "BREVO_API_KEY",
+    "BREVO_BASE_URL",
+    "BREVO_WEBHOOK_SECRET",
+    "CLOUDINARY_API_KEY",
+    "CLOUDINARY_API_SECRET",
+    "CLOUDINARY_CLOUD_NAME",
+    "DATABASE_URL",
+    "DIRECT_URL",
+    "ENCRYPTION_KEY",
+    "FAST2SMS_API_KEY",
+    "FRONTEND_URL",
+    "GST_API_KEY",
+    "GSTIN_CHECK_API_KEY",
+    "GSTINCHECK_API_KEY",
+    "INVENTORY_ALERT_INTERVAL_MS",
+    "JWT_EXPIRES_IN",
+    "JWT_SECRET",
+    "KEEPALIVE_TOKEN",
+    "LANDINGI_WEBHOOK_SECRET",
+    "MSG91_AUTH_KEY",
+    "MSG91_BASE_URL",
+    "MSG91_OTP_TEMPLATE_ID",
+    "NEXT_DIST_DIR",
+    "NEXT_PUBLIC_ALLOW_AUTH_TEMPLATES",
+    "NEXT_PUBLIC_ALLOW_UTILITY_TEMPLATES",
+    "NEXT_PUBLIC_API_URL",
+    "NEXT_PUBLIC_COMPANY_NAME",
+    "NEXT_PUBLIC_WHATSAPP_TEXT_ONLY_MVP",
+    "NODE_ENV",
+    "PLUNK_API_KEY",
+    "PLUNK_FROM_EMAIL",
+    "PLUNK_FROM_NAME",
+    "PLUNK_USE_CUSTOM_FROM",
+    "PORT",
+    "RESEND_API_KEY",
+    "RESEND_FROM_EMAIL",
+    "RESEND_REPLY_TO",
+    "RESERVATION_SWEEP_INTERVAL_MS",
+    "S3_BUCKET_NAME",
+    "S3_ENDPOINT",
+    "S3_FORCE_PATH_STYLE",
+    "S3_USE_ACL",
+    "TEST_ADMIN_SECRET",
+    "WHATSAPP_SCHEDULER_INTERVAL_MS",
+    "DEVELOPER_LOGIN_EMAIL",
+    "DEVELOPER_LOGIN_PASSWORD",
+    "DEVELOPER_LOGIN_NAME"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": [".next/**", "dist/**", "!.next/cache/**"]
+    },
+    "@repo/db#build": {
+      "dependsOn": [],
+      "inputs": ["$TURBO_DEFAULT$", ".env*", "prisma/**"],
+      "outputs": ["dist/**", "node_modules/.prisma/**"]
+    },
+    "lint": {
+      "dependsOn": ["^lint"]
+    },
+    "format": {
+      "dependsOn": ["^format"]
+    },
+    "check-types": {
+      "dependsOn": ["^check-types"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true,
+      "env": ["PORT"]
+    },
+    "prisma:generate": {
+      "cache": false,
+      "inputs": ["$TURBO_DEFAULT$", ".env*"]
+    },
+    "prisma:migrate": {
+      "cache": false,
+      "inputs": ["$TURBO_DEFAULT$", ".env*"]
+    },
+    "prisma:deploy": {
+      "cache": false,
+      "inputs": ["$TURBO_DEFAULT$", ".env*"]
+    },
+    "prisma:studio": {
+      "cache": false,
+      "persistent": true,
+      "inputs": ["$TURBO_DEFAULT$", ".env*"]
+    },
+    "prisma:seed": {
+      "cache": false,
+      "inputs": ["$TURBO_DEFAULT$", ".env*"]
+    },
+    "prisma:seed:demo": {
+      "cache": false,
+      "inputs": ["$TURBO_DEFAULT$", ".env*"]
+    },
+    "prisma:seed:supply-chain": {
+      "cache": false,
+      "inputs": ["$TURBO_DEFAULT$", ".env*"]
+    },
+    "prisma:reset": {
+      "cache": false,
+      "inputs": ["$TURBO_DEFAULT$", ".env*"]
+    }
+  }
+}

@@ -1,0 +1,1418 @@
+{
+	"info": {
+		"_postman_id": "ee48e4c3-37ba-46ef-b276-4e1995a2c8a2",
+		"name": "crm-backend",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "49254644",
+		"_collection_link": "https://nilima-s-cb6fba18-3451611.postman.co/workspace/crm~59c84401-b2c8-452c-8d90-dd95d921404f/collection/49103633-ee48e4c3-37ba-46ef-b276-4e1995a2c8a2?action=share&source=collection_link&creator=49254644"
+	},
+	"item": [
+		{
+			"name": "/health",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:4000/health",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"health"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "leads/filter?createdFrom&createdTo",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var template = `\r",
+							"<style type=\"text/css\">\r",
+							"    .tftable {font-size:14px;color:#333333;width:100%;border-width: 1px;border-color: #87ceeb;border-collapse: collapse;}\r",
+							"    .tftable th {font-size:18px;background-color:#87ceeb;border-width: 1px;padding: 8px;border-style: solid;border-color: #87ceeb;text-align:left;}\r",
+							"    .tftable tr {background-color:#ffffff;}\r",
+							"    .tftable td {font-size:14px;border-width: 1px;padding: 8px;border-style: solid;border-color: #87ceeb;}\r",
+							"    .tftable tr:hover {background-color:#e0ffff;}\r",
+							"</style>\r",
+							"\r",
+							"<table class=\"tftable\" border=\"1\">\r",
+							"    <tr>\r",
+							"        <th>ID</th>\r",
+							"        <th>Name</th>\r",
+							"        <th>Email</th>\r",
+							"        <th>Phone</th>\r",
+							"        <th>Source</th>\r",
+							"        <th>Status</th>\r",
+							"        <th>Created At</th>\r",
+							"        <th>Score</th>\r",
+							"        <th>Owner Name</th>\r",
+							"    </tr>\r",
+							"    \r",
+							"    {{#each response}}\r",
+							"        <tr id=row_{{@key}}>\r",
+							"            <td>{{id}}</td>\r",
+							"            <td>{{name}}</td>\r",
+							"            <td>{{email}}</td>\r",
+							"            <td>{{phone}}</td>\r",
+							"            <td>{{source}}</td>\r",
+							"            <td>{{status}}</td>\r",
+							"            <td>{{createdAt}}</td>\r",
+							"            <td>{{score}}</td>\r",
+							"            <td>{{owner.name}}</td>\r",
+							"        </tr>\r",
+							"    {{/each}}\r",
+							"</table>\r",
+							"`;\r",
+							"\r",
+							"function constructVisualizerPayload() {\r",
+							"    var res = pm.response.json();\r",
+							"\r",
+							"    return {response: res};\r",
+							"}\r",
+							"\r",
+							"pm.visualizer.set(template, constructVisualizerPayload());"
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:4000/api/leads/filter?createdFrom=2025-10-14&createdTo=2025-10-16",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"leads",
+						"filter"
+					],
+					"query": [
+						{
+							"key": "createdFrom",
+							"value": "2025-10-14"
+						},
+						{
+							"key": "createdTo",
+							"value": "2025-10-16"
+						}
+					]
+				}
+			},
+			"response": [
+				{
+					"name": "/filter?createdFrom&createdTo",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:4000/api/leads/filter?status=Contacted&ownerId=1",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "4000",
+							"path": [
+								"api",
+								"leads",
+								"filter"
+							],
+							"query": [
+								{
+									"key": "status",
+									"value": "Contacted"
+								},
+								{
+									"key": "ownerId",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"_postman_previewlanguage": null,
+					"header": [
+						{
+							"key": "X-Powered-By",
+							"value": "Express"
+						},
+						{
+							"key": "Access-Control-Allow-Origin",
+							"value": "*"
+						},
+						{
+							"key": "Content-Type",
+							"value": "application/json; charset=utf-8"
+						},
+						{
+							"key": "Content-Length",
+							"value": "513"
+						},
+						{
+							"key": "ETag",
+							"value": "W/\"201-STmgUifIWj57ADMaPZxDS0UpFmY\""
+						},
+						{
+							"key": "Date",
+							"value": "Tue, 14 Oct 2025 09:07:55 GMT"
+						},
+						{
+							"key": "Connection",
+							"value": "keep-alive"
+						},
+						{
+							"key": "Keep-Alive",
+							"value": "timeout=5"
+						}
+					],
+					"cookie": [],
+					"body": "[\n    {\n        \"id\": 3,\n        \"name\": \"Carol Green\",\n        \"email\": \"carol.green@email.com\",\n        \"phone\": \"+1-555-0987\",\n        \"source\": \"Trade Show\",\n        \"status\": \"Contacted\",\n        \"createdAt\": \"2025-10-07T09:13:01.331Z\",\n        \"convertedToContactId\": null,\n        \"ownerId\": 1,\n        \"score\": 78,\n        \"owner\": {\n            \"id\": 1,\n            \"name\": \"System Administrator\",\n            \"email\": \"admin@innovun.com\",\n            \"passwordHash\": \"$2b$10$K7L1OJ45/4Y2nIvhRVpCe.FSmhDdWoXehVzJByJ.Xd5c3z2y7BZ8K\",\n            \"roleId\": 1,\n            \"createdAt\": \"2025-10-07T09:13:01.230Z\",\n            \"role\": {\n                \"id\": 1,\n                \"name\": \"Admin\",\n                \"description\": \"Full system access\"\n            }\n        },\n        \"convertedToContact\": null\n    }\n]"
+				}
+			]
+		},
+		{
+			"name": "leads/filter?status&ownerId",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var template = `\r",
+							"<style type=\"text/css\">\r",
+							"    .tftable {font-size:14px;color:#333333;width:100%;border-width: 1px;border-color: #87ceeb;border-collapse: collapse;}\r",
+							"    .tftable th {font-size:18px;background-color:#87ceeb;border-width: 1px;padding: 8px;border-style: solid;border-color: #87ceeb;text-align:left;}\r",
+							"    .tftable tr {background-color:#ffffff;}\r",
+							"    .tftable td {font-size:14px;border-width: 1px;padding: 8px;border-style: solid;border-color: #87ceeb;}\r",
+							"    .tftable tr:hover {background-color:#e0ffff;}\r",
+							"</style>\r",
+							"\r",
+							"<table class=\"tftable\" border=\"1\">\r",
+							"    <tr>\r",
+							"        <th>ID</th>\r",
+							"        <th>Name</th>\r",
+							"        <th>Email</th>\r",
+							"        <th>Phone</th>\r",
+							"        <th>Source</th>\r",
+							"        <th>Status</th>\r",
+							"        <th>Created At</th>\r",
+							"        <th>Score</th>\r",
+							"        <th>Owner Name</th>\r",
+							"    </tr>\r",
+							"    \r",
+							"    {{#each response}}\r",
+							"        <tr id=row_{{@key}}>\r",
+							"            <td>{{id}}</td>\r",
+							"            <td>{{name}}</td>\r",
+							"            <td>{{email}}</td>\r",
+							"            <td>{{phone}}</td>\r",
+							"            <td>{{source}}</td>\r",
+							"            <td>{{status}}</td>\r",
+							"            <td>{{createdAt}}</td>\r",
+							"            <td>{{score}}</td>\r",
+							"            <td>{{owner.name}}</td>\r",
+							"        </tr>\r",
+							"    {{/each}}\r",
+							"</table>\r",
+							"`;\r",
+							"\r",
+							"function constructVisualizerPayload() {\r",
+							"    var res = pm.response.json();\r",
+							"\r",
+							"    return {response: res};\r",
+							"}\r",
+							"\r",
+							"pm.visualizer.set(template, constructVisualizerPayload());"
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:4000/api/leads/filter?status=Nurturing",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"leads",
+						"filter"
+					],
+					"query": [
+						{
+							"key": "status",
+							"value": "Nurturing"
+						},
+						{
+							"key": "ownerId",
+							"value": "",
+							"disabled": true
+						}
+					]
+				}
+			},
+			"response": [
+				{
+					"name": "/filter?status&ownerId",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:4000/api/leads/filter?status=Contacted&ownerId=1",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "4000",
+							"path": [
+								"api",
+								"leads",
+								"filter"
+							],
+							"query": [
+								{
+									"key": "status",
+									"value": "Contacted"
+								},
+								{
+									"key": "ownerId",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"_postman_previewlanguage": null,
+					"header": [
+						{
+							"key": "X-Powered-By",
+							"value": "Express"
+						},
+						{
+							"key": "Access-Control-Allow-Origin",
+							"value": "*"
+						},
+						{
+							"key": "Content-Type",
+							"value": "application/json; charset=utf-8"
+						},
+						{
+							"key": "Content-Length",
+							"value": "513"
+						},
+						{
+							"key": "ETag",
+							"value": "W/\"201-STmgUifIWj57ADMaPZxDS0UpFmY\""
+						},
+						{
+							"key": "Date",
+							"value": "Tue, 14 Oct 2025 09:08:36 GMT"
+						},
+						{
+							"key": "Connection",
+							"value": "keep-alive"
+						},
+						{
+							"key": "Keep-Alive",
+							"value": "timeout=5"
+						}
+					],
+					"cookie": [],
+					"body": "[\n    {\n        \"id\": 3,\n        \"name\": \"Carol Green\",\n        \"email\": \"carol.green@email.com\",\n        \"phone\": \"+1-555-0987\",\n        \"source\": \"Trade Show\",\n        \"status\": \"Contacted\",\n        \"createdAt\": \"2025-10-07T09:13:01.331Z\",\n        \"convertedToContactId\": null,\n        \"ownerId\": 1,\n        \"score\": 78,\n        \"owner\": {\n            \"id\": 1,\n            \"name\": \"System Administrator\",\n            \"email\": \"admin@innovun.com\",\n            \"passwordHash\": \"$2b$10$K7L1OJ45/4Y2nIvhRVpCe.FSmhDdWoXehVzJByJ.Xd5c3z2y7BZ8K\",\n            \"roleId\": 1,\n            \"createdAt\": \"2025-10-07T09:13:01.230Z\",\n            \"role\": {\n                \"id\": 1,\n                \"name\": \"Admin\",\n                \"description\": \"Full system access\"\n            }\n        },\n        \"convertedToContact\": null\n    }\n]"
+				}
+			]
+		},
+		{
+			"name": "leads/filter?createdFrom=2025-10-01",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:4000/api/leads/filter?createdFrom=2025-10-01",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"leads",
+						"filter"
+					],
+					"query": [
+						{
+							"key": "createdFrom",
+							"value": "2025-10-01"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "leads/filter?createdTo=2025-10-08",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:4000/api/leads/filter?createdTo=2025-10-16",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"leads",
+						"filter"
+					],
+					"query": [
+						{
+							"key": "createdTo",
+							"value": "2025-10-16"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "leads/filter?createdFrom=2025-10-07T00:00:00.000Z&createdTo=2025-10-07T23:59:59.999Z",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:4000/api/leads/filter?createdFrom=2025-10-15T00:00:00.000Z&createdTo=2025-10-15T23:59:59.999Z",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"leads",
+						"filter"
+					],
+					"query": [
+						{
+							"key": "createdFrom",
+							"value": "2025-10-15T00:00:00.000Z"
+						},
+						{
+							"key": "createdTo",
+							"value": "2025-10-15T23:59:59.999Z"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "leads/api/leads/search?q=brown@email.com",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:4000/api/leads/search?q=clark",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"leads",
+						"search"
+					],
+					"query": [
+						{
+							"key": "q",
+							"value": "clark"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/api/leads/createLead",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"name\":\"shubham\",\r\n    \"email\":\"luffy@example.com\",\r\n    \"phone\": \"9876543210\",\r\n    \"source\": \"Landing Page\"\r\n    \r\n\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:4000/api/leads/",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"leads",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/api/leads/updateLead",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"phone\": \"0123456789\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:4000/api/leads/60",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"leads",
+						"60"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "api/leads/all",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"email\": \"superadmin@example.com\",\r\n    \"password\": \"admin123\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:4000/api/auth/login",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"auth",
+						"login"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "leads/by-status/:status",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"name\":\"luffy\",\r\n    \"email\":\"luffy@example.com\",\r\n    \"phone\": \"9876543210\",\r\n    \"source\": \"Landing Page\",\r\n    \"ownerId\": 8\r\n\r\n}"
+				},
+				"url": {
+					"raw": "http://localhost:4000/api/leads/by-status/Closed Won",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"leads",
+						"by-status",
+						"Closed Won"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "leads/by-source/:source",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"name\":\"luffy\",\r\n    \"email\":\"luffy@example.com\",\r\n    \"phone\": \"9876543210\",\r\n    \"source\": \"Landing Page\",\r\n    \"ownerId\": 8\r\n\r\n}"
+				},
+				"url": {
+					"raw": "http://localhost:4000/api/leads/by-source/WhatsApp",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"leads",
+						"by-source",
+						"WhatsApp"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "leads/by-owner/:ownerId",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjcsImVtYWlsIjoic3VwZXJhZG1pbkBleGFtcGxlLmNvbSIsImlhdCI6MTc2MTkwNzgwNSwiZXhwIjoxNzYxOTk0MjA1fQ.HvNj74okKknNiIwrXP1wOEJ6xAeM94nHptXHzKCvGzc",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"name\":\"luffy\",\r\n    \"email\":\"luffy@example.com\",\r\n    \"phone\": \"9876543210\",\r\n    \"source\": \"Landing Page\",\r\n    \"ownerId\": 8\r\n\r\n}"
+				},
+				"url": {
+					"raw": "http://localhost:4000/api/leads/by-owner/10",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"leads",
+						"by-owner",
+						"10"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "leads/:id/convert",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n \"accountId\":44, \r\n \"position\": \"sales\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:4000/api/leads/90/convert",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"leads",
+						"90",
+						"convert"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "leads/:id/conversion-history",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n \"accountId\":44, \r\n \"position\": \"sales\"\r\n}"
+				},
+				"url": {
+					"raw": "http://localhost:4000/api/leads/90/conversion-history",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"leads",
+						"90",
+						"conversion-history"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "leads/convert-bulk",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"leads\": [\r\n    {\r\n      \"leadId\": \"77\",\r\n      \"accountId\": \"53\",\r\n      \"position\": \"Manager\"\r\n    },  {\r\n      \"leadId\": \"78\",\r\n      \"accountId\": \"54\",\r\n      \"position\": \"Manager\"\r\n    },  {\r\n      \"leadId\": \"79\",\r\n      \"accountId\": \"55\",\r\n      \"position\": \"Manager\"\r\n    }\r\n  ]\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:4000/api/leads/convert-bulk",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"leads",
+						"convert-bulk"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "leads/:id/assign",
+			"protocolProfileBehavior": {
+				"disabledSystemHeaders": {
+					"content-type": true
+				}
+			},
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{   \r\n    \"userId\": \"9\",\r\n    \"reason\": \"Reassigning to sales team\"\r\n  }"
+				},
+				"url": {
+					"raw": "http://localhost:4000/api/leads/129/assign",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"leads",
+						"129",
+						"assign"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "leads/assign-bulk",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"leadIds\": [130, 131, 135],\r\n  \"userId\": \"9\",\r\n  \"reason\": \"Reassigning to sales team\"\r\n}"
+				},
+				"url": {
+					"raw": "http://localhost:4000/api/leads/assign-bulk",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"leads",
+						"assign-bulk"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/auth/create-test-admin",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"secret\": \"your-test-admin-secret-from-env\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:4000/api/auth/create-test-admin",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"auth",
+						"create-test-admin"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/api/accounts/getAllAccounts",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjgsImVtYWlsIjoic3VwZXJhZG1pbkBleGFtcGxlLmNvbSIsImlhdCI6MTc2MTIwNDIzNywiZXhwIjoxNzYxMjkwNjM3fQ.wfqQuyxhtLr87a8UCl9VQkMhXtL4Y4daRIIMlx7r9jI",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "http://localhost:4000/api/accounts/getAllAccounts",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"accounts",
+						"getAllAccounts"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/api/accounts/getDetails/:accountId",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjgsImVtYWlsIjoic3VwZXJhZG1pbkBleGFtcGxlLmNvbSIsImlhdCI6MTc2MTIwNDIzNywiZXhwIjoxNzYxMjkwNjM3fQ.wfqQuyxhtLr87a8UCl9VQkMhXtL4Y4daRIIMlx7r9jI",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "http://localhost:4000/api/accounts/getDetails/22",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"accounts",
+						"getDetails",
+						"22"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/api/contacts",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjgsImVtYWlsIjoic3VwZXJhZG1pbkBleGFtcGxlLmNvbSIsImlhdCI6MTc2MTIwNDIzNywiZXhwIjoxNzYxMjkwNjM3fQ.wfqQuyxhtLr87a8UCl9VQkMhXtL4Y4daRIIMlx7r9jI",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "http://localhost:4000/api/contacts",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"contacts"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/api/contacts/:id",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjgsImVtYWlsIjoic3VwZXJhZG1pbkBleGFtcGxlLmNvbSIsImlhdCI6MTc2MTIwNDIzNywiZXhwIjoxNzYxMjkwNjM3fQ.wfqQuyxhtLr87a8UCl9VQkMhXtL4Y4daRIIMlx7r9jI",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "  {\r\n    \"name\": \"John Doe\",\r\n    \"email\": \"john.doe@example.com\",\r\n    \"phone\": \"+1-555-123-4567\",\r\n    \"position\": \"CTO\",\r\n    \"accountId\": null\r\n  }",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:4000/api/contacts/128",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"contacts",
+						"128"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/api/contacts/:id",
+			"request": {
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjgsImVtYWlsIjoic3VwZXJhZG1pbkBleGFtcGxlLmNvbSIsImlhdCI6MTc2MTIwNDIzNywiZXhwIjoxNzYxMjkwNjM3fQ.wfqQuyxhtLr87a8UCl9VQkMhXtL4Y4daRIIMlx7r9jI",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "http://localhost:4000/api/contacts/128",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"contacts",
+						"128"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "create/api/contacts",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjgsImVtYWlsIjoic3VwZXJhZG1pbkBleGFtcGxlLmNvbSIsImlhdCI6MTc2MTIwNDIzNywiZXhwIjoxNzYxMjkwNjM3fQ.wfqQuyxhtLr87a8UCl9VQkMhXtL4Y4daRIIMlx7r9jI",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"name\": \"John Doe\",\r\n  \"email\": \"john.doe@example.com\",\r\n  \"phone\": \"+1-555-123-4567\",\r\n  \"position\": \"CTO\",\r\n  \"accountId\": null\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:4000/api/contacts",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"contacts"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "update/api/contacts/:id",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjgsImVtYWlsIjoic3VwZXJhZG1pbkBleGFtcGxlLmNvbSIsImlhdCI6MTc2MTIwNDIzNywiZXhwIjoxNzYxMjkwNjM3fQ.wfqQuyxhtLr87a8UCl9VQkMhXtL4Y4daRIIMlx7r9jI",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "  {\r\n    \"name\": \"John Smith\",\r\n    \"phone\": \"+1-555-987-6543\",\r\n    \"position\": \"CEO\"\r\n  }"
+				},
+				"url": {
+					"raw": "http://localhost:4000/api/contacts/130",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"contacts",
+						"130"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/api/auth/create-test-admin",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"secret\": \"your-test-admin-secret-from-env\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:4000/api/auth/create-test-admin",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"auth",
+						"create-test-admin"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/integrations/credentials",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjQsImVtYWlsIjoic3VwZXJhZG1pbkBleGFtcGxlLmNvbSIsImlhdCI6MTc2MjE2NjM1MiwiZXhwIjoxNzYyMjUyNzUyfQ.Vr6tJ1v6_-ArjncAF5RZSybZPkqJ4ec25ghhqwZoBng"
+					}
+				],
+				"url": {
+					"raw": "http://localhost:4000/api/integrations/credentials",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"integrations",
+						"credentials"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/integrations/config",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjQsImVtYWlsIjoic3VwZXJhZG1pbkBleGFtcGxlLmNvbSIsImlhdCI6MTc2MjE2NjM1MiwiZXhwIjoxNzYyMjUyNzUyfQ.Vr6tJ1v6_-ArjncAF5RZSybZPkqJ4ec25ghhqwZoBng"
+					}
+				],
+				"url": {
+					"raw": "http://localhost:4000/api/integrations/config",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"integrations",
+						"config"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/brevo/test-connection",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjQsImVtYWlsIjoic3VwZXJhZG1pbkBleGFtcGxlLmNvbSIsImlhdCI6MTc2MjE2NjM1MiwiZXhwIjoxNzYyMjUyNzUyfQ.Vr6tJ1v6_-ArjncAF5RZSybZPkqJ4ec25ghhqwZoBng"
+					}
+				],
+				"url": {
+					"raw": "http://localhost:4000/api/brevo/test-connection",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"brevo",
+						"test-connection"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "api.brevo.com/v3/account",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "api-key",
+						"value": "<YOUR_SENDINBLUE_API_KEY>"
+					}
+				],
+				"url": {
+					"raw": "https://api.brevo.com/v3/account",
+					"protocol": "https",
+					"host": [
+						"api",
+						"brevo",
+						"com"
+					],
+					"path": [
+						"v3",
+						"account"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/api/auth/login",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"email\": \"superadmin@example.com\",\r\n    \"password\": \"admin123\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:4000/api/auth/login",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"auth",
+						"login"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "sendOTP",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/JSON"
+					},
+					{
+						"key": "content-type",
+						"value": "application/json"
+					},
+					{
+						"key": "Cookie",
+						"value": "HELLO_APP_HASH=U1duUWgvZGdTWUZ2OEcrTW4wZlBhbWM2aWFrL2MvdjhMUDRHQm9mcjkyRT0%3D; PHPSESSID=kdf0s15nd85jueb60f0remv8po"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n \n}",
+					"options": {
+						"raw": {
+							"language": "text"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://control.msg91.com/api/v5/otp?otp_expiry=60&template_id=691d7800becd5819951fa9f7&mobile=+919244351755&authkey=265027Ar4eFM1aE5c764dda&realTimeResponse=1&otp_length=6",
+					"protocol": "https",
+					"host": [
+						"control",
+						"msg91",
+						"com"
+					],
+					"path": [
+						"api",
+						"v5",
+						"otp"
+					],
+					"query": [
+						{
+							"key": "otp_expiry",
+							"value": "60"
+						},
+						{
+							"key": "template_id",
+							"value": "691d7800becd5819951fa9f7"
+						},
+						{
+							"key": "mobile",
+							"value": "+919244351755"
+						},
+						{
+							"key": "authkey",
+							"value": "265027Ar4eFM1aE5c764dda"
+						},
+						{
+							"key": "realTimeResponse",
+							"value": "1"
+						},
+						{
+							"key": "otp_length",
+							"value": "6"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "verifyOTP",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "authkey",
+						"value": "265027Ar4eFM1aE5c764dda"
+					}
+				],
+				"url": {
+					"raw": "https://control.msg91.com/api/v5/otp/verify?otp=375593&mobile=+919244351755",
+					"protocol": "https",
+					"host": [
+						"control",
+						"msg91",
+						"com"
+					],
+					"path": [
+						"api",
+						"v5",
+						"otp",
+						"verify"
+					],
+					"query": [
+						{
+							"key": "otp",
+							"value": "375593"
+						},
+						{
+							"key": "mobile",
+							"value": "+919244351755"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/api/auth/create-system-admin",
+			"protocolProfileBehavior": {
+				"disabledSystemHeaders": {
+					"content-type": true
+				}
+			},
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "x-admin-secret",
+						"value": "your-admin-secret-key-from-env",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"email\": \"nikhil.kumar@sbdinc.com\",\r\n  \"firstName\": \"Nikhil\",\r\n  \"lastName\": \"Kumar\",\r\n  \"phone\": \"9663744166\",\r\n  \"role\": \"SYSTEM_ADMIN\"\r\n}"
+				},
+				"url": {
+					"raw": "http://localhost:4000/api/auth/create-system-admin",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"auth",
+						"create-system-admin"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/api/users/admin-edit/115",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "x-admin-secret",
+						"value": "your-admin-secret-key-from-env",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n      \"role\":\"SYSTEM_ADMIN\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:4000/api/users/admin-edit/118",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"api",
+						"users",
+						"admin-edit",
+						"118"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

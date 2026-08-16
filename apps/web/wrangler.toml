@@ -1,0 +1,20 @@
+name = "custom-marketing-crm-suite-aakraman"
+main = ".open-next/worker.js"
+compatibility_date = "2025-11-24"
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+
+account_id = "4cef819697ac4313700e2c4b7a2ba12f"
+
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
+
+# Non-secret NEXT_PUBLIC_* values baked into the client bundle at build time.
+# NEXT_PUBLIC_API_URL MUST be overridden to the real deployed API origin —
+# do not deploy with the localhost value used for local dev.
+[vars]
+NEXT_PUBLIC_COMPANY_NAME = "SBD"
+NEXT_PUBLIC_API_URL = "https://REPLACE_WITH_PRODUCTION_API_URL"
+NEXT_PUBLIC_WHATSAPP_TEXT_ONLY_MVP = "false"
+NEXT_PUBLIC_ALLOW_AUTH_TEMPLATES = "false"
+NEXT_PUBLIC_ALLOW_UTILITY_TEMPLATES = "false"

@@ -1,0 +1,1110 @@
+// Base types
+export interface ApiResponse<T> {
+  data: T;
+  message?: string;
+  success: boolean;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+// Pagination metadata from backend
+export interface PaginationMeta {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  itemsPerPage: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+}
+
+// Paginated response structure from backend
+export interface PaginatedApiResponse<T> {
+  data: T[];
+  pagination: PaginationMeta;
+}
+
+// User and Permissions
+export interface User {
+  id: number;
+  name: string;
+  email: string;
+  phone?: string;
+  passwordHash?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  permissions?: UserPermissions;
+  leads?: Lead[];
+  campaigns?: Campaign[];
+  role?: string;
+  region?: string;
+  isDeveloper?: boolean;
+}
+
+export interface UserPermissions {
+  id: number;
+  userId: number;
+  leadManagement: boolean;
+  campaignManagement: boolean;
+  chatbotAccess: boolean;
+  whatsappCampaign: boolean;
+  emailMarketing: boolean;
+  systemAdminAccess: boolean;
+}
+
+// Lead types
+export interface Lead {
+  id: number;
+  firstName: string;
+  lastName?: string | null;
+  email: string;
+  phone?: string;
+  companyName?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  source: string;
+  status:
+  | "OPEN"
+  | "WORKING"
+  | "QUALIFIED"
+  | "UNQUALIFIED"
+  | "NURTURING"
+  | "CONVERTED";
+  score: number;
+  ownerId?: number;
+  convertedToContactId?: number;
+  createdAt: string;
+  updatedAt: string;
+  assignedAt?: string | null;
+  owner?: User;
+  convertedToContact?: Contact;
+  campaignMembers?: CampaignMember[];
+  analyticsEvents?: AnalyticsEvent[];
+  formSubmissions?: FormSubmission[];
+  enquiries?: Enquiry[];
+  keywords?: Array<{
+    id: number;
+    leadId: number;
+    keywordId: number;
+    keyword: Keyword;
+  }>;
+  activities?: Array<{
+    id: string;
+    title: string;
+    description: string;
+    time: string;
+  }>;
+}
+
+export interface LeadAssignmentStats {
+  userId: number;
+  totalLeads: number;
+  totalConverted: number;
+  totalRemaining: number;
+  conversionRate: number;
+}
+
+export type LeadSource = "IMPORT" | "LANDING_PAGE" | "MANUAL";
+
+// Sales typed responses
+export interface SalesMyLeadsResponse {
+  leads: Lead[];
+  pagination: PaginationMeta;
+}
+
+export interface SalesMyStatsResponse {
+  stats: {
+    totalLeads: number;
+    qualifiedLeads: number;
+    unqualifiedLeads: number;
+    workingLeads: number;
+    openLeads: number;
+    convertedLeads: number;
+    unresolvedEnquiries: number;
+    conversionRate: string;
+    qualificationRate: string;
+  };
+}
+
+// Contact types
+export interface Contact {
+  id: number;
+  name: string;
+  email: string;
+  phone?: string;
+  position?: string;
+  accountId?: number;
+  createdAt: string;
+  updatedAt: string;
+  account?: Account;
+  convertedLeads?: Lead[];
+  campaignMembers?: CampaignMember[];
+}
+
+// Account types
+export interface Account {
+  id: number;
+  name: string;
+  industry?: string;
+  website?: string;
+  phone?: string;
+  description?: string;
+  annualRevenue?: string;
+  companySize?: string;
+  billingAddress?: Address;
+  shippingAddress?: Address;
+  accountOwner?: string;
+  createdBy?: string;
+  lastUpdatedBy?: string;
+  accountStatus?: string;
+  createdAt: string;
+  updatedAt: string;
+  contacts?: Contact[];
+}
+
+export interface Address {
+  street: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  country: string;
+  sameAsBilling?: boolean;
+}
+
+// Campaign types
+export interface Campaign {
+  id: number;
+  name: string;
+  description?: string;
+  startDate: string;
+  endDate?: string;
+  createdBy: number;
+  createdAt: string;
+  updatedAt: string;
+  creator?: User;
+  campaignMembers?: CampaignMember[];
+  analyticsEvents?: AnalyticsEvent[];
+  formSubmissions?: FormSubmission[];
+}
+
+export interface CampaignMember {
+  id: number;
+  campaignId: number;
+  contactId?: number;
+  leadId?: number;
+  joinedAt: string;
+  campaign?: Campaign;
+  contact?: Contact;
+  lead?: Lead;
+}
+
+// Analytics types
+export interface AnalyticsEvent {
+  id: number;
+  campaignId?: number;
+  contactId?: number;
+  leadId?: number;
+  eventType: string;
+  eventData: Record<string, any>;
+  occurredAt: string;
+  campaign?: Campaign;
+  contact?: Contact;
+  lead?: Lead;
+}
+
+// Form Submission types
+export interface FormSubmission {
+  id: number;
+  campaignId: number;
+  leadId?: number;
+  contactId?: number;
+  formData: Record<string, any>;
+  submittedAt: string;
+  campaign?: Campaign;
+  lead?: Lead;
+  contact?: Contact;
+}
+
+// Landing Page Campaign types
+export interface LandingPageCampaign {
+  id: number;
+  name: string;
+  description?: string | null;
+  uniqueId: string;
+  status: "ACTIVE" | "PAUSED" | "SCHEDULED" | "CLOSED" | "ARCHIVED";
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: number | null;
+  creator?: {
+    id: number;
+    name: string | null;
+    email: string;
+  };
+  _count?: {
+    enquiries: number;
+  };
+  enquiries?: Enquiry[];
+}
+
+export interface Enquiry {
+  id: number;
+  leadId: number;
+  landingPageCampaignId?: number | null;
+  customFields?: Record<string, any> | null;
+  status: "UNRESOLVED" | "RESOLVED" | "IN_PROGRESS";
+  enquiryCreatedAt: string;
+  resolvedAt?: string | null;
+  resolvedBy?: number | null;
+  lead?: {
+    id: number;
+    firstName: string;
+    lastName?: string | null;
+    email: string;
+    phone?: string | null;
+  };
+  landingPageCampaign?: {
+    id: number;
+    name: string;
+    uniqueId: string;
+  };
+  resolver?: {
+    id: number;
+    name: string | null;
+    email: string;
+  };
+}
+
+export interface LandingPageCampaignFilters {
+  status?: "ACTIVE" | "PAUSED" | "SCHEDULED" | "CLOSED" | "ARCHIVED";
+  search?: string;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
+}
+
+export interface LandingPageCampaignStats {
+  activeCampaigns: number;
+  totalCampaigns: number;
+  totalEnquiries: number;
+  unresolvedEnquiries: number;
+}
+
+// Messaging (Generic)
+export interface MessagingAccount {
+  id: number;
+  provider: string;
+  displayName: string;
+  credentialsJson: Record<string, any>;
+  sourceHandle: string;
+  externalIdsJson?: Record<string, any>;
+  isActive: boolean;
+  createdBy: number;
+  createdAt: string;
+}
+
+export interface MessageTemplate {
+  id: number;
+  provider: string;
+  channel: string;
+  providerTemplateId: string;
+  name: string;
+  language: string;
+  category?: string;
+  status: string;
+  componentsJson: Record<string, any>;
+  lastSyncedAt: string;
+  messagingAccountId: number;
+  createdAt: string;
+}
+
+export interface CampaignDelivery {
+  id: number;
+  campaignId: number;
+  campaignMemberId: number;
+  channel: string;
+  messagingAccountId: number;
+  address: string;
+  variablesJson?: Record<string, any>;
+  status:
+  | "pending"
+  | "queued"
+  | "sent"
+  | "delivered"
+  | "read"
+  | "failed"
+  | "paused"
+  | "opted_out";
+  errorCode?: string;
+  errorMessage?: string;
+  providerMessageId?: string;
+  sentAt?: string;
+  deliveredAt?: string;
+  readAt?: string;
+  createdAt: string;
+}
+
+// Auth types
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  user: User;
+  token: string;
+  isDeveloper?: boolean;
+}
+
+export interface SignupRequest {
+  name: string;
+  email: string;
+  password: string;
+}
+
+export interface SignupResponse {
+  user: User;
+  token: string;
+}
+
+// API Error types
+export interface ApiError {
+  message: string;
+  status: number;
+  code?: string;
+}
+
+// Filter and Query types
+export interface LeadFilters {
+  status?: string;
+  source?: string;
+  createdFrom?: string;
+  createdTo?: string;
+  keywordIds?: number[];
+  ownerId?: number;
+  ownerRegion?: string;
+  unassigned?: boolean;
+  assigned?: boolean;
+}
+
+export interface ContactFilters {
+  accountId?: number;
+  position?: string;
+  createdFrom?: string;
+  createdTo?: string;
+}
+
+export interface CampaignFilters {
+  createdBy?: number;
+  status?: "active" | "inactive" | "completed";
+  createdFrom?: string;
+  createdTo?: string;
+}
+
+export interface UserFilters {
+  role?: string;
+  region?: string;
+  permissions?: Partial<UserPermissions>;
+  createdFrom?: string;
+  createdTo?: string;
+}
+
+// Webhook types
+export interface WebhookPayload {
+  form_submission?: Record<string, any>;
+  lead?: Record<string, any>;
+  campaign?: Record<string, any>;
+  landing_page?: Record<string, any>;
+  custom_fields?: Record<string, any>;
+  [key: string]: any;
+}
+
+export interface WebhookResponse {
+  success: boolean;
+  message: string;
+  timestamp: string;
+  receivedData: {
+    hasBody: boolean;
+    bodyKeys: string[];
+    headers: string[];
+    queryKeys: string[];
+  };
+  leadCreated: boolean;
+  leadId?: number;
+  formSubmissionCreated: boolean;
+  formSubmissionId?: number;
+}
+
+// Brevo types
+export interface SyncLeadsRequest {
+  leadIds: number[];
+}
+
+export interface SyncLeadsResponse {
+  successful: Array<{
+    leadId: number;
+    brevoContactId: number;
+    email: string;
+  }>;
+  failed: Array<{
+    leadId: number;
+    email: string;
+    error: string;
+  }>;
+  summary: {
+    total: number;
+    successful: number;
+    failed: number;
+  };
+}
+
+export interface BrevoCampaignStats {
+  clickers: number;
+  complaints: number;
+  deferred?: number;
+  delivered: number;
+  hardBounces: number;
+  sent: number;
+  softBounces: number;
+  trackableViews: number;
+  uniqueClicks: number;
+  uniqueViews: number;
+  unsubscriptions: number;
+  viewed: number;
+  listId?: number;
+  appleMppOpens?: number;
+  estimatedViews?: number;
+  opensRate?: number;
+  trackableViewsRate?: number;
+  returnBounce?: number;
+}
+
+export interface BrevoCampaignStatistics {
+  globalStats?: BrevoCampaignStats;
+  campaignStats?: BrevoCampaignStats[];
+  linksStats?: Record<string, { nbClick: number }>;
+  statsByBrowser?: Record<string, {
+    clickers: number;
+    uniqueClicks: number;
+    uniqueViews: number;
+    viewed: number;
+  }>;
+  statsByDevice?: {
+    desktop?: Record<string, {
+      clickers: number;
+      uniqueClicks: number;
+      uniqueViews: number;
+      viewed: number;
+    }>;
+    mobile?: Record<string, {
+      clickers: number;
+      uniqueClicks: number;
+      uniqueViews: number;
+      viewed: number;
+    }>;
+    tablet?: Record<string, {
+      clickers: number;
+      uniqueClicks: number;
+      uniqueViews: number;
+      viewed: number;
+    }>;
+    unknown?: Record<string, {
+      clickers: number;
+      uniqueClicks: number;
+      uniqueViews: number;
+      viewed: number;
+    }>;
+  };
+  statsByDomain?: Record<string, BrevoCampaignStats>;
+  mirrorClick?: number;
+  remaining?: number;
+  // Legacy fields for backward compatibility
+  delivered?: number;
+  sent?: number;
+  processing?: number;
+  bounces?: number;
+  hardBounces?: number;
+  softBounces?: number;
+  clicks?: number;
+  uniqueClicks?: number;
+  opens?: number;
+  uniqueOpens?: number;
+  spamReports?: number;
+  unsubscriptions?: number;
+  deliveredPercentage?: number;
+  sentPercentage?: number;
+  processingPercentage?: number;
+  bouncePercentage?: number;
+  openPercentage?: number;
+  clickPercentage?: number;
+  spamPercentage?: number;
+  unsubscriptionPercentage?: number;
+}
+
+export interface BrevoCampaign {
+  id: number;
+  name: string;
+  subject?: string;
+  type: 'classic' | 'trigger';
+  status: 'draft' | 'sent' | 'archive' | 'queued' | 'suspended' | 'in_process';
+  scheduledAt?: string;
+  createdAt: string;
+  modifiedAt: string;
+  sender?: {
+    id?: number;
+    name: string;
+    email: string;
+  };
+  replyTo?: {
+    email: string;
+    name?: string;
+  } | string;
+  previewText?: string;
+  recipients?: {
+    lists?: number[];
+    exclusionLists?: number[];
+    listIds?: number[];
+  };
+  statistics?: BrevoCampaignStatistics;
+  htmlContent?: string;
+  footer?: string;
+  header?: string;
+  inlineImageActivation?: boolean;
+  mirrorActive?: boolean;
+  recurring?: boolean;
+  shareLink?: string;
+  tag?: string;
+  testSent?: boolean;
+  toField?: string;
+  sentDate?: string;
+}
+
+export interface BrevoAnalyticsResponse {
+  totalCampaigns: number;
+  activeCampaigns: number;
+  totalSent: number;
+  totalDelivered: number;
+  totalOpened: number;
+  totalClicked: number;
+  totalBounced: number;
+  totalUnsubscribed: number;
+  totalSpam: number;
+  deliveryRate: number;
+  openRate: number;
+  clickRate: number;
+  bounceRate: number;
+  unsubscribeRate: number;
+  spamRate: number;
+}
+
+export interface UpdateCampaignRequest {
+  name?: string;
+  subject?: string;
+  sender?: {
+    name: string;
+    email: string;
+  };
+  recipients?: {
+    listIds: number[];
+  };
+  replyTo?: string; // Brevo API expects a string (email), not an object
+  previewText?: string;
+  htmlContent?: string;
+  textContent?: string;
+  scheduledAt?: string;
+  type?: 'classic' | 'trigger';
+  [key: string]: any;
+}
+
+export interface UpdateCampaignStatusRequest {
+  status: 'suspended' | 'archive' | 'darchive' | 'sent' | 'queued' | 'replicate' | 'replicateTemplate' | 'draft';
+}
+
+// Subdealer types
+export interface Subdealer {
+  id: number;
+  phone: string;
+  gstNumber: string;
+  email?: string;
+  legalName: string;
+  tradeName?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  panNumber?: string;
+  registrationDate?: string;
+  businessType?: string;
+  status?: string;
+  jurisdiction?: string;
+  phoneVerified: boolean;
+  verifiedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GstDetails {
+  legalName: string;
+  tradeName?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  panNumber?: string;
+  registrationDate?: string;
+  businessType?: string;
+  status?: string;
+  jurisdiction?: string;
+  email?: string; // Optional email field for subdealer
+  gstNumber: string;
+}
+
+export interface FetchGstResponse {
+  success: boolean;
+  data: GstDetails;
+}
+
+export interface GenerateOtpResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface VerifyOtpRequest {
+  phone: string;
+  otp: string;
+  gstDetails: GstDetails;
+}
+
+export interface VerifyOtpResponse {
+  success: boolean;
+  message: string;
+  data: {
+    id: number;
+    phone: string;
+    gstNumber: string;
+    legalName: string;
+  };
+}
+
+// Product types
+export interface ProductCategory {
+  id: number;
+  name: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Product {
+  id: number;
+  name: string;
+  code: string;
+  imageUrl?: string;
+  price: string | number;
+  description?: string;
+  categoryId: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  category?: ProductCategory;
+}
+
+export interface CreateProductInput {
+  name: string;
+  code: string;
+  price: number;
+  description?: string;
+  categoryId: number;
+  active?: boolean;
+  image?: File;
+}
+
+export interface UpdateProductInput {
+  name?: string;
+  code?: string;
+  price?: number;
+  description?: string;
+  spamReports?: number;
+  unsubscriptions?: number;
+  deliveredPercentage?: number;
+  sentPercentage?: number;
+  processingPercentage?: number;
+  bouncePercentage?: number;
+  openPercentage?: number;
+  clickPercentage?: number;
+  spamPercentage?: number;
+  unsubscriptionPercentage?: number;
+}
+
+export interface BrevoCampaign {
+  id: number;
+  name: string;
+  subject?: string;
+  type: 'classic' | 'trigger';
+  status: 'draft' | 'sent' | 'archive' | 'queued' | 'suspended' | 'in_process';
+  scheduledAt?: string;
+  createdAt: string;
+  modifiedAt: string;
+  sender?: {
+    id?: number;
+    name: string;
+    email: string;
+  };
+  replyTo?: {
+    email: string;
+    name?: string;
+  } | string;
+  previewText?: string;
+  recipients?: {
+    lists?: number[];
+    exclusionLists?: number[];
+    listIds?: number[];
+  };
+  statistics?: BrevoCampaignStatistics;
+  htmlContent?: string;
+  footer?: string;
+  header?: string;
+  inlineImageActivation?: boolean;
+  mirrorActive?: boolean;
+  recurring?: boolean;
+  shareLink?: string;
+  tag?: string;
+  testSent?: boolean;
+  toField?: string;
+  sentDate?: string;
+}
+
+export interface BrevoAnalyticsResponse {
+  totalCampaigns: number;
+  activeCampaigns: number;
+  totalSent: number;
+  totalDelivered: number;
+  totalOpened: number;
+  totalClicked: number;
+  totalBounced: number;
+  totalUnsubscribed: number;
+  totalSpam: number;
+  deliveryRate: number;
+  openRate: number;
+  clickRate: number;
+  bounceRate: number;
+  unsubscribeRate: number;
+  spamRate: number;
+}
+
+export interface UpdateCampaignRequest {
+  name?: string;
+  subject?: string;
+  sender?: {
+    name: string;
+    email: string;
+  };
+  recipients?: {
+    listIds: number[];
+  };
+  replyTo?: string; // Brevo API expects a string (email), not an object
+  previewText?: string;
+  htmlContent?: string;
+  textContent?: string;
+  scheduledAt?: string;
+  type?: 'classic' | 'trigger';
+  [key: string]: any;
+}
+
+export interface UpdateCampaignStatusRequest {
+  status: 'suspended' | 'archive' | 'darchive' | 'sent' | 'queued' | 'replicate' | 'replicateTemplate' | 'draft';
+}
+
+// Subdealer types
+export interface Subdealer {
+  id: number;
+  phone: string;
+  gstNumber: string;
+  email?: string;
+  legalName: string;
+  tradeName?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  panNumber?: string;
+  registrationDate?: string;
+  businessType?: string;
+  status?: string;
+  jurisdiction?: string;
+  phoneVerified: boolean;
+  verifiedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GstDetails {
+  legalName: string;
+  tradeName?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  panNumber?: string;
+  registrationDate?: string;
+  businessType?: string;
+  status?: string;
+  jurisdiction?: string;
+  email?: string; // Optional email field for subdealer
+  gstNumber: string;
+}
+
+export interface FetchGstResponse {
+  success: boolean;
+  data: GstDetails;
+}
+
+export interface GenerateOtpResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface VerifyOtpRequest {
+  phone: string;
+  otp: string;
+  gstDetails: GstDetails;
+}
+
+export interface VerifyOtpResponse {
+  success: boolean;
+  message: string;
+  data: {
+    id: number;
+    phone: string;
+    gstNumber: string;
+    legalName: string;
+  };
+}
+
+// Product types
+export interface ProductCategory {
+  id: number;
+  name: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Product {
+  id: number;
+  name: string;
+  code: string;
+  imageUrl?: string;
+  price: string | number;
+  description?: string;
+  categoryId: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  category?: ProductCategory;
+}
+
+export interface CreateProductInput {
+  name: string;
+  code: string;
+  price: number;
+  description?: string;
+  categoryId: number;
+  active?: boolean;
+  image?: File;
+}
+
+export interface UpdateProductInput {
+  name?: string;
+  code?: string;
+  price?: number;
+  description?: string;
+  categoryId?: number;
+  active?: boolean;
+  image?: File;
+}
+
+export interface CreateCategoryInput {
+  name: string;
+  description?: string;
+}
+
+export interface UpdateCategoryInput {
+  name?: string;
+  description?: string;
+}
+
+// Keyword types
+export interface Keyword {
+  id: number;
+  name: string;
+  createdAt: string;
+}
+
+// Order types
+export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED';
+
+export interface Order {
+  id: number;
+  subdealerId: number;
+  orderNumber: string;
+  status: OrderStatus;
+  totalAmount: string | number;
+  createdAt: string;
+  updatedAt: string;
+  subdealer?: Subdealer;
+  lineItems?: ProductLineItem[];
+}
+
+export interface ProductLineItem {
+  id: number;
+  orderId: number;
+  productId: number;
+  quantity: number;
+  unitPrice: string | number;
+  totalPrice: string | number;
+  createdAt: string;
+  order?: Order;
+  product?: Product;
+}
+
+export interface CreateOrderInput {
+  lineItems: {
+    productId: number;
+    quantity: number;
+  }[];
+}
+
+// Invoice category types
+export type InvoiceCategory =
+  | 'PENDING'
+  | 'DUPLICATE'
+  | 'NOT_CLEAR'
+  | 'OLD'
+  | 'DIFFERENT_CONTRACTOR'
+  | 'WITHOUT_GST'
+  | 'NON_PROGRAM'
+  | 'IRRELEVANT'
+  | 'NON_DEALER';
+
+export interface Invoice {
+  id: number;
+  pdfUrl: string;
+  uploadedBy: number;
+  category?: InvoiceCategory;
+  status?: string;
+  createdAt: string;
+  updatedAt: string;
+  subdealer?: Subdealer;
+}
+
+export interface UpdateInvoiceCategoryInput {
+  category: InvoiceCategory;
+}
+
+// Audit category types
+export type AuditCategory = 'CAMPAIGN_MANAGEMENT' | 'SALES_MANAGEMENT';
+
+export interface AuditLog {
+  id: number;
+  entityType: string;
+  entityId: number;
+  changedBy: number;
+  action: string;
+  oldValues?: Record<string, any>;
+  newValues?: Record<string, any>;
+  category?: AuditCategory;
+  changedAt: string;
+  changedByUser?: {
+    id: number;
+    name?: string;
+    email: string;
+  };
+}
+
+// Subdealer authentication types
+export interface CheckPhoneResponse {
+  success: boolean;
+  exists: boolean;
+  data: {
+    id: number;
+    phone: string;
+    gstNumber: string;
+    legalName: string;
+  } | null;
+}
+
+export interface SubdealerLoginRequest {
+  phone: string;
+  otp: string;
+}
+
+export interface SubdealerAuthResponse {
+  success: boolean;
+  message: string;
+  data: {
+    id: number;
+    phone: string;
+    gstNumber: string;
+    legalName: string;
+  };
+  token: string;
+}
+
+// Sales dashboard KPI types
+export interface SalesKPIResponse {
+  registrations: {
+    total: number;
+    verified: number;
+    pending: number;
+  };
+  invoices: {
+    total: number;
+    pending: number;
+    duplicate: number;
+    notClear: number;
+    old: number;
+    differentContractor: number;
+    withoutGst: number;
+    nonProgram: number;
+    irrelevant: number;
+    nonDealer: number;
+  };
+  orders: {
+    total: number;
+    pending: number;
+    confirmed: number;
+    processing: number;
+    shipped: number;
+    delivered: number;
+    cancelled: number;
+  };
+}
+
+export interface InvoiceCategoryCount {
+  category: InvoiceCategory;
+  count: number;
+}
+
+export interface SalesRegistrationsResponse {
+  data: Subdealer[];
+  pagination: PaginationMeta;
+}
+
+export interface SalesInvoicesResponse {
+  data: Invoice[];
+  pagination: PaginationMeta;
+}
+
+export interface SalesOrdersResponse {
+  data: Order[];
+  pagination: PaginationMeta;
+}
+
+export interface SalesAuditLogsResponse {
+  data: AuditLog[];
+  pagination: PaginationMeta;
+}
