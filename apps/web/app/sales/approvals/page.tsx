@@ -20,6 +20,8 @@ import { PageHeader } from "@repo/ui/components/ui/page-header";
 import { ApprovalsTable } from "@/components/approvals/approvals-table";
 import { useAllApprovals, useMyApprovals } from "@/hooks/useApprovals";
 import { TableSkeleton } from "@/components/skeletons";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { DEFAULT_PAGE_SIZE } from "@/components/data-table";
 
 const STATUS_OPTIONS = [
   { value: "__all__", label: "All statuses" },
@@ -57,7 +59,7 @@ function ApprovalsPageContent() {
   const type = queryState.type || "all";
 
   const [page, setPage] = React.useState(1);
-  const [itemsPerPage, setItemsPerPage] = React.useState(10);
+  const [itemsPerPage, setItemsPerPage] = React.useState(DEFAULT_PAGE_SIZE);
 
   React.useEffect(() => {
     setPage(1);
@@ -180,7 +182,7 @@ function ApprovalsPageContent() {
   };
 
   return (
-    <div className="space-y-5 p-4">
+    <PageShell>
       <PageHeader
         title="Approvals"
         description="Review requests and track decisions across the sales workflow."
@@ -233,7 +235,7 @@ function ApprovalsPageContent() {
           </TabsContent>
         </TabsContents>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }
 

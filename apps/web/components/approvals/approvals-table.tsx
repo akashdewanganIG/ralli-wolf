@@ -2,8 +2,9 @@
 
 import * as React from "react";
 import { DataTable, type TableColumn } from "@/components/data-table";
-import { Badge } from "@repo/ui";
 import type { Approval } from "./approval-types";
+import { Tag } from "@repo/ui/components/ui/tag";
+import { statusTone } from "@repo/ui/components/ui/status-badge";
 
 type ApprovalsTableProps = {
   approvals: Approval[];
@@ -31,12 +32,6 @@ function formatDate(iso: string) {
   });
 }
 
-const STATUS_CLASSES: Record<string, string> = {
-  PENDING: "bg-amber-100 text-amber-800 border-amber-200",
-  APPROVED: "bg-emerald-100 text-emerald-800 border-emerald-200",
-  REJECTED: "bg-red-100 text-red-800 border-red-200",
-};
-
 export function ApprovalsTable({
   approvals,
   title,
@@ -59,7 +54,7 @@ export function ApprovalsTable({
           onQuoteNoClick ? (
             <button
               type="button"
-              className="text-blue-600 hover:underline"
+              className="text-info-foreground hover:text-info"
               onClick={e => {
                 e.stopPropagation();
                 onQuoteNoClick(item);
@@ -75,13 +70,7 @@ export function ApprovalsTable({
       {
         key: "status",
         label: "Status",
-        render: v => (
-          <Badge
-            className={STATUS_CLASSES[String(v)] ?? "bg-gray-100 text-gray-800"}
-          >
-            {String(v)}
-          </Badge>
-        ),
+        render: v => <Tag tone={statusTone(String(v))}>{String(v)}</Tag>,
       },
       { key: "createdBy", label: "Created By" },
       {

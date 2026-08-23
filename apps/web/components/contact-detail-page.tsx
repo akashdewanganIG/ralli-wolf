@@ -28,7 +28,7 @@ import {
   Phone,
   Tag,
   User,
-} from "lucide-react";
+} from "@repo/ui/icons";
 import * as React from "react";
 import { useAnalyticsByContact } from "../hooks/useAnalytics";
 import { useContact, useUpdateContact } from "../hooks/useContacts";
@@ -47,6 +47,7 @@ import {
   SectionSkeleton,
   StatGridSkeleton,
 } from "./skeletons";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 interface Contact {
   id: string;
@@ -213,7 +214,7 @@ export function ContactDetailPage({
   // Loading and error states
   if (contactLoading) {
     return (
-      <div className="space-y-5 p-4">
+      <PageShell>
         <DetailHeaderSkeleton />
         <SectionSkeleton>
           <StatGridSkeleton count={4} />
@@ -230,7 +231,7 @@ export function ContactDetailPage({
             <DetailSidebarSkeleton items={4} />
           </div>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
@@ -238,7 +239,9 @@ export function ContactDetailPage({
     return (
       <div className="min-h-[60vh] p-4 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-red-600 mb-4">Failed to load contact details</p>
+          <p className="text-destructive mb-4">
+            Failed to load contact details
+          </p>
           <Button onClick={onBack} variant="outline">
             Go Back
           </Button>
@@ -320,7 +323,7 @@ export function ContactDetailPage({
                       <CardTitle className="text-lg">
                         Account Information
                       </CardTitle>
-                      <Button size="sm" className="bg-black hover:bg-gray-800">
+                      <Button className="bg-foreground hover:bg-foreground">
                         View Full Account
                       </Button>
                     </div>
@@ -362,7 +365,7 @@ export function ContactDetailPage({
                   </CardHeader>
                   {/* @ts-ignore */}
                   <CardContent>
-                    <div className="max-h-[400px] overflow-y-auto">
+                    <div className="max-h-[25rem] overflow-y-auto">
                       {analyticsLoading ? (
                         <ActivityFeedSkeleton items={3} />
                       ) : formattedActivities.length > 0 ? (
@@ -409,67 +412,67 @@ export function ContactDetailPage({
                   <CardContent>
                     <div className="space-y-3">
                       <div className="flex items-start gap-3">
-                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-50">
-                          <MapPin className="h-3.5 w-3.5 text-blue-500" />
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-info-surface">
+                          <MapPin className="h-3.5 w-3.5 text-info" />
                         </div>
                         <div>
-                          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                             Mailing Address
                           </p>
-                          <p className="text-sm font-medium text-gray-700">
+                          <p className="text-sm font-medium text-text-secondary">
                             {editedContact.mailingAddress || "N/A"}
                           </p>
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-violet-50">
-                            <MapPin className="h-3.5 w-3.5 text-violet-500" />
+                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                            <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
                           </div>
                           <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                               City
                             </p>
-                            <p className="text-sm font-medium text-gray-700">
+                            <p className="text-sm font-medium text-text-secondary">
                               {editedContact.city || "N/A"}
                             </p>
                           </div>
                         </div>
                         <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-sky-50">
-                            <MapPin className="h-3.5 w-3.5 text-sky-500" />
+                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                            <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
                           </div>
                           <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                               State
                             </p>
-                            <p className="text-sm font-medium text-gray-700">
+                            <p className="text-sm font-medium text-text-secondary">
                               {editedContact.state || "N/A"}
                             </p>
                           </div>
                         </div>
                         <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-teal-50">
-                            <Tag className="h-3.5 w-3.5 text-teal-500" />
+                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                            <Tag className="h-3.5 w-3.5 text-muted-foreground" />
                           </div>
                           <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                               Zip Code
                             </p>
-                            <p className="text-sm font-medium text-gray-700">
+                            <p className="text-sm font-medium text-text-secondary">
                               {editedContact.zipCode || "N/A"}
                             </p>
                           </div>
                         </div>
                         <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-orange-50">
-                            <Globe className="h-3.5 w-3.5 text-orange-500" />
+                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-warning-surface">
+                            <Globe className="h-3.5 w-3.5 text-warning" />
                           </div>
                           <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                               Country
                             </p>
-                            <p className="text-sm font-medium text-gray-700">
+                            <p className="text-sm font-medium text-text-secondary">
                               {editedContact.country || "N/A"}
                             </p>
                           </div>
@@ -493,67 +496,67 @@ export function ContactDetailPage({
                   <CardContent>
                     <div className="space-y-3">
                       <div className="flex items-start gap-3">
-                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-gray-100">
-                          <FileText className="h-3.5 w-3.5 text-gray-500" />
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                          <FileText className="h-3.5 w-3.5 text-muted-foreground" />
                         </div>
                         <div>
-                          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                             Description / Notes
                           </p>
-                          <p className="text-sm font-medium text-gray-700 leading-relaxed">
+                          <p className="text-sm font-medium text-text-secondary leading-relaxed">
                             {editedContact.description || "N/A"}
                           </p>
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-50">
-                            <Link2 className="h-3.5 w-3.5 text-blue-500" />
+                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-info-surface">
+                            <Link2 className="h-3.5 w-3.5 text-info" />
                           </div>
                           <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                               LinkedIn
                             </p>
-                            <p className="text-sm font-medium text-gray-700">
+                            <p className="text-sm font-medium text-text-secondary">
                               {editedContact.linkedin || "N/A"}
                             </p>
                           </div>
                         </div>
                         <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-purple-50">
-                            <Phone className="h-3.5 w-3.5 text-purple-500" />
+                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                            <Phone className="h-3.5 w-3.5 text-muted-foreground" />
                           </div>
                           <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                               Preferred Contact
                             </p>
-                            <p className="text-sm font-medium text-gray-700">
+                            <p className="text-sm font-medium text-text-secondary">
                               {editedContact.preferredContactMethod || "N/A"}
                             </p>
                           </div>
                         </div>
                         <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-sky-50">
-                            <Mail className="h-3.5 w-3.5 text-sky-500" />
+                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                            <Mail className="h-3.5 w-3.5 text-muted-foreground" />
                           </div>
                           <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                               Alternate Email
                             </p>
-                            <p className="text-sm font-medium text-gray-700">
+                            <p className="text-sm font-medium text-text-secondary">
                               {editedContact.alternateEmail || "N/A"}
                             </p>
                           </div>
                         </div>
                         <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-amber-50">
-                            <Globe className="h-3.5 w-3.5 text-amber-500" />
+                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-warning-surface">
+                            <Globe className="h-3.5 w-3.5 text-warning" />
                           </div>
                           <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                               Time Zone
                             </p>
-                            <p className="text-sm font-medium text-gray-700">
+                            <p className="text-sm font-medium text-text-secondary">
                               {editedContact.timeZone || "N/A"}
                             </p>
                           </div>
@@ -580,37 +583,37 @@ export function ContactDetailPage({
                   <CardContent>
                     <div className="space-y-3">
                       <div className="flex items-start gap-3">
-                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-50">
-                          <Clock className="h-3.5 w-3.5 text-blue-500" />
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-info-surface">
+                          <Clock className="h-3.5 w-3.5 text-info" />
                         </div>
                         <div>
-                          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                             Created At
                           </p>
-                          <p className="text-sm font-medium text-gray-700">
+                          <p className="text-sm font-medium text-text-secondary">
                             {transformedContact.createdBy}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-start gap-3">
-                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-purple-50">
-                          <Clock className="h-3.5 w-3.5 text-purple-500" />
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                          <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                         </div>
                         <div>
-                          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                             Last Updated
                           </p>
-                          <p className="text-sm font-medium text-gray-700">
+                          <p className="text-sm font-medium text-text-secondary">
                             {transformedContact.lastUpdatedBy}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-start gap-3">
-                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-green-50">
-                          <User className="h-3.5 w-3.5 text-green-500" />
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-success-surface">
+                          <User className="h-3.5 w-3.5 text-success" />
                         </div>
                         <div>
-                          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                             Contact Status
                           </p>
                           <Badge

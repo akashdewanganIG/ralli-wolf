@@ -42,8 +42,7 @@ import {
   CreditCard,
   Truck,
   Download,
-  Loader2,
-} from "lucide-react";
+} from "@repo/ui/icons";
 import {
   useQuote,
   useQuoteLineItems,
@@ -62,6 +61,10 @@ import {
 import { ApplyForApprovalDialog } from "@/components/approvals/apply-for-approval-dialog";
 import type { QuoteLineItemApi } from "@/lib/api/types";
 import { DetailPageSkeleton } from "@/components/skeletons";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { DEFAULT_PAGE_SIZE } from "@/components/data-table";
+import { statusTone } from "@repo/ui/components/ui/status-badge";
+import { Tag as StatusTag } from "@repo/ui/components/ui/tag";
 
 type QuoteDetailPageProps = {
   quoteId: string;
@@ -97,15 +100,6 @@ function formatCurrency(n: number): string {
   return `₹${n.toLocaleString()}`;
 }
 
-const STATUS_BADGE_CLASSES: Record<string, string> = {
-  DRAFT: "bg-amber-100 text-amber-800 border-amber-200",
-  IN_REVIEW: "bg-blue-100 text-blue-800 border-blue-200",
-  APPROVED: "bg-emerald-100 text-emerald-800 border-emerald-200",
-  REJECTED: "bg-red-100 text-red-800 border-red-200",
-  PRESENTED: "bg-purple-100 text-purple-800 border-purple-200",
-  ACCEPTED: "bg-green-100 text-green-800 border-green-200",
-};
-
 function mapApiLineItemToRow(item: QuoteLineItemApi): QuoteLineItemRow {
   const productName = item.product?.name ?? "—";
   const productCode = item.product?.code ?? "—";
@@ -140,7 +134,8 @@ function mapApiLineItemToRow(item: QuoteLineItemApi): QuoteLineItemRow {
 export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
   const router = useRouter();
   const [lineItemsPage, setLineItemsPage] = React.useState(1);
-  const [lineItemsPerPage, setLineItemsPerPage] = React.useState(10);
+  const [lineItemsPerPage, setLineItemsPerPage] =
+    React.useState(DEFAULT_PAGE_SIZE);
   const [tabState, setTabState] = useQueryStates(
     { tab: parseAsString.withDefault("details") },
     { history: "push", shallow: true }
@@ -213,7 +208,7 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
 
   if (isError || !quote) {
     return (
-      <div className="space-y-5 p-4">
+      <PageShell>
         <div className="text-lg font-semibold">Quote not found</div>
         {error && typeof error === "object" && "message" in error && (
           <p className="text-sm text-muted-foreground">
@@ -223,13 +218,10 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
         <Button variant="outline" onClick={() => router.push("/sales/quotes")}>
           Back to Quotes
         </Button>
-      </div>
+      </PageShell>
     );
   }
 
-  const statusBadgeClass =
-    STATUS_BADGE_CLASSES[quote.status] ??
-    "bg-gray-100 text-gray-800 border-gray-200";
   const grandTotalNum = toNum(quote.grandTotal);
   const preparedByName = quote.preparedBy
     ? [quote.preparedBy.firstName, quote.preparedBy.lastName]
@@ -248,25 +240,20 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
     : "—";
 
   return (
-    <div className="p-4 space-y-6">
+    <div className="p-4 space-y-4">
       <DetailPageHeader
         title={quote.quoteNumber}
         status={quote.status}
-        statusVariant="secondary"
+        statusTone={statusTone(quote.status)}
         onBack={() => router.push("/sales/quotes")}
         headerRight={
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
-              size="sm"
               onClick={handleDownloadPdf}
               disabled={isDownloading}
             >
-              {isDownloading ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Download className="h-4 w-4 mr-2" />
-              )}
+              {isDownloading ? null : <Download className="h-4 w-4" />}
               {isDownloading ? "Generating..." : "Download PDF"}
             </Button>
 
@@ -305,10 +292,7 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                             }
                           >
                             {generateOrderMutation.isPending ? (
-                              <>
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                Generating…
-                              </>
+                              <>Generating…</>
                             ) : (
                               "Generate Order"
                             )}
@@ -331,7 +315,7 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
               onValueChange={value => updateStatusMutation.mutate(value)}
               disabled={updateStatusMutation.isPending}
             >
-              <SelectTrigger className="w-full sm:w-[200px]">
+              <SelectTrigger className="w-full sm:w-[12.5rem]">
                 <span className="flex-1 text-left">
                   Status: {quote.status || "—"}
                 </span>
@@ -400,7 +384,7 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
       </Dialog>
 
       {/* Financial banner */}
-      <div className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-500 p-4 text-white">
+      <div className="rounded-xl bg-info-surface border border-info-border p-4 text-info-foreground">
         <p className="text-xs font-semibold uppercase tracking-wider opacity-75">
           Grand Total
         </p>
@@ -430,16 +414,16 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="justify-start space-x-16 border-b border-gray-300">
+        <TabsList className="justify-start space-x-16 border-b border-input">
           <TabsTrigger
             value="details"
-            className="text-lg font-medium data-[state=active]:border-b-[3px] data-[state=active]:border-gray-700"
+            className="text-lg font-medium data-[state=active]:border-b-[3px] data-[state=active]:border-border"
           >
             Details
           </TabsTrigger>
           <TabsTrigger
             value="line-items"
-            className="text-lg font-medium data-[state=active]:border-b-[3px] data-[state=active]:border-gray-700"
+            className="text-lg font-medium data-[state=active]:border-b-[3px] data-[state=active]:border-border"
           >
             Line Items
           </TabsTrigger>
@@ -448,67 +432,66 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
         <TabsContents className="mt-8">
           <TabsContent value="details">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <div className="lg:col-span-2 space-y-6">
+              <div className="lg:col-span-2 space-y-4">
                 <DetailCard
                   title="Quote Information"
-                  className="bg-white border-gray-200"
+                  className="bg-surface border-border"
                 >
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-50">
-                        <Hash className="h-3.5 w-3.5 text-blue-500" />
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-info-surface">
+                        <Hash className="h-3.5 w-3.5 text-info" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                           Quote Number
                         </p>
-                        <p className="text-sm font-medium text-gray-700">
+                        <p className="text-sm font-medium text-text-secondary">
                           {quote.quoteNumber}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-violet-50">
-                        <Tag className="h-3.5 w-3.5 text-violet-500" />
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                        <Tag className="h-3.5 w-3.5 text-muted-foreground" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                           Name
                         </p>
-                        <p className="text-sm font-medium text-gray-700">
+                        <p className="text-sm font-medium text-text-secondary">
                           {quote.name || "—"}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-emerald-50">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-success-surface">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-success" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                           Status
                         </p>
-                        <Badge className={statusBadgeClass}>
+                        <StatusTag tone={statusTone(quote.status)}>
                           {quote.status}
-                        </Badge>
+                        </StatusTag>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-sky-50">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-sky-500" />
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-muted-foreground" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                           Primary
                         </p>
                         <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium text-gray-700">
+                          <p className="text-sm font-medium text-text-secondary">
                             {quote.isPrimary ? "Yes" : "No"}
                           </p>
                           {!quote.isPrimary && (
                             <Button
                               variant="link"
-                              size="sm"
                               className="h-auto p-0 text-xs text-primary"
                               onClick={() => setSetPrimaryOpen(true)}
                             >
@@ -520,14 +503,14 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                     </div>
                     {quote.type != null && (
                       <div className="flex items-start gap-3">
-                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-fuchsia-50">
-                          <Tag className="h-3.5 w-3.5 text-fuchsia-500" />
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                          <Tag className="h-3.5 w-3.5 text-muted-foreground" />
                         </div>
                         <div>
-                          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                             Type
                           </p>
-                          <p className="text-sm font-medium text-gray-700">
+                          <p className="text-sm font-medium text-text-secondary">
                             {quote.type}
                           </p>
                         </div>
@@ -535,54 +518,54 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                     )}
                     {quote.version != null && (
                       <div className="flex items-start gap-3">
-                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-slate-50">
-                          <Hash className="h-3.5 w-3.5 text-slate-500" />
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-elevated">
+                          <Hash className="h-3.5 w-3.5 text-muted-foreground" />
                         </div>
                         <div>
-                          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                             Version
                           </p>
-                          <p className="text-sm font-medium text-gray-700">
+                          <p className="text-sm font-medium text-text-secondary">
                             {String(quote.version)}
                           </p>
                         </div>
                       </div>
                     )}
                     <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-orange-50">
-                        <Building2 className="h-3.5 w-3.5 text-orange-500" />
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-warning-surface">
+                        <Building2 className="h-3.5 w-3.5 text-warning" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                           Account
                         </p>
-                        <p className="text-sm font-medium text-gray-700">
+                        <p className="text-sm font-medium text-text-secondary">
                           {quote.account ? quote.account.name : "—"}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-indigo-50">
-                        <Link2 className="h-3.5 w-3.5 text-indigo-500" />
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary-surface">
+                        <Link2 className="h-3.5 w-3.5 text-primary" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                           Opportunity
                         </p>
-                        <p className="text-sm font-medium text-gray-700">
+                        <p className="text-sm font-medium text-text-secondary">
                           {quote.opportunity ? quote.opportunity.name : "—"}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-pink-50">
-                        <User className="h-3.5 w-3.5 text-pink-500" />
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                        <User className="h-3.5 w-3.5 text-muted-foreground" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                           Primary Contact
                         </p>
-                        <p className="text-sm font-medium text-gray-700">
+                        <p className="text-sm font-medium text-text-secondary">
                           {quote.contact
                             ? `${quote.contact.name}${quote.contact.email ? ` (${quote.contact.email})` : ""}`
                             : "N/A"}
@@ -590,40 +573,40 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-amber-50">
-                        <Calendar className="h-3.5 w-3.5 text-amber-500" />
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-warning-surface">
+                        <Calendar className="h-3.5 w-3.5 text-warning" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                           Valid Until
                         </p>
-                        <p className="text-sm font-medium text-gray-700">
+                        <p className="text-sm font-medium text-text-secondary">
                           {formatDate(quote.validUntil ?? undefined)}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-50">
-                        <CreditCard className="h-3.5 w-3.5 text-blue-500" />
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-info-surface">
+                        <CreditCard className="h-3.5 w-3.5 text-info" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                           Payment Terms
                         </p>
-                        <p className="text-sm font-medium text-gray-700">
+                        <p className="text-sm font-medium text-text-secondary">
                           {quote.paymentTerms ?? "N/A"}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-teal-50">
-                        <Truck className="h-3.5 w-3.5 text-teal-500" />
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                        <Truck className="h-3.5 w-3.5 text-muted-foreground" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                           Delivery Terms
                         </p>
-                        <p className="text-sm font-medium text-gray-700">
+                        <p className="text-sm font-medium text-text-secondary">
                           {quote.deliveryTerms ?? "N/A"}
                         </p>
                       </div>
@@ -631,7 +614,7 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                   </div>
 
                   {/* Financial breakdown */}
-                  <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <div className="mt-4 pt-4 border-t border-subtle grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {[
                       {
                         label: "Subtotal",
@@ -657,12 +640,12 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                     ].map(item => (
                       <div
                         key={item.label}
-                        className="rounded-lg border p-3 bg-gray-50 border-gray-200"
+                        className="rounded-lg border p-3 bg-surface-elevated border-border"
                       >
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                           {item.label}
                         </p>
-                        <p className="text-sm font-semibold text-gray-700">
+                        <p className="text-sm font-semibold text-text-secondary">
                           {item.value}
                         </p>
                       </div>
@@ -673,17 +656,17 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                   {(quote.notes ||
                     quote.internalNotes ||
                     quote.description) && (
-                    <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
+                    <div className="mt-4 pt-4 border-t border-subtle space-y-3">
                       {quote.notes && (
                         <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-gray-100">
-                            <StickyNote className="h-3.5 w-3.5 text-gray-500" />
+                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                            <StickyNote className="h-3.5 w-3.5 text-muted-foreground" />
                           </div>
                           <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                               Notes
                             </p>
-                            <p className="text-sm font-medium text-gray-700 whitespace-pre-wrap">
+                            <p className="text-sm font-medium text-text-secondary whitespace-pre-wrap">
                               {quote.notes}
                             </p>
                           </div>
@@ -691,14 +674,14 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                       )}
                       {quote.internalNotes && (
                         <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-amber-50">
-                            <StickyNote className="h-3.5 w-3.5 text-amber-500" />
+                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-warning-surface">
+                            <StickyNote className="h-3.5 w-3.5 text-warning" />
                           </div>
                           <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                               Internal Notes
                             </p>
-                            <p className="text-sm font-medium text-gray-700 whitespace-pre-wrap">
+                            <p className="text-sm font-medium text-text-secondary whitespace-pre-wrap">
                               {quote.internalNotes}
                             </p>
                           </div>
@@ -706,14 +689,14 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                       )}
                       {quote.description && (
                         <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-gray-100">
-                            <FileText className="h-3.5 w-3.5 text-gray-500" />
+                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                            <FileText className="h-3.5 w-3.5 text-muted-foreground" />
                           </div>
                           <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                               Description
                             </p>
-                            <p className="text-sm font-medium text-gray-700 whitespace-pre-wrap">
+                            <p className="text-sm font-medium text-text-secondary whitespace-pre-wrap">
                               {quote.description}
                             </p>
                           </div>
@@ -729,18 +712,18 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                   quote.shippingStreet) && (
                   <DetailCard
                     title="Addresses"
-                    className="bg-white border-gray-200"
+                    className="bg-surface border-border"
                   >
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="flex items-start gap-3">
-                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-50">
-                          <CreditCard className="h-3.5 w-3.5 text-blue-500" />
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-info-surface">
+                          <CreditCard className="h-3.5 w-3.5 text-info" />
                         </div>
                         <div>
-                          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
                             Billing Address
                           </p>
-                          <div className="text-sm font-medium text-gray-700 space-y-0.5">
+                          <div className="text-sm font-medium text-text-secondary space-y-0.5">
                             {quote.billingName && <p>{quote.billingName}</p>}
                             {quote.billingStreet && (
                               <p>{quote.billingStreet}</p>
@@ -748,7 +731,7 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                             {(quote.billingCity ||
                               quote.billingState ||
                               quote.billingPostalCode) && (
-                              <p className="text-gray-500">
+                              <p className="text-muted-foreground">
                                 {[
                                   quote.billingCity,
                                   quote.billingState,
@@ -759,7 +742,7 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                               </p>
                             )}
                             {quote.billingCountry && (
-                              <p className="text-gray-500">
+                              <p className="text-muted-foreground">
                                 {quote.billingCountry}
                               </p>
                             )}
@@ -771,14 +754,14 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                         </div>
                       </div>
                       <div className="flex items-start gap-3">
-                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-teal-50">
-                          <Truck className="h-3.5 w-3.5 text-teal-500" />
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                          <Truck className="h-3.5 w-3.5 text-muted-foreground" />
                         </div>
                         <div>
-                          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
                             Shipping Address
                           </p>
-                          <div className="text-sm font-medium text-gray-700 space-y-0.5">
+                          <div className="text-sm font-medium text-text-secondary space-y-0.5">
                             {quote.shippingName && <p>{quote.shippingName}</p>}
                             {quote.shippingStreet && (
                               <p>{quote.shippingStreet}</p>
@@ -786,7 +769,7 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                             {(quote.shippingCity ||
                               quote.shippingState ||
                               quote.shippingPostalCode) && (
-                              <p className="text-gray-500">
+                              <p className="text-muted-foreground">
                                 {[
                                   quote.shippingCity,
                                   quote.shippingState,
@@ -797,7 +780,7 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                               </p>
                             )}
                             {quote.shippingCountry && (
-                              <p className="text-gray-500">
+                              <p className="text-muted-foreground">
                                 {quote.shippingCountry}
                               </p>
                             )}
@@ -815,19 +798,19 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                 {(quote.approvalComment || quote.rejectionComment) && (
                   <DetailCard
                     title="Approval / Rejection"
-                    className="bg-white border-gray-200"
+                    className="bg-surface border-border"
                   >
                     <div className="space-y-3">
                       {quote.approvalComment && (
                         <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-green-50">
-                            <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-success-surface">
+                            <CheckCircle2 className="h-3.5 w-3.5 text-success" />
                           </div>
                           <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                               Approval Comment
                             </p>
-                            <p className="text-sm font-medium text-gray-700">
+                            <p className="text-sm font-medium text-text-secondary">
                               {quote.approvalComment}
                             </p>
                           </div>
@@ -835,14 +818,14 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                       )}
                       {quote.rejectionComment && (
                         <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-red-50">
-                            <StickyNote className="h-3.5 w-3.5 text-red-500" />
+                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-error-surface">
+                            <StickyNote className="h-3.5 w-3.5 text-destructive" />
                           </div>
                           <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                               Rejection Comment
                             </p>
-                            <p className="text-sm font-medium text-gray-700">
+                            <p className="text-sm font-medium text-text-secondary">
                               {quote.rejectionComment}
                             </p>
                           </div>
@@ -853,47 +836,47 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                 )}
               </div>
 
-              <div className="h-full space-y-6">
+              <div className="h-full space-y-4">
                 <DetailCard
                   title="System Information"
-                  className="bg-white border-gray-200"
+                  className="bg-surface border-border"
                 >
                   <div className="space-y-3">
                     <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-indigo-50">
-                        <User className="h-3.5 w-3.5 text-indigo-500" />
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary-surface">
+                        <User className="h-3.5 w-3.5 text-primary" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                           Prepared By
                         </p>
-                        <p className="text-sm font-medium text-gray-700">
+                        <p className="text-sm font-medium text-text-secondary">
                           {preparedByName}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-50">
-                        <Clock className="h-3.5 w-3.5 text-blue-500" />
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-info-surface">
+                        <Clock className="h-3.5 w-3.5 text-info" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                           Created At
                         </p>
-                        <p className="text-sm font-medium text-gray-700">
+                        <p className="text-sm font-medium text-text-secondary">
                           {formatDateTime(quote.createdAt)}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-purple-50">
-                        <Clock className="h-3.5 w-3.5 text-purple-500" />
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                        <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                           Updated At
                         </p>
-                        <p className="text-sm font-medium text-gray-700">
+                        <p className="text-sm font-medium text-text-secondary">
                           {formatDateTime(quote.updatedAt)}
                         </p>
                       </div>
@@ -901,27 +884,27 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                     {quote.approvedAt && (
                       <>
                         <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-green-50">
-                            <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-success-surface">
+                            <CheckCircle2 className="h-3.5 w-3.5 text-success" />
                           </div>
                           <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                               Approved By
                             </p>
-                            <p className="text-sm font-medium text-gray-700">
+                            <p className="text-sm font-medium text-text-secondary">
                               {approvedByName}
                             </p>
                           </div>
                         </div>
                         <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-green-50">
-                            <Calendar className="h-3.5 w-3.5 text-green-500" />
+                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-success-surface">
+                            <Calendar className="h-3.5 w-3.5 text-success" />
                           </div>
                           <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                               Approved At
                             </p>
-                            <p className="text-sm font-medium text-gray-700">
+                            <p className="text-sm font-medium text-text-secondary">
                               {formatDateTime(quote.approvedAt)}
                             </p>
                           </div>
@@ -931,27 +914,27 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                     {quote.rejectedAt && (
                       <>
                         <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-red-50">
-                            <User className="h-3.5 w-3.5 text-red-500" />
+                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-error-surface">
+                            <User className="h-3.5 w-3.5 text-destructive" />
                           </div>
                           <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                               Rejected By
                             </p>
-                            <p className="text-sm font-medium text-gray-700">
+                            <p className="text-sm font-medium text-text-secondary">
                               {rejectedByName}
                             </p>
                           </div>
                         </div>
                         <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-red-50">
-                            <Calendar className="h-3.5 w-3.5 text-red-500" />
+                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-error-surface">
+                            <Calendar className="h-3.5 w-3.5 text-destructive" />
                           </div>
                           <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                               Rejected At
                             </p>
-                            <p className="text-sm font-medium text-gray-700">
+                            <p className="text-sm font-medium text-text-secondary">
                               {formatDateTime(quote.rejectedAt)}
                             </p>
                           </div>
@@ -960,14 +943,14 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                     )}
                     {quote.presentedAt && (
                       <div className="flex items-start gap-3">
-                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-purple-50">
-                          <Clock className="h-3.5 w-3.5 text-purple-500" />
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                          <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                         </div>
                         <div>
-                          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                             Presented At
                           </p>
-                          <p className="text-sm font-medium text-gray-700">
+                          <p className="text-sm font-medium text-text-secondary">
                             {formatDateTime(quote.presentedAt)}
                           </p>
                         </div>
@@ -975,59 +958,59 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                     )}
                     {quote.acceptedAt && (
                       <div className="flex items-start gap-3">
-                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-green-50">
-                          <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-success-surface">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-success" />
                         </div>
                         <div>
-                          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                             Accepted At
                           </p>
-                          <p className="text-sm font-medium text-gray-700">
+                          <p className="text-sm font-medium text-text-secondary">
                             {formatDateTime(quote.acceptedAt)}
                           </p>
                         </div>
                       </div>
                     )}
                     <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-sky-50">
-                        <Hash className="h-3.5 w-3.5 text-sky-500" />
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                        <Hash className="h-3.5 w-3.5 text-muted-foreground" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                           Line Items
                         </p>
-                        <p className="text-sm font-medium text-gray-700">
+                        <p className="text-sm font-medium text-text-secondary">
                           {String(quote._count?.lineItems ?? 0)}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-orange-50">
-                        <Hash className="h-3.5 w-3.5 text-orange-500" />
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-warning-surface">
+                        <Hash className="h-3.5 w-3.5 text-warning" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                           Sales Orders
                         </p>
-                        <p className="text-sm font-medium text-gray-700">
+                        <p className="text-sm font-medium text-text-secondary">
                           {String(quote._count?.salesOrders ?? 0)}
                         </p>
                       </div>
                     </div>
                     {quote.pdfUrl && (
                       <div className="flex items-start gap-3">
-                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-gray-100">
-                          <FileText className="h-3.5 w-3.5 text-gray-500" />
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                          <FileText className="h-3.5 w-3.5 text-muted-foreground" />
                         </div>
                         <div>
-                          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                             PDF
                           </p>
                           <a
                             href={quote.pdfUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-sm font-medium text-blue-600 hover:underline"
+                            className="text-sm font-medium text-info-foreground hover:text-info"
                           >
                             View PDF
                           </a>

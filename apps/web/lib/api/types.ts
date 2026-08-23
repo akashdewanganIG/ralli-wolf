@@ -521,14 +521,57 @@ export interface LoginRequest {
 }
 
 export interface LoginOtpVerifyRequest {
-  email: string;
+  /** The short-lived token handed back by the password step. */
+  mfaToken: string;
   otp: string;
 }
 
-export interface LoginOtpRequestResponse {
-  success: boolean;
-  message: string;
+/**
+ * What `POST /auth/login` returns once the password is accepted. No session
+ * token is issued until the emailed code is verified.
+ */
+export interface LoginMfaChallenge {
+  mfaRequired: true;
+  mfaToken: string;
+  /** e.g. `ak****an@example.com`, safe to show on screen. */
+  maskedEmail: string;
   expiresIn: number;
+  /** Which challenge to show: an authenticator code, or an emailed one. */
+  factor: "totp" | "email";
+  /** Everything this account could use, so the form can offer a switch. */
+  availableFactors: Array<"totp" | "email">;
+}
+
+export interface LoginOtpResendResponse {
+  success: boolean;
+  maskedEmail: string;
+  expiresIn: number;
+}
+
+/** The three ways an account can authenticate. */
+export type AuthMethodName = "password" | "email" | "totp";
+
+export interface AuthMethodStatus {
+  method: AuthMethodName;
+  enabled: boolean;
+  verified: boolean;
+  /** A secret exists but no code has proved it yet; does not count. */
+  pendingVerification: boolean;
+}
+
+export interface AuthMethodsSummary {
+  minimumRequired: number;
+  activeCount: number;
+  methods: AuthMethodStatus[];
+}
+
+export interface TotpEnrolment {
+  qrCodeDataUrl: string;
+  otpauthUrl: string;
+  /** Shown once, for users who cannot scan a QR code. */
+  manualKey: string;
+  issuer: string;
+  accountName: string;
 }
 
 export interface LoginResponse {
@@ -553,6 +596,8 @@ export interface ApiError {
   message: string;
   status: number;
   code?: string;
+  /** Set by the OTP verify endpoint when a code is entered incorrectly. */
+  attemptsRemaining?: number;
 }
 
 // Filter and Query types

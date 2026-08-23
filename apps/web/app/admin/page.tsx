@@ -58,7 +58,9 @@ export default function AdminPage() {
     <ProtectedRoute>
       <RoleGuard allowedRoles={["ADMIN"]}>
         <div className="p-4">
-          <h1 className="text-3xl font-bold mb-4">Admin Panel</h1>
+          <h1 className="text-base sm:text-lg font-semibold mb-4">
+            Admin Panel
+          </h1>
 
           <Tabs defaultValue="health" className="space-y-4">
             <TabsList>
@@ -101,7 +103,9 @@ export default function AdminPage() {
                       </div>
                     </div>
                   ) : (
-                    <p className="text-red-600">Failed to load health status</p>
+                    <p className="text-destructive">
+                      Failed to load health status
+                    </p>
                   )}
                 </CardContent>
               </Card>
@@ -132,21 +136,21 @@ export default function AdminPage() {
                       : "Test Landingi Webhook"}
                   </Button>
                   {webhookTestMutation.data && (
-                    <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded">
-                      <h4 className="font-semibold text-green-800">
+                    <div className="mt-4 p-4 bg-success-surface border border-success-border rounded">
+                      <h4 className="font-semibold text-success-foreground">
                         Webhook Test Result:
                       </h4>
-                      <pre className="text-sm text-green-700 mt-2">
+                      <pre className="text-sm text-success-foreground mt-2">
                         {JSON.stringify(webhookTestMutation.data, null, 2)}
                       </pre>
                     </div>
                   )}
                   {webhookTestMutation.error && (
-                    <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded">
-                      <h4 className="font-semibold text-red-800">
+                    <div className="mt-4 p-4 bg-error-surface border border-error-border rounded">
+                      <h4 className="font-semibold text-error-foreground">
                         Webhook Test Error:
                       </h4>
-                      <p className="text-sm text-red-700 mt-2">
+                      <p className="text-sm text-error-foreground mt-2">
                         {webhookTestMutation.error.message}
                       </p>
                     </div>

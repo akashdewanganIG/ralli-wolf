@@ -21,6 +21,9 @@ import {
   humanizeEnum,
 } from "@/lib/utils/decimal";
 import type { StockMovementType } from "@/lib/api/types/supplyChain";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { DashboardToolbar } from "@repo/ui/components/ui/dashboard-toolbar";
+import { Tag } from "@repo/ui/components/ui/tag";
 
 const MOVEMENT_TYPES: StockMovementType[] = [
   "OPENING_BALANCE",
@@ -73,7 +76,7 @@ export default function StockLedgerPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title="Stock ledger"
           subtitle="Trace every stock receipt, issue, transfer, and adjustment."
@@ -81,84 +84,88 @@ export default function StockLedgerPage() {
 
         <ErrorBanner error={error} />
 
-        <Panel>
-          <div className="mb-4 grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
-            <div className="w-full sm:w-56">
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Warehouse
-              </label>
-              <WarehouseFilter
-                value={warehouseId}
-                onChange={value => {
-                  setWarehouseId(value);
-                  setPage(1);
-                }}
-              />
-            </div>
-            <div className="w-full sm:w-56">
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Movement type
-              </label>
-              <SelectField
-                value={movementType}
-                onChange={event => {
-                  setMovementType(event.target.value);
-                  setPage(1);
-                }}
-              >
-                <option value="">All types</option>
-                {MOVEMENT_TYPES.map(type => (
-                  <option key={type} value={type}>
-                    {humanizeEnum(type)}
-                  </option>
-                ))}
-              </SelectField>
-            </div>
-            <div className="w-full sm:w-40">
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Direction
-              </label>
-              <SelectField
-                value={direction}
-                onChange={event => {
-                  setDirection(event.target.value);
-                  setPage(1);
-                }}
-              >
-                <option value="">Any</option>
-                <option value="IN">In</option>
-                <option value="OUT">Out</option>
-                <option value="INTERNAL">Internal</option>
-              </SelectField>
-            </div>
-            <div className="w-full sm:w-40">
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                From
-              </label>
-              <Input
-                type="date"
-                value={from}
-                onChange={event => {
-                  setFrom(event.target.value);
-                  setPage(1);
-                }}
-              />
-            </div>
-            <div className="w-full sm:w-40">
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                To
-              </label>
-              <Input
-                type="date"
-                value={to}
-                onChange={event => {
-                  setTo(event.target.value);
-                  setPage(1);
-                }}
-              />
-            </div>
-          </div>
-
+        <Panel
+          actions={
+            <DashboardToolbar
+              actions={[
+                <WarehouseFilter
+                  key="warehouse"
+                  value={warehouseId}
+                  onChange={value => {
+                    setWarehouseId(value);
+                    setPage(1);
+                  }}
+                />,
+                <SelectField
+                  key="movement-type"
+                  aria-label="Filter by movement type"
+                  className="w-full sm:w-48"
+                  value={movementType}
+                  onChange={event => {
+                    setMovementType(event.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <option value="">All types</option>
+                  {MOVEMENT_TYPES.map(type => (
+                    <option key={type} value={type}>
+                      {humanizeEnum(type)}
+                    </option>
+                  ))}
+                </SelectField>,
+                <SelectField
+                  key="direction"
+                  aria-label="Filter by direction"
+                  className="w-full sm:w-36"
+                  value={direction}
+                  onChange={event => {
+                    setDirection(event.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <option value="">Any direction</option>
+                  <option value="IN">In</option>
+                  <option value="OUT">Out</option>
+                  <option value="INTERNAL">Internal</option>
+                </SelectField>,
+                // Two adjacent date fields need naming: a date input shows
+                // "dd/mm/yyyy" either way, so a placeholder cannot say which
+                // end of the range it is. The label sits inline rather than
+                // stacked, which keeps the control on the toolbar's row.
+                <label
+                  key="from"
+                  className="flex h-9 shrink-0 items-center gap-1.5 text-xs text-muted-foreground"
+                >
+                  From
+                  <Input
+                    type="date"
+                    className="w-36"
+                    value={from}
+                    onChange={event => {
+                      setFrom(event.target.value);
+                      setPage(1);
+                    }}
+                  />
+                </label>,
+                <label
+                  key="to"
+                  className="flex h-9 shrink-0 items-center gap-1.5 text-xs text-muted-foreground"
+                >
+                  To
+                  <Input
+                    type="date"
+                    className="w-36"
+                    value={to}
+                    onChange={event => {
+                      setTo(event.target.value);
+                      setPage(1);
+                    }}
+                  />
+                </label>,
+              ]}
+            />
+          }
+        >
           <SimpleTable
             isLoading={isLoading}
             rows={movements}
@@ -179,7 +186,7 @@ export default function StockLedgerPage() {
                 cell: row => (
                   <Link
                     href={`/inventory/stock/${row.product.id}`}
-                    className="text-primary hover:underline"
+                    className="text-primary hover:text-info"
                   >
                     <span className="font-mono text-xs">
                       {row.product.code}
@@ -188,17 +195,21 @@ export default function StockLedgerPage() {
                   </Link>
                 ),
               },
-              { header: "Type", cell: row => humanizeEnum(row.movementType) },
+              {
+                header: "Type",
+                cell: row =>
+                  row.movementType ? <Tag>{row.movementType}</Tag> : "—",
+              },
               {
                 header: "Dir",
                 cell: row => (
                   <span
                     className={
                       row.direction === "IN"
-                        ? "font-medium text-emerald-700"
+                        ? "font-medium text-success-foreground"
                         : row.direction === "OUT"
-                          ? "font-medium text-red-700"
-                          : "font-medium text-blue-700"
+                          ? "font-medium text-error-foreground"
+                          : "font-medium text-info-foreground"
                     }
                   >
                     {row.direction === "IN"
@@ -256,11 +267,10 @@ export default function StockLedgerPage() {
           <Pager
             page={page}
             totalPages={pagination?.totalPages}
-            totalItems={pagination?.totalItems}
             onChange={setPage}
           />
         </Panel>
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

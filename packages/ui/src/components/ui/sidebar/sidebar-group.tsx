@@ -1,15 +1,26 @@
+"use client";
+
 import * as React from "react";
 import { cn } from "@repo/ui/lib/utils";
+import { useSidebar } from "./sidebar-provider";
 
 export function SidebarGroup({
   title,
   children,
   className,
 }: React.HTMLAttributes<HTMLDivElement> & { title?: string }) {
+  const { open } = useSidebar();
   return (
-    <div className={cn("mb-3", className)}>
-      {title && (
-        <h4 className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+    <div
+      className={cn(
+        // Sections are separated by a hairline rule instead of raw whitespace, so
+        // the rail still reads as distinct blocks once the labels are hidden.
+        "mt-3 border-t border-sidebar-border/70 pt-3 first:mt-0 first:border-t-0 first:pt-0",
+        className
+      )}
+    >
+      {title && open && (
+        <h4 className="px-3 pb-1.5 text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           {title}
         </h4>
       )}

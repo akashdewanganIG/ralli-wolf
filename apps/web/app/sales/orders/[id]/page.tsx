@@ -28,7 +28,6 @@ import {
   Download,
   FileText,
   Hash,
-  Loader2,
   Mail,
   MapPin,
   Phone,
@@ -36,11 +35,14 @@ import {
   TrendingUp,
   Truck,
   User,
-} from "lucide-react";
+} from "@repo/ui/icons";
 import { useParams, useRouter } from "next/navigation";
 import { parseAsString, useQueryState } from "nuqs";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import * as React from "react";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { statusTone } from "@repo/ui/components/ui/status-badge";
+import { Tag } from "@repo/ui/components/ui/tag";
 
 function formatDate(iso: string | null | undefined) {
   if (!iso) return "N/A";
@@ -76,15 +78,6 @@ function buildFullName(
 ) {
   return [firstName, lastName].filter(Boolean).join(" ") || "N/A";
 }
-
-const STATUS_BADGE_CLASSES: Record<string, string> = {
-  DRAFT: "bg-amber-100 text-amber-800 border-amber-200",
-  ACTIVATED: "bg-blue-100 text-blue-800 border-blue-200",
-  DELIVERED: "bg-emerald-100 text-emerald-800 border-emerald-200",
-  CANCELLED: "bg-red-100 text-red-800 border-red-200",
-  INVOICED: "bg-purple-100 text-purple-800 border-purple-200",
-  SHIPPED: "bg-sky-100 text-sky-800 border-sky-200",
-};
 
 const lineItemColumns: TableColumn<SalesOrderLineItem>[] = [
   {
@@ -153,19 +146,16 @@ function OrderDetailContent() {
 
   if (isError || !response?.data) {
     return (
-      <div className="space-y-5 p-4">
+      <PageShell>
         <div className="text-lg font-semibold">Order not found</div>
         <Button variant="outline" onClick={() => router.push("/sales/orders")}>
           Back to Orders
         </Button>
-      </div>
+      </PageShell>
     );
   }
 
   const order = response.data;
-  const statusBadgeClass =
-    STATUS_BADGE_CLASSES[order.status] ??
-    "bg-gray-100 text-gray-800 border-gray-200";
 
   const billingCityLine = [
     order.billingCity,
@@ -184,11 +174,11 @@ function OrderDetailContent() {
     .join(", ");
 
   return (
-    <div className="p-4 space-y-6">
+    <div className="p-4 space-y-4">
       <DetailPageHeader
         title={order.name}
         status={order.status}
-        statusVariant="secondary"
+        statusTone={statusTone(order.status)}
         onBack={() => router.push("/sales/orders")}
         headerRight={
           <Button
@@ -197,27 +187,23 @@ function OrderDetailContent() {
             onClick={() => handleDownloadPdf(order.id, order.orderNumber)}
             disabled={isDownloading}
           >
-            {isDownloading ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Download className="h-4 w-4 mr-2" />
-            )}
+            {isDownloading ? null : <Download className="h-4 w-4" />}
             {isDownloading ? "Generating..." : "Download PDF"}
           </Button>
         }
       />
 
       <Tabs value={tab} onValueChange={v => setTab(v)}>
-        <TabsList className="justify-start space-x-16 border-b border-gray-300">
+        <TabsList className="justify-start space-x-16 border-b border-input">
           <TabsTrigger
             value="details"
-            className="text-lg font-medium data-[state=active]:border-b-[3px] data-[state=active]:border-gray-700"
+            className="text-lg font-medium data-[state=active]:border-b-[3px] data-[state=active]:border-border"
           >
             Details
           </TabsTrigger>
           <TabsTrigger
             value="products"
-            className="text-lg font-medium data-[state=active]:border-b-[3px] data-[state=active]:border-gray-700"
+            className="text-lg font-medium data-[state=active]:border-b-[3px] data-[state=active]:border-border"
           >
             Products
           </TabsTrigger>
@@ -232,70 +218,70 @@ function OrderDetailContent() {
                 {/* Order Information */}
                 <DetailCard
                   title="Order Information"
-                  className="bg-white border-gray-200"
+                  className="bg-surface border-border"
                 >
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-50">
-                        <Hash className="h-3.5 w-3.5 text-blue-500" />
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-info-surface">
+                        <Hash className="h-3.5 w-3.5 text-info" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                           Order Number
                         </p>
-                        <p className="text-sm font-medium text-gray-700">
+                        <p className="text-sm font-medium text-text-secondary">
                           {order.orderNumber}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-emerald-50">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-success-surface">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-success" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                           Status
                         </p>
-                        <Badge className={statusBadgeClass}>
+                        <Tag tone={statusTone(order.status)}>
                           {order.status}
-                        </Badge>
+                        </Tag>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-violet-50">
-                        <Calendar className="h-3.5 w-3.5 text-violet-500" />
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                        <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                           Order Date
                         </p>
-                        <p className="text-sm font-medium text-gray-700">
+                        <p className="text-sm font-medium text-text-secondary">
                           {formatDate(order.orderDate)}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-purple-50">
-                        <FileText className="h-3.5 w-3.5 text-purple-500" />
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                        <FileText className="h-3.5 w-3.5 text-muted-foreground" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                           Quote Number
                         </p>
-                        <p className="text-sm font-medium text-gray-700">
+                        <p className="text-sm font-medium text-text-secondary">
                           {order.quote?.quoteNumber ?? "—"}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3 sm:col-span-2">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-orange-50">
-                        <TrendingUp className="h-3.5 w-3.5 text-orange-500" />
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-warning-surface">
+                        <TrendingUp className="h-3.5 w-3.5 text-warning" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                           Opportunity
                         </p>
-                        <p className="text-sm font-medium text-gray-700">
+                        <p className="text-sm font-medium text-text-secondary">
                           {order.quote?.opportunity?.name ?? "—"}
                         </p>
                       </div>
@@ -306,9 +292,9 @@ function OrderDetailContent() {
                 {/* Financial Summary */}
                 <DetailCard
                   title="Financial Summary"
-                  className="bg-white border-gray-200"
+                  className="bg-surface border-border"
                 >
-                  <div className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 p-4 text-white mb-4">
+                  <div className="rounded-xl bg-success-surface border border-success-border p-4 text-success-foreground mb-4">
                     <p className="text-xs font-semibold uppercase tracking-wider opacity-75">
                       Grand Total
                     </p>
@@ -355,18 +341,18 @@ function OrderDetailContent() {
                 {/* Customer */}
                 <DetailCard
                   title="Customer"
-                  className="bg-white border-gray-200"
+                  className="bg-surface border-border"
                 >
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-50">
-                        <Building2 className="h-3.5 w-3.5 text-blue-500" />
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-info-surface">
+                        <Building2 className="h-3.5 w-3.5 text-info" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                           Account
                         </p>
-                        <p className="text-sm font-medium text-gray-700">
+                        <p className="text-sm font-medium text-text-secondary">
                           {order.account.name}
                         </p>
                       </div>
@@ -374,40 +360,40 @@ function OrderDetailContent() {
                     {order.contact && (
                       <>
                         <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-violet-50">
-                            <User className="h-3.5 w-3.5 text-violet-500" />
+                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                            <User className="h-3.5 w-3.5 text-muted-foreground" />
                           </div>
                           <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                               Contact Name
                             </p>
-                            <p className="text-sm font-medium text-gray-700">
+                            <p className="text-sm font-medium text-text-secondary">
                               {order.contact.name}
                             </p>
                           </div>
                         </div>
                         <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-sky-50">
-                            <Mail className="h-3.5 w-3.5 text-sky-500" />
+                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                            <Mail className="h-3.5 w-3.5 text-muted-foreground" />
                           </div>
                           <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                               Contact Email
                             </p>
-                            <p className="text-sm font-medium text-gray-700">
+                            <p className="text-sm font-medium text-text-secondary">
                               {order.contact.email ?? "—"}
                             </p>
                           </div>
                         </div>
                         <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-green-50">
-                            <Phone className="h-3.5 w-3.5 text-green-500" />
+                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-success-surface">
+                            <Phone className="h-3.5 w-3.5 text-success" />
                           </div>
                           <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                               Contact Phone
                             </p>
-                            <p className="text-sm font-medium text-gray-700">
+                            <p className="text-sm font-medium text-text-secondary">
                               {order.contact.phone ?? "—"}
                             </p>
                           </div>
@@ -423,40 +409,40 @@ function OrderDetailContent() {
                     {order.billingName && (
                       <DetailCard
                         title="Billing Address"
-                        className="bg-white border-gray-200"
+                        className="bg-surface border-border"
                       >
                         <div className="space-y-3">
                           <div className="flex items-start gap-3">
-                            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-50">
-                              <CreditCard className="h-3.5 w-3.5 text-blue-500" />
+                            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-info-surface">
+                              <CreditCard className="h-3.5 w-3.5 text-info" />
                             </div>
                             <div>
-                              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                                 Name
                               </p>
-                              <p className="text-sm font-medium text-gray-700">
+                              <p className="text-sm font-medium text-text-secondary">
                                 {order.billingName}
                               </p>
                             </div>
                           </div>
                           <div className="flex items-start gap-3">
-                            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-violet-50">
-                              <MapPin className="h-3.5 w-3.5 text-violet-500" />
+                            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                              <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
                             </div>
                             <div>
-                              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                                 Address
                               </p>
-                              <p className="text-sm font-medium text-gray-700">
+                              <p className="text-sm font-medium text-text-secondary">
                                 {order.billingStreet ?? "—"}
                               </p>
                               {billingCityLine && (
-                                <p className="text-sm text-gray-500">
+                                <p className="text-sm text-muted-foreground">
                                   {billingCityLine}
                                 </p>
                               )}
                               {order.billingCountry && (
-                                <p className="text-sm text-gray-500">
+                                <p className="text-sm text-muted-foreground">
                                   {order.billingCountry}
                                 </p>
                               )}
@@ -468,40 +454,40 @@ function OrderDetailContent() {
                     {order.shippingName && (
                       <DetailCard
                         title="Shipping Address"
-                        className="bg-white border-gray-200"
+                        className="bg-surface border-border"
                       >
                         <div className="space-y-3">
                           <div className="flex items-start gap-3">
-                            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-sky-50">
-                              <Truck className="h-3.5 w-3.5 text-sky-500" />
+                            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                              <Truck className="h-3.5 w-3.5 text-muted-foreground" />
                             </div>
                             <div>
-                              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                                 Name
                               </p>
-                              <p className="text-sm font-medium text-gray-700">
+                              <p className="text-sm font-medium text-text-secondary">
                                 {order.shippingName}
                               </p>
                             </div>
                           </div>
                           <div className="flex items-start gap-3">
-                            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-violet-50">
-                              <MapPin className="h-3.5 w-3.5 text-violet-500" />
+                            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                              <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
                             </div>
                             <div>
-                              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                                 Address
                               </p>
-                              <p className="text-sm font-medium text-gray-700">
+                              <p className="text-sm font-medium text-text-secondary">
                                 {order.shippingStreet ?? "—"}
                               </p>
                               {shippingCityLine && (
-                                <p className="text-sm text-gray-500">
+                                <p className="text-sm text-muted-foreground">
                                   {shippingCityLine}
                                 </p>
                               )}
                               {order.shippingCountry && (
-                                <p className="text-sm text-gray-500">
+                                <p className="text-sm text-muted-foreground">
                                   {order.shippingCountry}
                                 </p>
                               )}
@@ -517,19 +503,19 @@ function OrderDetailContent() {
                 {(order.paymentTerms || order.deliveryTerms || order.notes) && (
                   <DetailCard
                     title="Terms & Notes"
-                    className="bg-white border-gray-200"
+                    className="bg-surface border-border"
                   >
                     <div className="space-y-3">
                       {order.paymentTerms && (
                         <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-amber-50">
-                            <CreditCard className="h-3.5 w-3.5 text-amber-500" />
+                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-warning-surface">
+                            <CreditCard className="h-3.5 w-3.5 text-warning" />
                           </div>
                           <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                               Payment Terms
                             </p>
-                            <p className="text-sm font-medium text-gray-700">
+                            <p className="text-sm font-medium text-text-secondary">
                               {order.paymentTerms}
                             </p>
                           </div>
@@ -537,14 +523,14 @@ function OrderDetailContent() {
                       )}
                       {order.deliveryTerms && (
                         <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-sky-50">
-                            <Truck className="h-3.5 w-3.5 text-sky-500" />
+                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                            <Truck className="h-3.5 w-3.5 text-muted-foreground" />
                           </div>
                           <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                               Delivery Terms
                             </p>
-                            <p className="text-sm font-medium text-gray-700">
+                            <p className="text-sm font-medium text-text-secondary">
                               {order.deliveryTerms}
                             </p>
                           </div>
@@ -552,14 +538,14 @@ function OrderDetailContent() {
                       )}
                       {order.notes && (
                         <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-gray-100">
-                            <StickyNote className="h-3.5 w-3.5 text-gray-500" />
+                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                            <StickyNote className="h-3.5 w-3.5 text-muted-foreground" />
                           </div>
                           <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                               Notes
                             </p>
-                            <p className="text-sm font-medium text-gray-700 whitespace-pre-wrap">
+                            <p className="text-sm font-medium text-text-secondary whitespace-pre-wrap">
                               {order.notes}
                             </p>
                           </div>
@@ -572,17 +558,17 @@ function OrderDetailContent() {
 
               {/* Right column — owner / system info */}
               <div className="space-y-4">
-                <DetailCard title="Owner" className="bg-white border-gray-200">
+                <DetailCard title="Owner" className="bg-surface border-border">
                   <div className="space-y-3">
                     <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-indigo-50">
-                        <User className="h-3.5 w-3.5 text-indigo-500" />
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary-surface">
+                        <User className="h-3.5 w-3.5 text-primary" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                           Owner Name
                         </p>
-                        <p className="text-sm font-medium text-gray-700">
+                        <p className="text-sm font-medium text-text-secondary">
                           {buildFullName(
                             order.owner.firstName,
                             order.owner.lastName
@@ -591,14 +577,14 @@ function OrderDetailContent() {
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-sky-50">
-                        <Mail className="h-3.5 w-3.5 text-sky-500" />
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                        <Mail className="h-3.5 w-3.5 text-muted-foreground" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                           Owner Email
                         </p>
-                        <p className="text-sm font-medium text-gray-700">
+                        <p className="text-sm font-medium text-text-secondary">
                           {order.owner.email ?? "—"}
                         </p>
                       </div>
@@ -608,45 +594,45 @@ function OrderDetailContent() {
 
                 <DetailCard
                   title="System Information"
-                  className="bg-white border-gray-200"
+                  className="bg-surface border-border"
                 >
                   <div className="space-y-3">
                     <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-50">
-                        <Clock className="h-3.5 w-3.5 text-blue-500" />
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-info-surface">
+                        <Clock className="h-3.5 w-3.5 text-info" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                           Created At
                         </p>
-                        <p className="text-sm font-medium text-gray-700">
+                        <p className="text-sm font-medium text-text-secondary">
                           {formatDate(order.createdAt)}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-purple-50">
-                        <Clock className="h-3.5 w-3.5 text-purple-500" />
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                        <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                           Last Modified
                         </p>
-                        <p className="text-sm font-medium text-gray-700">
+                        <p className="text-sm font-medium text-text-secondary">
                           {formatDate(order.updatedAt)}
                         </p>
                       </div>
                     </div>
                     {order.approvedBy && (
                       <div className="flex items-start gap-3">
-                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-green-50">
-                          <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-success-surface">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-success" />
                         </div>
                         <div>
-                          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                             Approved By
                           </p>
-                          <p className="text-sm font-medium text-gray-700">
+                          <p className="text-sm font-medium text-text-secondary">
                             {buildFullName(
                               order.approvedBy.firstName,
                               order.approvedBy.lastName

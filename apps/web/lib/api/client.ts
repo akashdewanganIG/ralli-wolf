@@ -134,10 +134,12 @@ apiClient.interceptors.response.use(
     // Transform error to our ApiError format
     const serverMsg =
       error?.response?.data?.error || error?.response?.data?.message;
+    const attemptsRemaining = error.response?.data?.attemptsRemaining;
     const apiError: ApiError = {
       message: serverMsg || error.message || "An error occurred",
       status: status || 500,
       code: error.response?.data?.code,
+      ...(typeof attemptsRemaining === "number" ? { attemptsRemaining } : {}),
     };
 
     return Promise.reject(apiError);

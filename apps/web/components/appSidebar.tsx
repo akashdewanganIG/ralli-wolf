@@ -56,7 +56,7 @@ import {
   BadgeCheck,
   Wallet,
   X,
-} from "lucide-react";
+} from "@repo/ui/icons";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useIsSystemAdmin } from "./guards/RoleGuard";
@@ -68,7 +68,7 @@ function SidebarBrand() {
       src={ralliWolfLogo}
       alt="Ralli Wolf"
       height={32}
-      className="h-8 w-auto max-w-[172px] object-contain"
+      className="h-8 w-auto max-w-[10.75rem] object-contain"
       priority
     />
   ) : null;
@@ -87,7 +87,7 @@ export function AppSidebar({
     setIsClient(true);
   }, []);
 
-  // Check if we're on any lead management route
+  // Marketing and sales modules
   const isLeadManagementActive = pathname.startsWith("/leads");
   const isCampaignsActive = pathname.startsWith("/campaigns");
   const isSalesManagementActive = pathname.startsWith("/sales");
@@ -120,14 +120,21 @@ export function AppSidebar({
             <X className="h-5 w-5" />
           </button>
         </SidebarHeader>
-        <SidebarContent className="overscroll-contain">
-          <SidebarGroup title="">
+        {/* The rail still scrolls, but without a visible track cutting through
+            the section rules. */}
+        <SidebarContent className="scrollbar-none overscroll-contain">
+          <SidebarGroup>
             <SidebarItem
               icon={ChartNoAxesCombined}
               label="Dashboard"
               href="/"
               active={isClient && pathname === "/"}
             />
+          </SidebarGroup>
+
+          {/* Front office, in the order a customer record is built up: publish
+              the page, capture and work the lead, nurture it, then sell to it. */}
+          <SidebarGroup title="Marketing & Sales">
             <SidebarCollapsibleItem
               icon={LayoutTemplate}
               label="Landing Page"
@@ -135,19 +142,19 @@ export function AppSidebar({
               defaultOpen={isClient && isLandingPageActive}
             >
               <SidebarItem
+                label="Landing Page Builder"
+                href="https://app.landingi.com/landings"
+                target="_blank"
+                active={isClient && pathname === "/landing-page"}
+                icon={FileText}
+              />
+              <SidebarItem
                 label="Landing Page Trackers"
                 href="/landing-page-trackers"
                 active={
                   isClient && pathname.startsWith("/landing-page-trackers")
                 }
                 icon={Layers}
-              />
-              <SidebarItem
-                label="Landing Page Builder"
-                href="https://app.landingi.com/landings"
-                target="_blank"
-                active={isClient && pathname === "/landing-page"}
-                icon={FileText}
               />
             </SidebarCollapsibleItem>
             <SidebarCollapsibleItem
@@ -163,16 +170,16 @@ export function AppSidebar({
                 icon={ListChecks}
               />
               <SidebarItem
-                label="Assigned Leads"
-                href="/leads/assigned"
-                active={isClient && pathname === "/leads/assigned"}
-                icon={UserCheck}
-              />
-              <SidebarItem
                 label="Unassigned Leads"
                 href="/leads/unassigned-leads"
                 active={isClient && pathname === "/leads/unassigned-leads"}
                 icon={Share2}
+              />
+              <SidebarItem
+                label="Assigned Leads"
+                href="/leads/assigned"
+                active={isClient && pathname === "/leads/assigned"}
+                icon={UserCheck}
               />
               <SidebarItem
                 label="Accounts"
@@ -194,6 +201,12 @@ export function AppSidebar({
               defaultOpen={isClient && isCampaignsActive}
             >
               <SidebarItem
+                label="Segments"
+                href="/campaigns/segments"
+                active={isClient && pathname.startsWith("/campaigns/segments")}
+                icon={ListChecks}
+              />
+              <SidebarItem
                 label="Email Campaigns"
                 href="/campaigns/email"
                 active={isClient && pathname.startsWith("/campaigns/email")}
@@ -205,12 +218,6 @@ export function AppSidebar({
                 active={isClient && pathname.startsWith("/campaigns/whatsapp")}
                 icon={MessageCircle}
               />
-              <SidebarItem
-                label="Segments"
-                href="/campaigns/segments"
-                active={isClient && pathname.startsWith("/campaigns/segments")}
-                icon={ListChecks}
-              />
             </SidebarCollapsibleItem>
             <SidebarCollapsibleItem
               icon={TrendingUp}
@@ -218,12 +225,18 @@ export function AppSidebar({
               active={isClient && isSalesManagementActive}
               defaultOpen={isClient && isSalesManagementActive}
             >
-              {/*<SidebarItem
-                label="Dashboard"
-                href="/sales/dashboard"
-                active={isClient && pathname === '/sales/dashboard'}
-                icon={BarChart as any}
-              />*/}
+              <SidebarItem
+                label="Product Configuration"
+                href="/sales/products"
+                active={isClient && pathname.startsWith("/sales/products")}
+                icon={Package}
+              />
+              <SidebarItem
+                label="Price Books"
+                href="/sales/price-books"
+                active={isClient && pathname.startsWith("/sales/price-books")}
+                icon={BookCheckIcon}
+              />
               <SidebarItem
                 label="Opportunities"
                 href="/sales/opportunities"
@@ -243,118 +256,24 @@ export function AppSidebar({
                 icon={ShoppingCart}
               />
               <SidebarItem
-                label="Product Configuration"
-                href="/sales/products"
-                active={isClient && pathname.startsWith("/sales/products")}
-                icon={Package}
-              />
-              <SidebarItem
-                label="Price Books"
-                href="/sales/price-books"
-                active={isClient && pathname.startsWith("/sales/price-books")}
-                icon={BookCheckIcon}
-              />
-              <SidebarItem
                 label="Approvals"
                 href="/sales/approvals"
                 active={isClient && pathname.startsWith("/sales/approvals")}
                 icon={ClipboardCheck}
               />
             </SidebarCollapsibleItem>
-            <SidebarCollapsibleItem
-              icon={Boxes}
-              label="Inventory"
-              active={isClient && isInventoryActive}
-              defaultOpen={isClient && isInventoryActive}
-            >
-              <SidebarItem
-                label="Overview"
-                href="/inventory"
-                active={isClient && pathname === "/inventory"}
-                icon={BarChart}
-              />
-              <SidebarItem
-                label="Stock Positions"
-                href="/inventory/stock"
-                active={isClient && pathname.startsWith("/inventory/stock")}
-                icon={PackageSearch}
-              />
-              <SidebarItem
-                label="Stock Ledger"
-                href="/inventory/movements"
-                active={isClient && pathname.startsWith("/inventory/movements")}
-                icon={ArrowLeftRight}
-              />
-              <SidebarItem
-                label="Alerts"
-                href="/inventory/alerts"
-                active={isClient && pathname.startsWith("/inventory/alerts")}
-                icon={TriangleAlert}
-              />
-              <SidebarItem
-                label="Reorder Policies"
-                href="/inventory/reorder-rules"
-                active={
-                  isClient && pathname.startsWith("/inventory/reorder-rules")
-                }
-                icon={SlidersHorizontal}
-              />
-              <SidebarItem
-                label="Stock Counts"
-                href="/inventory/counts"
-                active={isClient && pathname.startsWith("/inventory/counts")}
-                icon={ScanBarcode}
-              />
-              <SidebarItem
-                label="Valuation"
-                href="/inventory/valuation"
-                active={isClient && pathname.startsWith("/inventory/valuation")}
-                icon={Wallet}
-              />
-            </SidebarCollapsibleItem>
-            <SidebarCollapsibleItem
-              icon={Component}
-              label="Materials"
-              active={isClient && isMaterialsActive}
-              defaultOpen={isClient && isMaterialsActive}
-            >
-              <SidebarItem
-                label="Material Master"
-                href="/materials"
-                active={isClient && pathname === "/materials"}
-                icon={Layers}
-              />
-              <SidebarItem
-                label="Build Availability"
-                href="/materials/availability"
-                active={
-                  isClient && pathname.startsWith("/materials/availability")
-                }
-                icon={ListChecks}
-              />
-              <SidebarItem
-                label="Shortages"
-                href="/materials/shortages"
-                active={isClient && pathname.startsWith("/materials/shortages")}
-                icon={TriangleAlert}
-              />
-              <SidebarItem
-                label="Consumption & Wastage"
-                href="/materials/consumption"
-                active={
-                  isClient && pathname.startsWith("/materials/consumption")
-                }
-                icon={Recycle}
-              />
-              <SidebarItem
-                label="Requisitions"
-                href="/materials/requisitions"
-                active={
-                  isClient && pathname.startsWith("/materials/requisitions")
-                }
-                icon={ClipboardList}
-              />
-            </SidebarCollapsibleItem>
+            <SidebarItem
+              icon={Bot}
+              label="Chatbot"
+              href="/chatbot"
+              active={isClient && pathname === "/chatbot"}
+            />
+          </SidebarGroup>
+
+          {/* Back office, in the order the data is actually entered: stand up
+              the warehouse, define the materials, buy them in, then track the
+              stock those receipts create and consume it in production. */}
+          <SidebarGroup title="Supply Chain & Operations">
             <SidebarCollapsibleItem
               icon={Warehouse}
               label="Warehouse"
@@ -389,22 +308,46 @@ export function AppSidebar({
               />
             </SidebarCollapsibleItem>
             <SidebarCollapsibleItem
-              icon={GitBranch}
-              label="BOM & Production"
-              active={isClient && isBomActive}
-              defaultOpen={isClient && isBomActive}
+              icon={Component}
+              label="Materials"
+              active={isClient && isMaterialsActive}
+              defaultOpen={isClient && isMaterialsActive}
             >
               <SidebarItem
-                label="Bills of Materials"
-                href="/bom"
-                active={isClient && pathname.startsWith("/bom")}
-                icon={GitBranch}
+                label="Material Master"
+                href="/materials"
+                active={isClient && pathname === "/materials"}
+                icon={Layers}
               />
               <SidebarItem
-                label="Production Orders"
-                href="/production"
-                active={isClient && pathname.startsWith("/production")}
-                icon={Factory}
+                label="Build Availability"
+                href="/materials/availability"
+                active={
+                  isClient && pathname.startsWith("/materials/availability")
+                }
+                icon={ListChecks}
+              />
+              <SidebarItem
+                label="Shortages"
+                href="/materials/shortages"
+                active={isClient && pathname.startsWith("/materials/shortages")}
+                icon={TriangleAlert}
+              />
+              <SidebarItem
+                label="Requisitions"
+                href="/materials/requisitions"
+                active={
+                  isClient && pathname.startsWith("/materials/requisitions")
+                }
+                icon={ClipboardList}
+              />
+              <SidebarItem
+                label="Consumption & Wastage"
+                href="/materials/consumption"
+                active={
+                  isClient && pathname.startsWith("/materials/consumption")
+                }
+                icon={Recycle}
               />
             </SidebarCollapsibleItem>
             <SidebarCollapsibleItem
@@ -456,12 +399,79 @@ export function AppSidebar({
                 icon={BadgeCheck}
               />
             </SidebarCollapsibleItem>
-            <SidebarItem
-              icon={Bot}
-              label="Chatbot"
-              href="/chatbot"
-              active={isClient && pathname === "/chatbot"}
-            />
+            <SidebarCollapsibleItem
+              icon={Boxes}
+              label="Inventory"
+              active={isClient && isInventoryActive}
+              defaultOpen={isClient && isInventoryActive}
+            >
+              <SidebarItem
+                label="Overview"
+                href="/inventory"
+                active={isClient && pathname === "/inventory"}
+                icon={BarChart}
+              />
+              <SidebarItem
+                label="Stock Positions"
+                href="/inventory/stock"
+                active={isClient && pathname.startsWith("/inventory/stock")}
+                icon={PackageSearch}
+              />
+              <SidebarItem
+                label="Stock Ledger"
+                href="/inventory/movements"
+                active={isClient && pathname.startsWith("/inventory/movements")}
+                icon={ArrowLeftRight}
+              />
+              <SidebarItem
+                label="Stock Counts"
+                href="/inventory/counts"
+                active={isClient && pathname.startsWith("/inventory/counts")}
+                icon={ScanBarcode}
+              />
+              <SidebarItem
+                label="Reorder Policies"
+                href="/inventory/reorder-rules"
+                active={
+                  isClient && pathname.startsWith("/inventory/reorder-rules")
+                }
+                icon={SlidersHorizontal}
+              />
+              <SidebarItem
+                label="Alerts"
+                href="/inventory/alerts"
+                active={isClient && pathname.startsWith("/inventory/alerts")}
+                icon={TriangleAlert}
+              />
+              <SidebarItem
+                label="Valuation"
+                href="/inventory/valuation"
+                active={isClient && pathname.startsWith("/inventory/valuation")}
+                icon={Wallet}
+              />
+            </SidebarCollapsibleItem>
+            <SidebarCollapsibleItem
+              icon={GitBranch}
+              label="BOM & Production"
+              active={isClient && isBomActive}
+              defaultOpen={isClient && isBomActive}
+            >
+              <SidebarItem
+                label="Bills of Materials"
+                href="/bom"
+                active={isClient && pathname.startsWith("/bom")}
+                icon={GitBranch}
+              />
+              <SidebarItem
+                label="Production Orders"
+                href="/production"
+                active={isClient && pathname.startsWith("/production")}
+                icon={Factory}
+              />
+            </SidebarCollapsibleItem>
+          </SidebarGroup>
+
+          <SidebarGroup title="Administration">
             {canManageUsers && (
               <SidebarItem
                 icon={UserLock}

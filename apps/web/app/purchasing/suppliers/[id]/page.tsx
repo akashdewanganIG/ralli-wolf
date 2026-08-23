@@ -36,6 +36,7 @@ import {
   formatPercent,
   formatQuantity,
 } from "@/lib/utils/decimal";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 export default function SupplierDetailPage() {
   const params = useParams<{ id: string }>();
@@ -82,7 +83,7 @@ export default function SupplierDetailPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title={supplier ? `${supplier.code} — ${supplier.name}` : "Supplier"}
           subtitle={
@@ -120,7 +121,7 @@ export default function SupplierDetailPage() {
                       }
                     }}
                     variant="outline"
-                    className="px-3 text-red-700 hover:bg-red-50 whitespace-nowrap"
+                    className="px-3 text-error-foreground hover:bg-error-surface whitespace-nowrap"
                   >
                     Blacklist
                   </Button>
@@ -157,7 +158,7 @@ export default function SupplierDetailPage() {
           </Alert>
         )}
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid-auto-fit gap-3">
           <StatCard
             label="Overall score"
             value={
@@ -230,7 +231,7 @@ export default function SupplierDetailPage() {
         {tab === "overview" && supplier && (
           <>
             <Panel title="Supplier details">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid-auto-fit gap-4">
                 <DetailRow
                   label="Legal name"
                   value={supplier.legalName ?? "—"}
@@ -289,7 +290,7 @@ export default function SupplierDetailPage() {
                     cell: row => (
                       <Link
                         href={`/purchasing/orders/${row.id}`}
-                        className="font-mono text-xs text-primary hover:underline"
+                        className="font-mono text-xs text-primary hover:text-info"
                       >
                         {row.poNumber}
                       </Link>
@@ -436,7 +437,7 @@ export default function SupplierDetailPage() {
                     cell: row => (
                       <Link
                         href={`/inventory/stock/${row.product.id}`}
-                        className="text-primary hover:underline"
+                        className="text-primary hover:text-info"
                       >
                         <span className="font-mono text-xs">
                           {row.product.code}
@@ -499,7 +500,7 @@ export default function SupplierDetailPage() {
                     cell: row => (
                       <div className="flex items-center gap-2">
                         {row.isPreferred && (
-                          <span className="text-xs font-medium text-emerald-700">
+                          <span className="text-xs font-medium text-success-foreground">
                             preferred
                           </span>
                         )}
@@ -554,7 +555,7 @@ export default function SupplierDetailPage() {
                   poor one.
                 </p>
               ) : (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid-auto-fit gap-4">
                   <DetailRow
                     label="Receipts"
                     value={`${scorecard.receiptsCount} (${scorecard.onTimeReceipts} on time)`}
@@ -714,7 +715,7 @@ export default function SupplierDetailPage() {
                     header: "Primary",
                     cell: row =>
                       row.isPrimary ? (
-                        <span className="text-xs font-medium text-emerald-700">
+                        <span className="text-xs font-medium text-success-foreground">
                           Yes
                         </span>
                       ) : (
@@ -727,7 +728,7 @@ export default function SupplierDetailPage() {
                       <button
                         type="button"
                         onClick={() => removeContact.mutate(row.id)}
-                        className="rounded border px-2 py-1 text-xs text-red-700 hover:bg-red-50 whitespace-nowrap"
+                        className="rounded border px-2 py-1 text-xs text-error-foreground hover:bg-error-surface whitespace-nowrap"
                       >
                         Remove
                       </button>
@@ -738,7 +739,7 @@ export default function SupplierDetailPage() {
             </Panel>
           </>
         )}
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

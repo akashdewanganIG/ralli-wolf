@@ -3,6 +3,11 @@
 import { ReactNode, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import {
+  Skeleton,
+  SkeletonList,
+  SkeletonRegion,
+} from "@repo/ui/components/ui/skeleton";
 
 interface DeveloperGuardProps {
   children: ReactNode;
@@ -28,9 +33,16 @@ export function DeveloperGuard({
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600" />
-      </div>
+      <SkeletonRegion
+        label="Checking developer access"
+        className="flex flex-col gap-4 px-4 pb-8 pt-5 sm:px-5"
+      >
+        <div className="space-y-2">
+          <Skeleton className="h-5 w-52" />
+          <Skeleton className="h-3.5 w-72" />
+        </div>
+        <SkeletonList rows={4} />
+      </SkeletonRegion>
     );
   }
 

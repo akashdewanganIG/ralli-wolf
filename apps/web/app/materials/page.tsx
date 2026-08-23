@@ -12,11 +12,16 @@ import {
   SelectField,
   SimpleTable,
   StatCard,
+  DEFAULT_PAGE_SIZE,
 } from "@/components/supply-chain/shared";
 import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
 import { useMaterialShortages, useMaterials } from "@/hooks/useSupplyChain";
 import { formatMoney, formatQuantity, humanizeEnum } from "@/lib/utils/decimal";
 import type { ItemType } from "@/lib/api/types/supplyChain";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { DashboardToolbar } from "@repo/ui/components/ui/dashboard-toolbar";
+import { SearchInput } from "@repo/ui/components/ui/search-input";
+import { Tag } from "@repo/ui/components/ui/tag";
 
 const MATERIAL_TYPES: ItemType[] = [
   "RAW_MATERIAL",
@@ -33,7 +38,7 @@ export default function MaterialsPage() {
 
   const { materials, pagination, isLoading, error } = useMaterials({
     page,
-    limit: 25,
+    limit: DEFAULT_PAGE_SIZE,
     search: search || undefined,
     warehouseId,
     itemType: itemType || undefined,
@@ -44,7 +49,7 @@ export default function MaterialsPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title="Material management"
           subtitle="Manage materials and monitor availability against safety stock."
@@ -70,7 +75,7 @@ export default function MaterialsPage() {
 
         <ErrorBanner error={error} />
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid-auto-fit gap-3">
           <StatCard
             label="Materials tracked"
             value={pagination?.totalItems ?? 0}
@@ -96,48 +101,46 @@ export default function MaterialsPage() {
           />
         </div>
 
-        <Panel>
-          <div className="mb-4 grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
-            <div className="min-w-0 flex-[1_1_14rem]">
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Search
-              </label>
-              <Input
-                placeholder="Material code or name"
-                value={search}
-                onChange={event => {
-                  setSearch(event.target.value);
-                  setPage(1);
-                }}
-              />
-            </div>
-            <div className="w-full sm:w-48">
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Material type
-              </label>
-              <SelectField
-                value={itemType}
-                onChange={event => {
-                  setItemType(event.target.value);
-                  setPage(1);
-                }}
-              >
-                <option value="">All material types</option>
-                {MATERIAL_TYPES.map(type => (
-                  <option key={type} value={type}>
-                    {humanizeEnum(type)}
-                  </option>
-                ))}
-              </SelectField>
-            </div>
-          </div>
-
+        <Panel
+          actions={
+            <DashboardToolbar
+              search={
+                <SearchInput
+                  placeholder="Search material code or name"
+                  value={search}
+                  onChange={event => {
+                    setSearch(event.target.value);
+                    setPage(1);
+                  }}
+                />
+              }
+              actions={
+                <SelectField
+                  aria-label="Filter by material type"
+                  className="w-full sm:w-48"
+                  value={itemType}
+                  onChange={event => {
+                    setItemType(event.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <option value="">All material types</option>
+                  {MATERIAL_TYPES.map(type => (
+                    <option key={type} value={type}>
+                      {humanizeEnum(type)}
+                    </option>
+                  ))}
+                </SelectField>
+              }
+            />
+          }
+        >
           <SimpleTable
             isLoading={isLoading}
             rows={materials}
             keyOf={row => row.id}
             rowClassName={row =>
-              row.isBelowSafetyStock ? "bg-amber-50/40" : ""
+              row.isBelowSafetyStock ? "bg-warning-surface/40" : ""
             }
             empty="No materials yet. Set a product's item type to Raw Material, Component, Consumable or Packaging for it to appear here."
             columns={[
@@ -146,14 +149,17 @@ export default function MaterialsPage() {
                 cell: row => (
                   <Link
                     href={`/inventory/stock/${row.id}`}
-                    className="text-primary hover:underline"
+                    className="text-primary hover:text-info"
                   >
                     <span className="font-mono text-xs">{row.code}</span>
                     <span className="ml-2 text-sm">{row.name}</span>
                   </Link>
                 ),
               },
-              { header: "Type", cell: row => humanizeEnum(row.itemType ?? "") },
+              {
+                header: "Type",
+                cell: row => (row.itemType ? <Tag>{row.itemType}</Tag> : "—"),
+              },
               { header: "UoM", cell: row => row.uom?.code ?? "—" },
               {
                 header: "On hand",
@@ -172,7 +178,7 @@ export default function MaterialsPage() {
                   <span
                     className={
                       row.isBelowSafetyStock
-                        ? "font-semibold text-amber-700"
+                        ? "font-semibold text-warning-foreground"
                         : ""
                     }
                   >
@@ -204,7 +210,7 @@ export default function MaterialsPage() {
                 header: "Purchasable",
                 cell: row =>
                   row.isPurchasable ? (
-                    <span className="text-xs font-medium text-emerald-700">
+                    <span className="text-xs font-medium text-success-foreground">
                       Yes
                     </span>
                   ) : (
@@ -216,11 +222,10 @@ export default function MaterialsPage() {
           <Pager
             page={page}
             totalPages={pagination?.totalPages}
-            totalItems={pagination?.totalItems}
             onChange={setPage}
           />
         </Panel>
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

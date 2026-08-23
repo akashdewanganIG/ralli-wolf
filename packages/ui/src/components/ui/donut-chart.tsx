@@ -7,7 +7,7 @@ import { cn } from "@repo/ui/lib/utils";
 interface DonutChartProps {
   data: {
     labels: string[];
-    datasets: Array<{ data: number[]; backgroundColor: string[] }>;
+    datasets: Array<{ data: number[]; backgroundColor?: string[] }>;
   };
   title?: string;
   subtitle?: string;
@@ -15,6 +15,14 @@ interface DonutChartProps {
   showLegend?: boolean;
   legendPosition?: "top" | "bottom" | "left" | "right";
 }
+
+const SEGMENT_COLORS = [
+  "var(--chart-step-2)",
+  "var(--chart-step-3)",
+  "var(--chart-step-4)",
+  "var(--chart-step-5)",
+  "var(--chart-step-1)",
+];
 
 export function DonutChart({
   data,
@@ -26,10 +34,12 @@ export function DonutChart({
 }: DonutChartProps) {
   const values = data.datasets[0]?.data ?? [];
   const colors = data.datasets[0]?.backgroundColor ?? [];
+  // Fall back through the ordinal chart ramp rather than a pinned hex, so an
+  // unstyled slice still follows the theme instead of forcing brand red.
   const rows = data.labels.map((name, index) => ({
     name,
     value: Number(values[index] ?? 0),
-    color: colors[index] || "#ED1C24",
+    color: colors[index] || SEGMENT_COLORS[index % SEGMENT_COLORS.length],
   }));
   const total = rows.reduce((sum, item) => sum + item.value, 0);
   const isSide = legendPosition === "left" || legendPosition === "right";
@@ -39,7 +49,7 @@ export function DonutChart({
       className={cn(
         isSide
           ? "grid min-w-36 gap-3"
-          : "mt-3 flex flex-wrap justify-center gap-x-5 gap-y-2"
+          : "mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1.5"
       )}
     >
       {rows.map(item => (
@@ -48,10 +58,10 @@ export function DonutChart({
             className="size-2.5 shrink-0 rounded-full"
             style={{ backgroundColor: item.color }}
           />
-          <span className="text-sm font-semibold tabular-nums">
+          <span className="text-xs font-semibold tabular-nums text-foreground">
             {total ? Math.round((item.value / total) * 100) : 0}%
           </span>
-          <span className="text-sm text-muted-foreground">{item.name}</span>
+          <span className="text-xs text-muted-foreground">{item.name}</span>
         </div>
       ))}
     </div>
@@ -61,9 +71,15 @@ export function DonutChart({
     <div className={cn("flex h-full w-full flex-col", className)}>
       {(title || subtitle) && (
         <div className="mb-4 text-center">
-          {title && <h3 className="text-lg font-semibold">{title}</h3>}
+          {title && (
+            <h3 className="text-sm font-semibold leading-5 tracking-tight text-foreground">
+              {title}
+            </h3>
+          )}
           {subtitle && (
-            <p className="text-sm text-muted-foreground">{subtitle}</p>
+            <p className="mt-0.5 text-xs leading-4 text-muted-foreground">
+              {subtitle}
+            </p>
           )}
         </div>
       )}
@@ -83,8 +99,8 @@ export function DonutChart({
                 nameKey="name"
                 innerRadius="63%"
                 outerRadius="88%"
-                paddingAngle={3}
-                cornerRadius={7}
+                paddingAngle={2}
+                cornerRadius={4}
                 stroke="transparent"
                 animationDuration={750}
               >
@@ -98,20 +114,20 @@ export function DonutChart({
                   name,
                 ]}
                 contentStyle={{
-                  borderRadius: 12,
+                  borderRadius: 8,
                   border: "1px solid var(--border)",
                   background: "var(--popover)",
-                  boxShadow: "0 12px 32px rgba(15,23,42,.12)",
+                  boxShadow: "0 8px 24px rgb(0 0 0 / 0.12)",
                   fontSize: 12,
                 }}
               />
             </PieChart>
           </ResponsiveContainer>
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-2xl font-bold tabular-nums">
+            <span className="text-xl font-semibold tabular-nums text-foreground">
               {total.toLocaleString()}
             </span>
-            <span className="text-[11px] uppercase tracking-widest text-muted-foreground">
+            <span className="text-[0.6875rem] uppercase tracking-widest text-muted-foreground">
               Total
             </span>
           </div>

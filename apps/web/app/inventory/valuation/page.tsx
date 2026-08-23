@@ -15,6 +15,8 @@ import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
 import { useInventoryValuation } from "@/hooks/useSupplyChain";
 import { formatMoney, formatQuantity, humanizeEnum } from "@/lib/utils/decimal";
 import type { ItemType } from "@/lib/api/types/supplyChain";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { Tag } from "@repo/ui/components/ui/tag";
 
 const ITEM_TYPES: ItemType[] = [
   "FINISHED_GOOD",
@@ -38,7 +40,7 @@ export default function InventoryValuationPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title="Inventory valuation"
           subtitle="Review inventory value by item and warehouse."
@@ -112,7 +114,7 @@ export default function InventoryValuationPage() {
               columns={[
                 {
                   header: "Item type",
-                  cell: row => humanizeEnum(row.itemType),
+                  cell: row => (row.itemType ? <Tag>{row.itemType}</Tag> : "—"),
                 },
                 {
                   header: "Quantity",
@@ -141,7 +143,7 @@ export default function InventoryValuationPage() {
                 cell: row => (
                   <Link
                     href={`/inventory/stock/${row.product.id}`}
-                    className="text-primary hover:underline"
+                    className="text-primary hover:text-info"
                   >
                     <span className="font-mono text-xs">
                       {row.product.code}
@@ -152,7 +154,12 @@ export default function InventoryValuationPage() {
               },
               {
                 header: "Type",
-                cell: row => humanizeEnum(row.product.itemType ?? ""),
+                cell: row =>
+                  row.product.itemType ? (
+                    <Tag>{row.product.itemType}</Tag>
+                  ) : (
+                    "—"
+                  ),
               },
               { header: "UoM", cell: row => row.product.uom?.code ?? "—" },
               {
@@ -175,7 +182,7 @@ export default function InventoryValuationPage() {
             ]}
           />
         </Panel>
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

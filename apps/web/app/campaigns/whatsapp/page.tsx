@@ -10,6 +10,7 @@ import { Button } from "@repo/ui";
 import { whatsappService } from "@/lib/api/services";
 import { Alert } from "@repo/ui/components/ui/alert";
 import { TablePageSkeleton } from "@/components/skeletons";
+import { DEFAULT_PAGE_SIZE } from "@/components/data-table";
 
 const CreateCampaignModal = dynamic(
   () =>
@@ -61,7 +62,7 @@ export default function WhatsappCampaignsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filters, setFilters] = useState<CampaignFilterValues>({});
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_PAGE_SIZE);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editCampaignId, setEditCampaignId] = useState<number | undefined>(
     undefined
@@ -211,7 +212,7 @@ export default function WhatsappCampaignsPage() {
           <button
             type="button"
             onClick={() => setIsModalOpen(true)}
-            className="underline"
+            className="text-primary transition-colors hover:text-info"
           >
             Create your first campaign
           </button>

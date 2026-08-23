@@ -1,37 +1,43 @@
 import * as React from "react";
-import { cva, type VariantProps } from "class-variance-authority";
 
-import { cn } from "@repo/ui/lib/utils";
+import { Tag, type TagTone } from "@repo/ui/components/ui/tag";
 
-const badgeVariants = cva(
-  "inline-flex min-h-6 items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium leading-none transition-[background-color,border-color,color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-2",
-  {
-    variants: {
-      variant: {
-        default: "border-transparent bg-primary text-primary-foreground",
-        secondary: "border-transparent bg-secondary text-secondary-foreground",
-        destructive:
-          "border-transparent bg-destructive text-destructive-foreground",
-        outline: "border-border bg-surface text-foreground",
-        success: "border-success/20 bg-success-surface text-success-foreground",
-        warning: "border-warning/20 bg-warning-surface text-warning-foreground",
-        info: "border-info/20 bg-info-surface text-info-foreground",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-    },
-  }
-);
+/**
+ * Compatibility shim over `Tag`.
+ *
+ * `Badge` predates `Tag` and is still called in ~55 places with its own
+ * variant names. Those names map onto tones here so every one of them renders
+ * the single `Tag` appearance — there is no longer a "solid" or "outline"
+ * badge that could look like a different component.
+ *
+ * New code should use `Tag`, whose vocabulary names the state ("pending")
+ * rather than the paint ("warning").
+ */
+const VARIANT_TONE: Record<string, TagTone> = {
+  default: "neutral",
+  secondary: "neutral",
+  outline: "neutral",
+  destructive: "danger",
+  success: "active",
+  warning: "pending",
+  info: "progress",
+};
+
+export type BadgeVariant = keyof typeof VARIANT_TONE;
 
 export interface BadgeProps
-  extends React.HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof badgeVariants> {}
+  extends Omit<React.HTMLAttributes<HTMLSpanElement>, "onCopy"> {
+  variant?: BadgeVariant;
+}
 
-function Badge({ className, variant, ...props }: BadgeProps) {
+function Badge({ className, variant = "default", ...props }: BadgeProps) {
   return (
-    <div className={cn(badgeVariants({ variant }), className)} {...props} />
+    <Tag
+      tone={VARIANT_TONE[variant] ?? "neutral"}
+      className={className}
+      {...props}
+    />
   );
 }
 
-export { Badge, badgeVariants };
+export { Badge };

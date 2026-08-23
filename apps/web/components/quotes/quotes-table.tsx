@@ -28,7 +28,7 @@ export function QuotesTable({
         render: (value, item) => (
           <button
             type="button"
-            className="text-muted-foreground hover:underline hover:text-blue-400"
+            className="text-muted-foreground hover:text-info"
             onClick={e => {
               e.stopPropagation();
               onQuoteClick?.(item);

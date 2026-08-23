@@ -6,7 +6,6 @@ import {
   Button,
   DetailCard,
   DetailPageHeader,
-  Badge,
   Label,
   Textarea,
   Dialog,
@@ -25,7 +24,7 @@ import {
   Calendar,
   Tag,
   MessageSquare,
-} from "lucide-react";
+} from "@repo/ui/icons";
 import {
   useApprovalById,
   useActionApproval,
@@ -34,6 +33,9 @@ import {
 import { useAuth } from "../../contexts/AuthContext";
 import { toast } from "@/lib/toast";
 import { DetailPageSkeleton } from "@/components/skeletons";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { statusTone } from "@repo/ui/components/ui/status-badge";
+import { Tag as StatusTag } from "@repo/ui/components/ui/tag";
 
 type ApprovalDetailPageProps = {
   approvalId: string;
@@ -52,12 +54,6 @@ function formatDateTime(iso: string | null | undefined) {
     hour12: true,
   });
 }
-
-const STATUS_CLASSES: Record<string, string> = {
-  PENDING: "bg-amber-100 text-amber-800 border-amber-200",
-  APPROVED: "bg-emerald-100 text-emerald-800 border-emerald-200",
-  REJECTED: "bg-red-100 text-red-800 border-red-200",
-};
 
 export function ApprovalDetailPage({ approvalId }: ApprovalDetailPageProps) {
   const router = useRouter();
@@ -110,7 +106,7 @@ export function ApprovalDetailPage({ approvalId }: ApprovalDetailPageProps) {
 
   if (!approval) {
     return (
-      <div className="space-y-5 p-4">
+      <PageShell>
         <div className="text-lg font-semibold">Approval not found</div>
         <Button
           variant="outline"
@@ -118,7 +114,7 @@ export function ApprovalDetailPage({ approvalId }: ApprovalDetailPageProps) {
         >
           Back to Approvals
         </Button>
-      </div>
+      </PageShell>
     );
   }
 
@@ -130,32 +126,26 @@ export function ApprovalDetailPage({ approvalId }: ApprovalDetailPageProps) {
 
   const statusIcon =
     approval.status === "APPROVED" ? (
-      <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+      <CheckCircle2 className="h-3.5 w-3.5 text-success" />
     ) : approval.status === "REJECTED" ? (
-      <XCircle className="h-3.5 w-3.5 text-red-500" />
+      <XCircle className="h-3.5 w-3.5 text-destructive" />
     ) : (
-      <Clock className="h-3.5 w-3.5 text-amber-500" />
+      <Clock className="h-3.5 w-3.5 text-warning" />
     );
 
   const statusBg =
     approval.status === "APPROVED"
-      ? "bg-green-50"
+      ? "bg-success-surface"
       : approval.status === "REJECTED"
-        ? "bg-red-50"
-        : "bg-amber-50";
+        ? "bg-error-surface"
+        : "bg-warning-surface";
 
   return (
-    <div className="space-y-5 p-4">
+    <PageShell>
       <DetailPageHeader
         title={`Approval #${approvalId}`}
         status={approval.status}
-        statusVariant={
-          approval.status === "APPROVED"
-            ? "default"
-            : approval.status === "REJECTED"
-              ? "destructive"
-              : "secondary"
-        }
+        statusTone={statusTone(approval.status)}
         onBack={() => router.push("/sales/approvals")}
         actions={
           canApproveOrReject
@@ -175,31 +165,33 @@ export function ApprovalDetailPage({ approvalId }: ApprovalDetailPageProps) {
         }
       />
 
-      <DetailCard title="Approval Details" className="bg-white border-gray-200">
+      <DetailCard title="Approval Details" className="bg-surface border-border">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Type */}
           <div className="flex items-start gap-3">
-            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-violet-50">
-              <Tag className="h-3.5 w-3.5 text-violet-500" />
+            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+              <Tag className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                 Type
               </p>
-              <p className="text-sm font-medium text-gray-700">{objectType}</p>
+              <p className="text-sm font-medium text-text-secondary">
+                {objectType}
+              </p>
             </div>
           </div>
 
           {/* Record */}
           <div className="flex items-start gap-3">
-            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-sky-50">
-              <Hash className="h-3.5 w-3.5 text-sky-500" />
+            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+              <Hash className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                 Record
               </p>
-              <p className="text-sm font-medium text-gray-700">
+              <p className="text-sm font-medium text-text-secondary">
                 {objectType} #{approval.targetRecordId}
               </p>
             </div>
@@ -213,29 +205,25 @@ export function ApprovalDetailPage({ approvalId }: ApprovalDetailPageProps) {
               {statusIcon}
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                 Status
               </p>
-              <Badge
-                className={
-                  STATUS_CLASSES[approval.status] ?? "bg-gray-100 text-gray-800"
-                }
-              >
+              <StatusTag tone={statusTone(approval.status)}>
                 {approval.status}
-              </Badge>
+              </StatusTag>
             </div>
           </div>
 
           {/* Assigned To */}
           <div className="flex items-start gap-3">
-            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-indigo-50">
-              <User className="h-3.5 w-3.5 text-indigo-500" />
+            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary-surface">
+              <User className="h-3.5 w-3.5 text-primary" />
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                 Assignee
               </p>
-              <p className="text-sm font-medium text-gray-700">
+              <p className="text-sm font-medium text-text-secondary">
                 {approval.assigneeName}
               </p>
             </div>
@@ -243,14 +231,14 @@ export function ApprovalDetailPage({ approvalId }: ApprovalDetailPageProps) {
 
           {/* Submitted By */}
           <div className="flex items-start gap-3">
-            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-50">
-              <User className="h-3.5 w-3.5 text-blue-500" />
+            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-info-surface">
+              <User className="h-3.5 w-3.5 text-info" />
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                 Raised By
               </p>
-              <p className="text-sm font-medium text-gray-700">
+              <p className="text-sm font-medium text-text-secondary">
                 {approval.createdBy}
               </p>
             </div>
@@ -258,14 +246,14 @@ export function ApprovalDetailPage({ approvalId }: ApprovalDetailPageProps) {
 
           {/* Submitted On */}
           <div className="flex items-start gap-3">
-            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-50">
-              <Calendar className="h-3.5 w-3.5 text-blue-500" />
+            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-info-surface">
+              <Calendar className="h-3.5 w-3.5 text-info" />
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                 Created Date
               </p>
-              <p className="text-sm font-medium text-gray-700">
+              <p className="text-sm font-medium text-text-secondary">
                 {formatDateTime(approval.createdDate)}
               </p>
             </div>
@@ -273,14 +261,14 @@ export function ApprovalDetailPage({ approvalId }: ApprovalDetailPageProps) {
 
           {/* Completed On */}
           <div className="flex items-start gap-3">
-            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-purple-50">
-              <Clock className="h-3.5 w-3.5 text-purple-500" />
+            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+              <Clock className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                 Completed Date
               </p>
-              <p className="text-sm font-medium text-gray-700">
+              <p className="text-sm font-medium text-text-secondary">
                 {approval.completedDate
                   ? formatDateTime(approval.completedDate)
                   : "N/A"}
@@ -290,14 +278,14 @@ export function ApprovalDetailPage({ approvalId }: ApprovalDetailPageProps) {
 
           {/* Last Actor */}
           <div className="flex items-start gap-3">
-            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-gray-100">
-              <User className="h-3.5 w-3.5 text-gray-500" />
+            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+              <User className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                 Last Actor
               </p>
-              <p className="text-sm font-medium text-gray-700">
+              <p className="text-sm font-medium text-text-secondary">
                 {approval.lastActorName ?? "N/A"}
               </p>
             </div>
@@ -306,16 +294,16 @@ export function ApprovalDetailPage({ approvalId }: ApprovalDetailPageProps) {
           {/* View Record Link */}
           {detailHref && (
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-50">
-                <Link2 className="h-3.5 w-3.5 text-blue-500" />
+              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-info-surface">
+                <Link2 className="h-3.5 w-3.5 text-info" />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                   Record Link
                 </p>
                 <a
                   href={detailHref}
-                  className="text-sm font-medium text-blue-600 hover:underline"
+                  className="text-sm font-medium text-info-foreground hover:text-info"
                 >
                   View Quote
                 </a>
@@ -326,15 +314,15 @@ export function ApprovalDetailPage({ approvalId }: ApprovalDetailPageProps) {
 
         {/* Comment */}
         {approval.description && (
-          <div className="mt-4 pt-4 border-t border-gray-100 flex items-start gap-3">
-            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-gray-100">
-              <MessageSquare className="h-3.5 w-3.5 text-gray-500" />
+          <div className="mt-4 pt-4 border-t border-subtle flex items-start gap-3">
+            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+              <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                 Comment
               </p>
-              <p className="text-sm font-medium text-gray-700 whitespace-pre-wrap">
+              <p className="text-sm font-medium text-text-secondary whitespace-pre-wrap">
                 {approval.description}
               </p>
             </div>
@@ -382,6 +370,6 @@ export function ApprovalDetailPage({ approvalId }: ApprovalDetailPageProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageShell>
   );
 }

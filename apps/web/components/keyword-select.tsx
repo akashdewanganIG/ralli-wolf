@@ -5,10 +5,11 @@ import { Button } from "@repo/ui/components/ui/button";
 import { Input } from "@repo/ui/components/ui/input";
 import { Label } from "@repo/ui/components/ui/label";
 import { cn } from "@repo/ui/lib/utils";
-import { ChevronDown, Loader2, Plus, Search, X } from "lucide-react";
+import { ChevronDown, Plus, Search, X } from "@repo/ui/icons";
 import React, { useEffect, useRef, useState } from "react";
 import { useCreateKeyword, useKeywords } from "../hooks/useKeywords";
 import { ListSkeleton } from "./skeletons";
+import { Tag } from "@repo/ui/components/ui/tag";
 
 interface KeywordSelectProps {
   selectedKeywordIds: number[];
@@ -134,20 +135,13 @@ export function KeywordSelect({
       {selectedKeywords.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-2">
           {selectedKeywords.map(keyword => (
-            <Badge
+            <Tag
               key={keyword.id}
-              variant="secondary"
-              className="flex items-center gap-1"
+              onRemove={() => handleRemoveKeyword(keyword.id)}
+              removeLabel={`Remove ${keyword.name}`}
             >
               {keyword.name}
-              <button
-                type="button"
-                onClick={() => handleRemoveKeyword(keyword.id)}
-                className="ml-1 hover:bg-destructive/20 rounded-full p-0.5 whitespace-nowrap"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
+            </Tag>
           ))}
         </div>
       )}
@@ -169,7 +163,7 @@ export function KeywordSelect({
         </Button>
 
         {isOpen && (
-          <div className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg max-h-80 overflow-auto">
+          <div className="absolute z-50 w-full mt-1 bg-surface border rounded-md shadow-lg max-h-80 overflow-auto">
             {/* Search Input */}
             <div className="p-2 border-b">
               <div className="relative">
@@ -202,15 +196,10 @@ export function KeywordSelect({
                 />
                 <Button
                   type="button"
-                  size="sm"
                   onClick={handleCreateKeyword}
                   disabled={!newKeywordName.trim() || isCreating}
                 >
-                  {isCreating ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Plus className="h-4 w-4" />
-                  )}
+                  {isCreating ? null : <Plus className="h-4 w-4" />}
                 </Button>
               </div>
             </div>

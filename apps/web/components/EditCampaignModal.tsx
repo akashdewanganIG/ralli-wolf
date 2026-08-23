@@ -186,10 +186,10 @@ export const EditCampaignModal: React.FC<Props> = ({
                 setForm(prev => ({ ...prev, replyTo: e.target.value }))
               }
               placeholder="Enter reply-to email address"
-              className={errors.replyTo ? "border-red-500" : ""}
+              className={errors.replyTo ? "border-destructive" : ""}
             />
             {errors.replyTo && (
-              <p className="text-sm text-red-500">{errors.replyTo}</p>
+              <p className="text-sm text-destructive">{errors.replyTo}</p>
             )}
           </div>
 
@@ -210,8 +210,8 @@ export const EditCampaignModal: React.FC<Props> = ({
           </div>
 
           {submitError && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-              <p className="text-sm text-red-600">{submitError}</p>
+            <div className="p-3 bg-error-surface border border-error-border rounded-md">
+              <p className="text-sm text-destructive">{submitError}</p>
             </div>
           )}
 

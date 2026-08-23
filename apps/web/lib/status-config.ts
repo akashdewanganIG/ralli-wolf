@@ -1,6 +1,6 @@
 // Central location for lead status badge styles
 import type { LeadSource, LeadStatus } from "./api/types";
-import { BadgeProps } from "@repo/ui/components/ui/badge";
+import type { SemanticTone } from "@repo/ui/components/ui/status-badge";
 
 // Client-safe runtime values mirror the API's schema without pulling
 // server-only generated code into browser or edge bundles.
@@ -19,37 +19,22 @@ const LeadSourceValue = {
   LANDING_PAGE: "LANDING_PAGE",
 } as const satisfies Record<string, LeadSource>;
 
-export const leadStatusConfig = {
-  [LeadStatusValue.OPEN]: {
-    label: "OPEN",
-    className: "border-info/20 bg-info-surface text-info-foreground",
-    variant: "outline",
-  },
-  [LeadStatusValue.WORKING]: {
-    label: "WORKING",
-    className: "border-warning/20 bg-warning-surface text-warning-foreground",
-    variant: "outline",
-  },
-  [LeadStatusValue.QUALIFIED]: {
-    label: "QUALIFIED",
-    className: "border-success/20 bg-success-surface text-success-foreground",
-    variant: "outline",
-  },
-  [LeadStatusValue.NURTURING]: {
-    label: "NURTURING",
-    className: "border-border bg-secondary text-secondary-foreground",
-    variant: "outline",
-  },
-  [LeadStatusValue.CONVERTED]: {
-    label: "CONVERTED",
-    className: "border-success/20 bg-success-surface text-success-foreground",
-    variant: "outline",
-  },
-  [LeadStatusValue.UNQUALIFIED]: {
-    label: "UNQUALIFIED",
-    className: "border-error/20 bg-error-surface text-error-foreground",
-    variant: "outline",
-  },
+/**
+ * Lead status → shared semantic tone.
+ *
+ * This used to be a fourth status palette: it stored its own Tailwind classes
+ * and UPPERCASE labels, and passed them to `Badge` as a `className` override —
+ * which is why Lead Management's tags looked and read differently from every
+ * other module's. It now maps to a tone and nothing else; `Tag` owns the
+ * appearance and the casing.
+ */
+export const leadStatusTone: Record<string, SemanticTone> = {
+  [LeadStatusValue.OPEN]: "progress",
+  [LeadStatusValue.WORKING]: "pending",
+  [LeadStatusValue.QUALIFIED]: "active",
+  [LeadStatusValue.NURTURING]: "neutral",
+  [LeadStatusValue.CONVERTED]: "active",
+  [LeadStatusValue.UNQUALIFIED]: "danger",
 };
 
 // Lead source display labels
@@ -61,50 +46,15 @@ export const leadSourceLabels: Record<LeadSource, string> = {
 
 export function getLeadStatusConfig(
   status: LeadStatus | string | null | undefined
-) {
-  if (!status) {
-    // Default to OPEN if status is null/undefined
-    return leadStatusConfig[LeadStatusValue.OPEN] as {
-      label: string;
-      className: string;
-      variant: BadgeProps["variant"];
-    };
-  }
-
-  // Normalize status to uppercase string for comparison
-  const statusStr = String(status).toUpperCase();
-
-  // Map string values to enum values (including legacy values like 'New')
-  const statusMap: Record<string, LeadStatus> = {
-    OPEN: LeadStatusValue.OPEN,
-    WORKING: LeadStatusValue.WORKING,
-    QUALIFIED: LeadStatusValue.QUALIFIED,
-    UNQUALIFIED: LeadStatusValue.UNQUALIFIED,
-    NURTURING: LeadStatusValue.NURTURING,
-    CONVERTED: LeadStatusValue.CONVERTED,
-    NEW: LeadStatusValue.OPEN, // Map legacy 'NEW' to OPEN
-    New: LeadStatusValue.OPEN, // Map legacy 'New' to OPEN
-  };
-
-  // Try to get the enum value from the map, or use the status directly if it's already an enum
-  const enumStatus = statusMap[statusStr] || (status as LeadStatus);
-
-  // Try to find the status in the config
-  const config = leadStatusConfig[enumStatus as keyof typeof leadStatusConfig];
-
-  if (config) {
-    return config as {
-      label: string;
-      className: string;
-      variant: BadgeProps["variant"];
-    };
-  }
-
-  // Fallback for unknown status - default to OPEN
-  return leadStatusConfig[LeadStatusValue.OPEN] as {
-    label: string;
-    className: string;
-    variant: BadgeProps["variant"];
+): { tone: SemanticTone; label: string } {
+  const raw = status ? String(status).toUpperCase() : LeadStatusValue.OPEN;
+  // 'NEW' is a legacy value that predates the OPEN/WORKING split.
+  const normalised = raw === "NEW" ? LeadStatusValue.OPEN : raw;
+  return {
+    tone: leadStatusTone[normalised] ?? "neutral",
+    // Passed through verbatim — `Tag` sentence-cases it, so this stays the
+    // single source of the value rather than a second source of the label.
+    label: normalised,
   };
 }
 

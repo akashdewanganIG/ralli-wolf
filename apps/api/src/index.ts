@@ -12,8 +12,14 @@ setupRoutes(app);
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`🚀 API server running on http://localhost:${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/health`);
+  // Report the address the service is actually reachable at. Printing
+  // `localhost` on a deployed instance is misleading in the logs, so the
+  // public origin is used whenever it is configured.
+  const publicUrl = (
+    process.env.API_PUBLIC_URL?.trim() || `http://localhost:${PORT}`
+  ).replace(/\/+$/, "");
+  console.log(`🚀 API server listening on port ${PORT} (${publicUrl})`);
+  console.log(`📊 Health check: ${publicUrl}/health`);
 
   // Lightweight in-process scheduler for WhatsApp campaigns.
   // Runs once per minute; adjust interval via WHATSAPP_SCHEDULER_INTERVAL_MS if needed.

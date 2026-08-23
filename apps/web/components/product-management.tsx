@@ -28,18 +28,16 @@ import { SearchInput } from "@repo/ui/components/ui/search-input";
 import { Textarea } from "@repo/ui/components/ui/textarea";
 import { SearchFilterToolbar } from "@repo/ui/components/ui/toolbar";
 import {
-  ArrowLeft,
   Check,
   ChevronsUpDown,
   Edit,
   Image as ImageIcon,
-  Loader2,
   Package,
   Plus,
   Search,
   Tag,
   X,
-} from "lucide-react";
+} from "@repo/ui/icons";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { DataTable } from "./data-table";
 import {
@@ -312,26 +310,22 @@ export function ProductManagement() {
         description="Manage products and the categories used throughout sales workflows."
         actions={
           <>
-            <Button variant="outline" onClick={() => router.back()}>
-              <ArrowLeft className="size-4" />
-              Back
-            </Button>
             <Button
               variant="outline"
               onClick={() => setIsViewCategoriesModalOpen(true)}
             >
-              <Tag className="h-4 w-4 mr-2" />
+              <Tag className="h-4 w-4" />
               View Categories
             </Button>
             <Button
               variant="outline"
               onClick={() => setIsCategoryModalOpen(true)}
             >
-              <Tag className="h-4 w-4 mr-2" />
+              <Tag className="h-4 w-4" />
               Add Category
             </Button>
             <Button onClick={handleCreateProduct}>
-              <Plus className="h-4 w-4 mr-2" />
+              <Plus className="h-4 w-4" />
               Add Product
             </Button>
           </>
@@ -408,7 +402,7 @@ export function ProductManagement() {
             //     <span className="text-muted-foreground py-4">
             //       {product.price != null
             //         ? `₹${typeof product.price === 'string' ? parseFloat(product.price).toFixed(2) : product.price.toFixed(2)}`
-            //         : <span className="text-gray-400">N/A</span>}
+            //         : <span className="text-muted-foreground">N/A</span>}
             //     </span>
             //   ),
             // },
@@ -485,7 +479,6 @@ export function ProductManagement() {
             <div className="flex justify-start items-center gap-2">
               <Button
                 variant="ghost"
-                size="sm"
                 onClick={() => handleEditProduct(product)}
               >
                 <Edit className="h-4 w-4" />
@@ -532,7 +525,6 @@ export function ProductManagement() {
                     <Button
                       type="button"
                       variant="destructive"
-                      size="sm"
                       className="absolute -top-2 -right-2"
                       onClick={handleRemoveImage}
                     >
@@ -624,7 +616,7 @@ export function ProductManagement() {
                         />
                       </div>
                     </div>
-                    <div className="max-h-[200px] overflow-y-auto p-1">
+                    <div className="max-h-[12.5rem] overflow-y-auto p-1">
                       {categories
                         .filter(category =>
                           category.name
@@ -751,10 +743,7 @@ export function ProductManagement() {
             </Button>
             <Button onClick={handleSubmitProduct} disabled={isSubmitting}>
               {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {editingProduct ? "Updating..." : "Creating..."}
-                </>
+                <>{editingProduct ? "Updating..." : "Creating..."}</>
               ) : (
                 <>{editingProduct ? "Update" : "Create"} Product</>
               )}

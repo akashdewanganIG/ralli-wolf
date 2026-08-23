@@ -2,9 +2,10 @@
 
 import * as React from "react";
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
-import { Check, ChevronRight, Circle } from "lucide-react";
+import { Check, ChevronRight, Circle } from "@repo/ui/icons";
 
 import { cn } from "@repo/ui/lib/utils";
+import { MENU_ITEM } from "@repo/ui/components/ui/form-control";
 
 const DropdownMenu = DropdownMenuPrimitive.Root;
 
@@ -84,11 +85,7 @@ function DropdownMenuItem({
 }) {
   return (
     <DropdownMenuPrimitive.Item
-      className={cn(
-        "relative flex min-h-9 cursor-default select-none items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none transition-[background-color,color] duration-150 focus:bg-secondary focus:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&>svg]:size-4 [&>svg]:shrink-0",
-        inset && "pl-8",
-        className
-      )}
+      className={cn(MENU_ITEM, inset && "pl-8", className)}
       {...props}
     />
   );
@@ -100,10 +97,7 @@ const DropdownMenuCheckboxItem = React.forwardRef<
 >(({ className, children, checked, ...props }, ref) => (
   <DropdownMenuPrimitive.CheckboxItem
     ref={ref}
-    className={cn(
-      "relative flex min-h-9 cursor-default select-none items-center rounded-md py-2 pl-8 pr-2.5 text-sm outline-none transition-colors focus:bg-secondary focus:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-      className
-    )}
+    className={cn(MENU_ITEM, "pl-8 pr-2.5", className)}
     checked={checked}
     {...props}
   >
@@ -124,10 +118,7 @@ const DropdownMenuRadioItem = React.forwardRef<
 >(({ className, children, ...props }, ref) => (
   <DropdownMenuPrimitive.RadioItem
     ref={ref}
-    className={cn(
-      "relative flex min-h-9 cursor-default select-none items-center rounded-md py-2 pl-8 pr-2.5 text-sm outline-none transition-colors focus:bg-secondary focus:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-      className
-    )}
+    className={cn(MENU_ITEM, "pl-8 pr-2.5", className)}
     {...props}
   >
     <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
@@ -149,7 +140,7 @@ const DropdownMenuLabel = React.forwardRef<
   <DropdownMenuPrimitive.Label
     ref={ref}
     className={cn(
-      "px-2 py-1.5 text-sm font-semibold",
+      "px-2.5 py-1.5 text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground",
       inset && "pl-8",
       className
     )}

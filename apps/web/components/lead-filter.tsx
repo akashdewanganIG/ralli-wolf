@@ -18,7 +18,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@repo/ui/components/ui/dialog";
-import { Filter } from "lucide-react";
+import { Filter } from "@repo/ui/icons";
 import { cn } from "@repo/ui/lib/utils";
 import { KeywordSelect } from "./keyword-select";
 import { toast } from "@/lib/toast";
@@ -133,7 +133,7 @@ export const LeadFilter: React.FC<LeadFilterProps> = ({
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[31.25rem]">
           <DialogHeader>
             <DialogTitle>Filter Leads</DialogTitle>
           </DialogHeader>

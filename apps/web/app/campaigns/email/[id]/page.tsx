@@ -15,6 +15,7 @@ import {
   TableSkeleton,
 } from "@/components/skeletons";
 import { Button } from "@repo/ui";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 const EditCampaignModal = dynamic(
   () => import("@/components/EditCampaignModal"),
@@ -181,7 +182,7 @@ export default function EmailCampaignDetailPage() {
 
   if (loading) {
     return (
-      <div className="space-y-5 p-4">
+      <PageShell>
         <DetailHeaderSkeleton />
         <SectionSkeleton>
           <StatGridSkeleton count={4} />
@@ -197,7 +198,7 @@ export default function EmailCampaignDetailPage() {
         <SectionSkeleton>
           <StatGridSkeleton count={5} />
         </SectionSkeleton>
-      </div>
+      </PageShell>
     );
   }
 
@@ -205,7 +206,7 @@ export default function EmailCampaignDetailPage() {
     return (
       <div className="min-h-[60vh] p-4 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-red-600 mb-4">
+          <p className="text-destructive mb-4">
             {error || "Failed to load campaign"}
           </p>
           <div className="flex gap-2 justify-center">

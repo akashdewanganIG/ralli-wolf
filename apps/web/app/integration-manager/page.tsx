@@ -14,7 +14,9 @@ export default function IntegrationManagerPage() {
       <div className="max-w-2xl mx-auto p-4">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-semibold">Integration Manager</h1>
+            <h1 className="text-base sm:text-lg font-semibold">
+              Integration Manager
+            </h1>
             <p className="text-sm text-muted-foreground">
               Store and manage encrypted API keys for WhatsApp and Email
               providers.
@@ -22,7 +24,7 @@ export default function IntegrationManagerPage() {
           </div>
           <Button
             variant="secondary"
-            className="bg-red-500 text-white hover:bg-red-600"
+            className="bg-destructive text-destructive-foreground hover:bg-destructive"
             onClick={() => void logout()}
           >
             Logout

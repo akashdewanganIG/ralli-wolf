@@ -28,6 +28,21 @@ model User {
   firstName              String?               @map("first_name")
   lastName               String?               @map("last_name")
   location               String?
+
+  // ---- Authentication methods -------------------------------------------
+  // An account must always have at least two of these enabled and verified.
+  // `*VerifiedAt` is what counts — a method that has only been set up, but
+  // never proved by entering a code, does not.
+
+  /// Password is always available today. The column exists so the two-method
+  /// rule can be evaluated uniformly, and relaxed later without a migration.
+  passwordEnabled        Boolean               @default(true) @map("password_enabled")
+  /// RFC 6238 shared secret, AES-256-GCM encrypted at rest. Written when
+  /// setup begins; only counts once `totpVerifiedAt` is set.
+  totpSecret             String?               @map("totp_secret")
+  totpVerifiedAt         DateTime?             @map("totp_verified_at")
+  /// Set once the user has completed an emailed-code challenge.
+  emailOtpVerifiedAt     DateTime?             @map("email_otp_verified_at")
   auditLogs              AuditLog[]            @relation("AuditLogUser")
   botSessions            BotSession[]
   campaigns              Campaign[]            @relation("CampaignCreator")

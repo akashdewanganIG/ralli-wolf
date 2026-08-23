@@ -163,9 +163,11 @@ export function IntegrationManagerForm() {
   };
 
   return (
-    <div className="space-y-6">
-      {error && <div className="text-red-600 text-sm">{error}</div>}
-      {success && <div className="text-green-700 text-sm">{success}</div>}
+    <div className="space-y-4">
+      {error && <div className="text-destructive text-sm">{error}</div>}
+      {success && (
+        <div className="text-success-foreground text-sm">{success}</div>
+      )}
 
       <section>
         <h2 className="text-lg font-medium mb-2">WhatsApp (MSG91)</h2>

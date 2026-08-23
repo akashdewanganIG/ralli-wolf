@@ -13,6 +13,8 @@ import {
 import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
 import { useMaterialShortages } from "@/hooks/useSupplyChain";
 import { formatMoney, formatQuantity, humanizeEnum } from "@/lib/utils/decimal";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { Tag } from "@repo/ui/components/ui/tag";
 
 export default function MaterialShortagesPage() {
   const [warehouseId, setWarehouseId] = useState<number | undefined>(undefined);
@@ -22,7 +24,7 @@ export default function MaterialShortagesPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title="Material shortages"
           subtitle="Prioritize material shortfalls that could block planned work."
@@ -72,8 +74,8 @@ export default function MaterialShortagesPage() {
             keyOf={row => `${row.product.id}-${row.warehouse.id}`}
             rowClassName={row =>
               Number(row.availableQuantity) <= 0
-                ? "bg-red-50/40"
-                : "bg-amber-50/30"
+                ? "bg-error-surface/40"
+                : "bg-warning-surface/30"
             }
             empty="Nothing is below its safety stock. Configure reorder policies for materials that should be watched."
             columns={[
@@ -82,7 +84,7 @@ export default function MaterialShortagesPage() {
                 cell: row => (
                   <Link
                     href={`/inventory/stock/${row.product.id}?warehouseId=${row.warehouse.id}`}
-                    className="text-primary hover:underline"
+                    className="text-primary hover:text-info"
                   >
                     <span className="font-mono text-xs">
                       {row.product.code}
@@ -93,7 +95,12 @@ export default function MaterialShortagesPage() {
               },
               {
                 header: "Type",
-                cell: row => humanizeEnum(row.product.itemType ?? ""),
+                cell: row =>
+                  row.product.itemType ? (
+                    <Tag>{row.product.itemType}</Tag>
+                  ) : (
+                    "—"
+                  ),
               },
               { header: "Warehouse", cell: row => row.warehouse.code },
               {
@@ -108,8 +115,8 @@ export default function MaterialShortagesPage() {
                   <span
                     className={
                       Number(row.availableQuantity) <= 0
-                        ? "font-semibold text-red-700"
-                        : "font-semibold text-amber-700"
+                        ? "font-semibold text-error-foreground"
+                        : "font-semibold text-warning-foreground"
                     }
                   >
                     {formatQuantity(row.availableQuantity)}
@@ -135,7 +142,7 @@ export default function MaterialShortagesPage() {
                 header: "Short by",
                 align: "right",
                 cell: row => (
-                  <span className="font-semibold text-red-700">
+                  <span className="font-semibold text-error-foreground">
                     {formatQuantity(row.shortfallQuantity)}
                   </span>
                 ),
@@ -166,13 +173,13 @@ export default function MaterialShortagesPage() {
                 header: "Auto PR",
                 cell: row =>
                   row.autoRequisition ? (
-                    <span className="text-xs font-medium text-emerald-700">
+                    <span className="text-xs font-medium text-success-foreground">
                       Automated
                     </span>
                   ) : (
                     <Link
                       href="/purchasing/requisitions"
-                      className="text-xs text-primary hover:underline"
+                      className="text-xs text-primary hover:text-info"
                     >
                       Raise manually
                     </Link>
@@ -181,7 +188,7 @@ export default function MaterialShortagesPage() {
             ]}
           />
         </Panel>
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

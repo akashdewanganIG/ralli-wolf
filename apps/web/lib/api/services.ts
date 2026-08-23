@@ -11,7 +11,10 @@ import {
   UserPermissions,
   LoginRequest,
   LoginOtpVerifyRequest,
-  LoginOtpRequestResponse,
+  LoginMfaChallenge,
+  AuthMethodsSummary,
+  TotpEnrolment,
+  LoginOtpResendResponse,
   LoginResponse,
   SignupRequest,
   SignupResponse,
@@ -71,18 +74,23 @@ import {
 
 // Auth Services
 export const authService = {
-  login: async (credentials: LoginRequest): Promise<LoginResponse> => {
+  /**
+   * Step one of sign-in. A correct password does not return a session — it
+   * returns a challenge, and the emailed code must be verified next.
+   */
+  login: async (credentials: LoginRequest): Promise<LoginMfaChallenge> => {
     const response = await apiClient.post("/api/auth/login", credentials);
     return response.data;
   },
 
-  requestLoginOtp: async (email: string): Promise<LoginOtpRequestResponse> => {
-    const response = await apiClient.post("/api/auth/login/otp/request", {
-      email,
+  resendLoginOtp: async (mfaToken: string): Promise<LoginOtpResendResponse> => {
+    const response = await apiClient.post("/api/auth/login/otp/resend", {
+      mfaToken,
     });
     return response.data;
   },
 
+  /** Step two of sign-in: trades a valid code for a session token. */
   verifyLoginOtp: async (
     credentials: LoginOtpVerifyRequest
   ): Promise<LoginResponse> => {
@@ -90,6 +98,46 @@ export const authService = {
       "/api/auth/login/otp/verify",
       credentials
     );
+    return response.data;
+  },
+
+  // ---- Authentication method management ----------------------------------
+  // All act on the signed-in account; the server never takes a user id here.
+
+  getAuthMethods: async (): Promise<AuthMethodsSummary> => {
+    const response = await apiClient.get("/api/auth/methods");
+    return response.data;
+  },
+
+  /** Mints a secret and returns the QR + manual key. Does not enable it. */
+  startTotpSetup: async (): Promise<TotpEnrolment> => {
+    const response = await apiClient.post("/api/auth/methods/totp/setup");
+    return response.data;
+  },
+
+  verifyTotpSetup: async (code: string): Promise<AuthMethodsSummary> => {
+    const response = await apiClient.post("/api/auth/methods/totp/verify", {
+      code,
+    });
+    return response.data;
+  },
+
+  sendAuthEmailCode: async (): Promise<{ success: boolean; email: string }> => {
+    const response = await apiClient.post("/api/auth/methods/email/send");
+    return response.data;
+  },
+
+  verifyAuthEmailCode: async (code: string): Promise<AuthMethodsSummary> => {
+    const response = await apiClient.post("/api/auth/methods/email/verify", {
+      code,
+    });
+    return response.data;
+  },
+
+  disableAuthMethod: async (
+    method: "totp" | "email" | "password"
+  ): Promise<AuthMethodsSummary> => {
+    const response = await apiClient.delete(`/api/auth/methods/${method}`);
     return response.data;
   },
 

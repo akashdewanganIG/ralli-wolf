@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Check } from "lucide-react";
+import { Check } from "@repo/ui/icons";
 import { cn } from "../../lib/utils";
 
 export type StepperProps = {
@@ -69,8 +69,8 @@ export function Stepper({
             >
               <span
                 className={cn(
-                  "flex size-5 shrink-0 items-center justify-center rounded-full border text-[11px]",
-                  isActive && "border-white/40 bg-white/15",
+                  "flex size-5 shrink-0 items-center justify-center rounded-full border text-[0.6875rem]",
+                  isActive && "border-surface/40 bg-surface/15",
                   isComplete &&
                     "border-primary/20 bg-primary text-primary-foreground",
                   !isActive && !isComplete && "border-border bg-secondary"

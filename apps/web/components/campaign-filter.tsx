@@ -19,7 +19,7 @@ import {
 } from "@repo/ui/components/ui/select";
 import { cn } from "@repo/ui/lib/utils";
 import { toast } from "@/lib/toast";
-import { SlidersHorizontal } from "lucide-react";
+import { SlidersHorizontal } from "@repo/ui/icons";
 import React, { useEffect, useState } from "react";
 import filterStyles from "./filter-button.module.css";
 
@@ -129,7 +129,7 @@ export const CampaignFilter: React.FC<CampaignFilterProps> = ({
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[31.25rem]">
           <DialogHeader>
             <DialogTitle>Filter Campaigns</DialogTitle>
           </DialogHeader>

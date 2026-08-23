@@ -256,12 +256,12 @@ export const AddLeadModal: React.FC<Props> = ({ open, onOpenChange }) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContentAny className="sm:max-w-[720px]">
+      <DialogContentAny className="sm:max-w-[45rem]">
         <DialogHeaderAny className="text-center">
           <DialogTitleAny className="text-center">Add Lead</DialogTitleAny>
           <DialogDescriptionAny className="text-center">
             Create a new lead by providing basic contact and company details.
-            Fields marked with <span className="text-red-500">*</span> are
+            Fields marked with <span className="text-destructive">*</span> are
             required.
           </DialogDescriptionAny>
         </DialogHeaderAny>
@@ -269,7 +269,7 @@ export const AddLeadModal: React.FC<Props> = ({ open, onOpenChange }) => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="firstName">
-                First Name<span className="text-red-500">*</span>
+                First Name<span className="text-destructive">*</span>
               </Label>
               <Input
                 id="firstName"
@@ -289,7 +289,10 @@ export const AddLeadModal: React.FC<Props> = ({ open, onOpenChange }) => {
                 }
               />
               {shouldShowError("firstName") && errors.firstName && (
-                <p id="firstName-error" className="text-xs text-red-600 mt-1">
+                <p
+                  id="firstName-error"
+                  className="text-xs text-destructive mt-1"
+                >
                   {errors.firstName}
                 </p>
               )}
@@ -311,14 +314,17 @@ export const AddLeadModal: React.FC<Props> = ({ open, onOpenChange }) => {
                 }
               />
               {shouldShowError("lastName") && errors.lastName && (
-                <p id="lastName-error" className="text-xs text-red-600 mt-1">
+                <p
+                  id="lastName-error"
+                  className="text-xs text-destructive mt-1"
+                >
                   {errors.lastName}
                 </p>
               )}
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="email">
-                Email<span className="text-red-500">*</span>
+                Email<span className="text-destructive">*</span>
               </Label>
               <Input
                 id="email"
@@ -336,14 +342,14 @@ export const AddLeadModal: React.FC<Props> = ({ open, onOpenChange }) => {
                 }
               />
               {shouldShowError("email") && errors.email && (
-                <p id="email-error" className="text-xs text-red-600 mt-1">
+                <p id="email-error" className="text-xs text-destructive mt-1">
                   {errors.email}
                 </p>
               )}
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="phone">
-                Phone<span className="text-red-500">*</span>
+                Phone<span className="text-destructive">*</span>
               </Label>
               <Input
                 id="phone"
@@ -360,7 +366,7 @@ export const AddLeadModal: React.FC<Props> = ({ open, onOpenChange }) => {
                 }
               />
               {shouldShowError("phone") && errors.phone && (
-                <p id="phone-error" className="text-xs text-red-600 mt-1">
+                <p id="phone-error" className="text-xs text-destructive mt-1">
                   {errors.phone}
                 </p>
               )}
@@ -384,7 +390,10 @@ export const AddLeadModal: React.FC<Props> = ({ open, onOpenChange }) => {
                 }
               />
               {shouldShowError("companyName") && errors.companyName && (
-                <p id="companyName-error" className="text-xs text-red-600 mt-1">
+                <p
+                  id="companyName-error"
+                  className="text-xs text-destructive mt-1"
+                >
                   {errors.companyName}
                 </p>
               )}
@@ -406,7 +415,7 @@ export const AddLeadModal: React.FC<Props> = ({ open, onOpenChange }) => {
                 }
               />
               {shouldShowError("city") && errors.city && (
-                <p id="city-error" className="text-xs text-red-600 mt-1">
+                <p id="city-error" className="text-xs text-destructive mt-1">
                   {errors.city}
                 </p>
               )}
@@ -428,7 +437,7 @@ export const AddLeadModal: React.FC<Props> = ({ open, onOpenChange }) => {
                 }
               />
               {shouldShowError("state") && errors.state && (
-                <p id="state-error" className="text-xs text-red-600 mt-1">
+                <p id="state-error" className="text-xs text-destructive mt-1">
                   {errors.state}
                 </p>
               )}
@@ -450,7 +459,7 @@ export const AddLeadModal: React.FC<Props> = ({ open, onOpenChange }) => {
                 }
               />
               {shouldShowError("pincode") && errors.pincode && (
-                <p id="pincode-error" className="text-xs text-red-600 mt-1">
+                <p id="pincode-error" className="text-xs text-destructive mt-1">
                   {errors.pincode}
                 </p>
               )}
@@ -501,7 +510,7 @@ export const AddLeadModal: React.FC<Props> = ({ open, onOpenChange }) => {
         </div>
         <DialogFooterAny>
           {submitError && (
-            <p className="text-sm text-red-600 mr-auto" role="alert">
+            <p className="text-sm text-destructive mr-auto" role="alert">
               {submitError}
             </p>
           )}
@@ -518,7 +527,6 @@ export const AddLeadModal: React.FC<Props> = ({ open, onOpenChange }) => {
           >
             {createLead.isPending ? (
               <span className="inline-flex items-center gap-2">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground" />
                 Creating...
               </span>
             ) : (

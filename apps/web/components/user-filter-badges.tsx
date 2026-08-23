@@ -1,9 +1,7 @@
 "use client";
 
 import React from "react";
-import { Badge } from "@repo/ui/components/ui/badge";
-import { Button } from "@repo/ui/components/ui/button";
-import { X } from "lucide-react";
+import { Tag } from "@repo/ui/components/ui/tag";
 
 interface UserFilterBadgesProps {
   selectedRole?: string;
@@ -44,47 +42,23 @@ export const UserFilterBadges: React.FC<UserFilterBadgesProps> = ({
   // Role filter badge
   if (selectedRole !== undefined) {
     badges.push(
-      <Badge
-        key="role"
-        variant="secondary"
-        className="bg-brand-pale-aqua text-brand-teal hover:bg-brand-pale-aqua"
-      >
+      <Tag key="role" onRemove={onRoleRemove} removeLabel="Remove filter">
         Role: {selectedRole}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="ml-2 h-4 w-4 p-0 hover:bg-brand-teal/20"
-          onClick={onRoleRemove}
-        >
-          <X className="h-3 w-3" />
-        </Button>
-      </Badge>
+      </Tag>
     );
   }
 
   // Region filter badge
   if (selectedRegion !== undefined) {
     badges.push(
-      <Badge
-        key="region"
-        variant="secondary"
-        className="bg-brand-lavender text-brand-indigo hover:bg-brand-lavender"
-      >
+      <Tag key="region" onRemove={onRegionRemove} removeLabel="Remove filter">
         Region: {formatRegion(selectedRegion)}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="ml-2 h-4 w-4 p-0 hover:bg-brand-indigo/20"
-          onClick={onRegionRemove}
-        >
-          <X className="h-3 w-3" />
-        </Button>
-      </Badge>
+      </Tag>
     );
   }
 
   return (
-    <div className="flex flex-wrap gap-2 min-h-[32px] justify-end">
+    <div className="flex flex-wrap gap-2 min-h-[2rem] justify-end">
       {badges}
     </div>
   );

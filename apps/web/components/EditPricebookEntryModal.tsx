@@ -120,20 +120,20 @@ export const EditPricebookEntryModal: React.FC<Props> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContentAny className="sm:max-w-[480px]">
+      <DialogContentAny className="sm:max-w-[30rem]">
         <DialogHeaderAny className="text-center">
           <DialogTitleAny className="text-center">
             Edit Price Book Entry
           </DialogTitleAny>
           <DialogDescriptionAny className="text-center">
             Update the details for this price book entry. Fields marked with{" "}
-            <span className="text-red-500">*</span> are required.
+            <span className="text-destructive">*</span> are required.
           </DialogDescriptionAny>
         </DialogHeaderAny>
         <div className="space-y-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="listPrice">
-              List Price<span className="text-red-500">*</span>
+              List Price<span className="text-destructive">*</span>
             </Label>
             <Input
               id="listPrice"
@@ -145,7 +145,9 @@ export const EditPricebookEntryModal: React.FC<Props> = ({
               aria-invalid={shouldShowError("listPrice") && !!errors.listPrice}
             />
             {shouldShowError("listPrice") && errors.listPrice && (
-              <p className="text-xs text-red-600 mt-1">{errors.listPrice}</p>
+              <p className="text-xs text-destructive mt-1">
+                {errors.listPrice}
+              </p>
             )}
           </div>
           <div className="flex items-center space-x-2">
@@ -164,7 +166,7 @@ export const EditPricebookEntryModal: React.FC<Props> = ({
         </div>
         <DialogFooterAny>
           {submitError && (
-            <p className="text-sm text-red-600 mr-auto" role="alert">
+            <p className="text-sm text-destructive mr-auto" role="alert">
               {submitError}
             </p>
           )}

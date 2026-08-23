@@ -181,7 +181,11 @@ export default function WhatsappCampaignDetailPage() {
     return (
       <div className="p-4">
         <p>Campaign not found</p>
-        <button type="button" onClick={handleBack} className="mt-4 underline">
+        <button
+          type="button"
+          onClick={handleBack}
+          className="mt-4 text-primary transition-colors hover:text-info"
+        >
           Back to campaigns
         </button>
       </div>

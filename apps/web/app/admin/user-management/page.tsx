@@ -1,5 +1,7 @@
 "use client";
 
+import { config } from "@/lib/config";
+
 import {
   Badge,
   Button,
@@ -32,7 +34,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@repo/ui/components/ui/select";
-import { SearchFilterToolbar } from "@repo/ui/components/ui/toolbar";
 import { isPermission, type Permission } from "@repo/db/permissions";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -46,7 +47,7 @@ import {
   ShieldCheck,
   Trash2,
   Upload,
-} from "lucide-react";
+} from "@repo/ui/icons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DataTable, type TableColumn } from "../../../components/data-table";
 import { RoleGuard } from "../../../components/guards/RoleGuard";
@@ -66,6 +67,10 @@ import {
   validateName,
   validatePhoneOptional,
 } from "../../../lib/validation";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { DEFAULT_PAGE_SIZE } from "@/components/data-table";
+import { Tag } from "@repo/ui/components/ui/tag";
+import { roleTone } from "@repo/ui/components/ui/status-badge";
 
 type User = {
   id: string;
@@ -151,7 +156,7 @@ export default function UserManagementPage() {
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_PAGE_SIZE);
 
   // Import modal state
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -716,14 +721,11 @@ export default function UserManagementPage() {
           ? "/api/users/import/template/download/csv"
           : "/api/users/import/template/download";
 
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000"}${endpoint}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await fetch(`${config.apiUrl}${endpoint}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       if (!response.ok) throw new Error("Failed to download template");
 
@@ -778,27 +780,17 @@ export default function UserManagementPage() {
         key: "role",
         label: "Role",
         render: (_v, item) => (
-          <Badge
-            variant="secondary"
-            className={
-              item.role === "ADMIN"
-                ? "bg-red-100 text-red-800 hover:bg-red-100"
-                : item.role === "ADMIN"
-                  ? "bg-purple-100 text-purple-800 hover:bg-purple-100"
-                  : "bg-blue-100 text-blue-800 hover:bg-blue-100"
-            }
-          >
-            {item.role}
-          </Badge>
+          // The previous version tested `=== "ADMIN"` in both branches of the
+          // ternary, so its middle case was unreachable and every non-admin
+          // fell through to the same tone regardless of role.
+          <Tag tone={roleTone(item.role)}>{item.role}</Tag>
         ),
       },
       {
         key: "region",
         label: "Region",
         render: (_v, item) => (
-          <Badge variant="outline" className="text-muted-foreground">
-            {formatRegion(item.region)}
-          </Badge>
+          <Tag tone="neutral">{formatRegion(item.region)}</Tag>
         ),
       },
       {
@@ -836,7 +828,6 @@ export default function UserManagementPage() {
         render: (_v, item) => (
           <Button
             variant="ghost"
-            size="sm"
             onClick={() => handleEditUser(item)}
             className="h-8 w-8 p-0"
           >
@@ -849,7 +840,7 @@ export default function UserManagementPage() {
   );
 
   const skeletonView = (
-    <div className="space-y-5 p-4">
+    <PageShell>
       <div className="space-y-2">
         <SkeletonLine className="h-8 w-72" />
         <SkeletonLine className="h-4 w-48" />
@@ -858,7 +849,7 @@ export default function UserManagementPage() {
         <ToolbarSkeleton />
         <TableSkeleton />
       </div>
-    </div>
+    </PageShell>
   );
 
   // Loader handling in return
@@ -917,32 +908,6 @@ export default function UserManagementPage() {
             }
           />
 
-          <SearchFilterToolbar
-            search={
-              <div className="relative min-w-0 flex-1">
-                <SearchInput
-                  id="search"
-                  placeholder="Search by name, email, or date..."
-                  value={query}
-                  onChange={e => setQuery(e.target.value)}
-                  className="w-full"
-                />
-                {query && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setQuery("")}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 p-0"
-                  >
-                    ×
-                  </Button>
-                )}
-              </div>
-            }
-          />
-
-          <Separator />
-
           {filtered.length === 0 &&
           (query || selectedRole || selectedRegion) ? (
             <div className="text-center py-8">
@@ -978,6 +943,9 @@ export default function UserManagementPage() {
               data={filtered}
               columns={columns}
               title="Users"
+              // Two role/region filters plus search and the columns toggle is
+              // more than one line holds; the title gets its own row.
+              stackedToolbar
               count={pagination?.totalItems || 0}
               currentPage={currentPage}
               totalPages={pagination?.totalPages || 1}
@@ -994,6 +962,26 @@ export default function UserManagementPage() {
                 });
                 setSelectedUsers(validIds);
               }}
+              search={
+                <div className="relative min-w-0 flex-1">
+                  <SearchInput
+                    id="search"
+                    placeholder="Search by name, email, or date..."
+                    value={query}
+                    onChange={e => setQuery(e.target.value)}
+                    className="w-full"
+                  />
+                  {query && (
+                    <Button
+                      variant="ghost"
+                      onClick={() => setQuery("")}
+                      className="absolute right-2 inset-y-0 my-auto h-fit h-6 w-6 p-0"
+                    >
+                      ×
+                    </Button>
+                  )}
+                </div>
+              }
               isSearchMode={!!query}
               searchQuery={query}
               showFilter={true}
@@ -1004,17 +992,15 @@ export default function UserManagementPage() {
                     <DropdownMenuTrigger asChild>
                       <Button
                         variant="outline"
-                        size="sm"
                         className={
                           selectedRole ? "bg-primary/10 border-primary" : ""
                         }
                       >
-                        <Filter className="h-4 w-4 mr-2" />
+                        <Filter className="h-4 w-4" />
                         Role
                         {selectedRole && (
                           <span className="ml-1 h-2 w-2 bg-primary rounded-full" />
                         )}
-                        <ChevronDown className="h-4 w-4 ml-2" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48">
@@ -1058,17 +1044,15 @@ export default function UserManagementPage() {
                     <DropdownMenuTrigger asChild>
                       <Button
                         variant="outline"
-                        size="sm"
                         className={
                           selectedRegion ? "bg-primary/10 border-primary" : ""
                         }
                       >
-                        <Filter className="h-4 w-4 mr-2" />
+                        <Filter className="h-4 w-4" />
                         Region
                         {selectedRegion && (
                           <span className="ml-1 h-2 w-2 bg-primary rounded-full" />
                         )}
-                        <ChevronDown className="h-4 w-4 ml-2" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48">
@@ -1179,7 +1163,7 @@ export default function UserManagementPage() {
               </DialogHeader>
 
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm">
+                <div className="bg-error-surface border border-error-border text-error-foreground px-4 py-3 rounded-lg text-sm">
                   {error}
                 </div>
               )}
@@ -1219,7 +1203,7 @@ export default function UserManagementPage() {
                     {displayErrors.firstName && (
                       <p
                         id="firstName-error"
-                        className="text-xs text-red-600 mt-1"
+                        className="text-xs text-destructive mt-1"
                       >
                         {displayErrors.firstName}
                       </p>
@@ -1258,7 +1242,7 @@ export default function UserManagementPage() {
                     {displayErrors.lastName && (
                       <p
                         id="lastName-error"
-                        className="text-xs text-red-600 mt-1"
+                        className="text-xs text-destructive mt-1"
                       >
                         {displayErrors.lastName}
                       </p>
@@ -1295,7 +1279,10 @@ export default function UserManagementPage() {
                     }
                   />
                   {displayErrors.email && (
-                    <p id="email-error" className="text-xs text-red-600 mt-1">
+                    <p
+                      id="email-error"
+                      className="text-xs text-destructive mt-1"
+                    >
                       {displayErrors.email}
                     </p>
                   )}
@@ -1332,7 +1319,10 @@ export default function UserManagementPage() {
                     }
                   />
                   {displayErrors.phone && (
-                    <p id="phone-error" className="text-xs text-red-600 mt-1">
+                    <p
+                      id="phone-error"
+                      className="text-xs text-destructive mt-1"
+                    >
                       {displayErrors.phone}
                     </p>
                   )}
@@ -1394,7 +1384,10 @@ export default function UserManagementPage() {
                     </SelectContent>
                   </Select>
                   {displayErrors.region && (
-                    <p id="region-error" className="text-xs text-red-600 mt-1">
+                    <p
+                      id="region-error"
+                      className="text-xs text-destructive mt-1"
+                    >
                       {displayErrors.region}
                     </p>
                   )}
@@ -1490,7 +1483,7 @@ export default function UserManagementPage() {
               </DialogHeader>
 
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm">
+                <div className="bg-error-surface border border-error-border text-error-foreground px-4 py-3 rounded-lg text-sm">
                   {error}
                 </div>
               )}
@@ -1534,7 +1527,7 @@ export default function UserManagementPage() {
                       {displayEditErrors.firstName && (
                         <p
                           id="edit-firstName-error"
-                          className="text-xs text-red-600 mt-1"
+                          className="text-xs text-destructive mt-1"
                         >
                           {displayEditErrors.firstName}
                         </p>
@@ -1576,7 +1569,7 @@ export default function UserManagementPage() {
                       {displayEditErrors.lastName && (
                         <p
                           id="edit-lastName-error"
-                          className="text-xs text-red-600 mt-1"
+                          className="text-xs text-destructive mt-1"
                         >
                           {displayEditErrors.lastName}
                         </p>
@@ -1617,7 +1610,7 @@ export default function UserManagementPage() {
                     {displayEditErrors.email && (
                       <p
                         id="edit-email-error"
-                        className="text-xs text-red-600 mt-1"
+                        className="text-xs text-destructive mt-1"
                       >
                         {displayEditErrors.email}
                       </p>
@@ -1659,7 +1652,7 @@ export default function UserManagementPage() {
                     {displayEditErrors.phone && (
                       <p
                         id="edit-phone-error"
-                        className="text-xs text-red-600 mt-1"
+                        className="text-xs text-destructive mt-1"
                       >
                         {displayEditErrors.phone}
                       </p>
@@ -1728,7 +1721,7 @@ export default function UserManagementPage() {
                     {displayEditErrors.region && (
                       <p
                         id="edit-region-error"
-                        className="text-xs text-red-600 mt-1"
+                        className="text-xs text-destructive mt-1"
                       >
                         {displayEditErrors.region}
                       </p>
@@ -1770,7 +1763,6 @@ export default function UserManagementPage() {
                         <Button
                           type="button"
                           variant="outline"
-                          size="sm"
                           onClick={() => setIsPermissionsOpen(true)}
                         >
                           <ShieldCheck className="size-4" />
@@ -1796,7 +1788,6 @@ export default function UserManagementPage() {
                       <Button
                         type="button"
                         variant="outline"
-                        size="sm"
                         disabled={resending || updating}
                         onClick={handleResendCredentials}
                       >
@@ -1808,7 +1799,6 @@ export default function UserManagementPage() {
                       <Button
                         type="button"
                         variant="outline"
-                        size="sm"
                         className="text-error-foreground hover:bg-error-surface"
                         disabled={updating || deletingUser}
                         onClick={() => setIsSingleDeleteOpen(true)}
@@ -1910,26 +1900,24 @@ export default function UserManagementPage() {
                 <div className="flex justify-end gap-2">
                   <Button
                     variant="outline"
-                    size="sm"
                     onClick={() => handleDownloadTemplate("xlsx")}
-                    className="text-green-600 border-green-200 hover:bg-green-50"
+                    className="text-success-foreground border-success-border hover:bg-success-surface"
                   >
-                    <FileSpreadsheet className="w-4 h-4 mr-2" />
+                    <FileSpreadsheet className="w-4 h-4" />
                     Excel Template
                   </Button>
                   <Button
                     variant="outline"
-                    size="sm"
                     onClick={() => handleDownloadTemplate("csv")}
-                    className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                    className="text-info-foreground border-info-border hover:bg-info-surface"
                   >
-                    <FileSpreadsheet className="w-4 h-4 mr-2" />
+                    <FileSpreadsheet className="w-4 h-4" />
                     CSV Template
                   </Button>
                 </div>
 
                 {/* File Upload */}
-                <div className="border-2 border-dashed border-gray-200 rounded-lg p-4 text-center hover:border-gray-300 transition-colors">
+                <div className="border-2 border-dashed border-border rounded-lg p-4 text-center hover:border-input transition-colors">
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -1943,31 +1931,31 @@ export default function UserManagementPage() {
                     htmlFor="file-upload"
                     className="cursor-pointer flex flex-col items-center gap-2"
                   >
-                    <Upload className="w-8 h-8 text-gray-400" />
-                    <span className="text-sm text-gray-600">
+                    <Upload className="w-8 h-8 text-muted-foreground" />
+                    <span className="text-sm text-text-secondary">
                       {importFile ? (
-                        <span className="text-green-600 font-medium">
+                        <span className="text-success-foreground font-medium">
                           {importFile.name}
                         </span>
                       ) : (
                         "Click to upload file"
                       )}
                     </span>
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-muted-foreground">
                       Supported formats: .csv, .xlsx
                     </span>
                   </label>
                 </div>
 
                 {/* Template Info */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
-                  <p className="font-semibold text-blue-800 mb-2">
+                <div className="bg-info-surface border border-info-border rounded-lg p-4 text-sm">
+                  <p className="font-semibold text-info-foreground mb-2">
                     File Format:
                   </p>
-                  <code className="text-xs text-blue-700 block bg-blue-100 p-2 rounded">
+                  <code className="text-xs text-info-foreground block bg-info-surface p-2 rounded">
                     First Name, Last Name, Email, Phone, Role, Region
                   </code>
-                  <p className="text-blue-700 mt-2 text-xs">
+                  <p className="text-info-foreground mt-2 text-xs">
                     • Role options: SALES, ADMIN (default: SALES)
                     <br />
                     • Region options: SOUTH, NORTH, EAST, WEST_1, WEST_2, APTOC
@@ -1980,7 +1968,7 @@ export default function UserManagementPage() {
                 {importResult && (
                   <div className="space-y-3">
                     {importResult.success > 0 && (
-                      <div className="flex items-center gap-2 text-green-700 bg-green-50 p-3 rounded-lg">
+                      <div className="flex items-center gap-2 text-success-foreground bg-success-surface p-3 rounded-lg">
                         <CheckCircle2 className="w-5 h-5" />
                         <span>
                           {importResult.success} user(s) imported successfully
@@ -1988,9 +1976,9 @@ export default function UserManagementPage() {
                       </div>
                     )}
                     {importResult.errors.length > 0 && (
-                      <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                      <div className="bg-error-surface border border-error-border rounded-lg p-3">
                         <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2 text-red-700">
+                          <div className="flex items-center gap-2 text-error-foreground">
                             <AlertCircle className="w-5 h-5" />
                             <span className="font-medium">
                               {importResult.errors.length} error(s)
@@ -1999,9 +1987,8 @@ export default function UserManagementPage() {
                           {importResult.report && (
                             <Button
                               variant="outline"
-                              size="sm"
                               onClick={handleDownloadErrorReport}
-                              className="text-red-600 border-red-200 hover:bg-red-50"
+                              className="text-destructive border-error-border hover:bg-error-surface"
                             >
                               <FileSpreadsheet className="w-4 h-4 mr-1" />
                               Download Error Report
@@ -2010,12 +1997,12 @@ export default function UserManagementPage() {
                         </div>
                         <div className="max-h-32 overflow-auto text-sm">
                           {importResult.errors.slice(0, 5).map((err, idx) => (
-                            <p key={idx} className="text-red-600">
+                            <p key={idx} className="text-destructive">
                               Row {err.row} ({err.email || "N/A"}): {err.error}
                             </p>
                           ))}
                           {importResult.errors.length > 5 && (
-                            <p className="text-red-500 mt-1 italic">
+                            <p className="text-destructive mt-1 italic">
                               ... and {importResult.errors.length - 5} more
                               errors. Download the report for full details.
                             </p>

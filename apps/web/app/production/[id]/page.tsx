@@ -33,6 +33,7 @@ import {
   formatPercent,
   formatQuantity,
 } from "@/lib/utils/decimal";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 export default function ProductionOrderDetailPage() {
   const params = useParams<{ id: string }>();
@@ -73,7 +74,7 @@ export default function ProductionOrderDetailPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title={
             order ? `Production order ${order.orderNumber}` : "Production order"
@@ -116,7 +117,7 @@ export default function ProductionOrderDetailPage() {
                       }}
                       disabled={cancel.isPending}
                       variant="outline"
-                      className="px-3 text-red-700 hover:bg-red-50 whitespace-nowrap"
+                      className="px-3 text-error-foreground hover:bg-error-surface whitespace-nowrap"
                     >
                       Cancel
                     </Button>
@@ -132,7 +133,7 @@ export default function ProductionOrderDetailPage() {
         <ErrorBanner error={cancel.error} />
         <ErrorBanner error={createRequisition.error} />
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid-auto-fit gap-3">
           <StatCard
             label="Planned"
             value={order ? formatQuantity(order.plannedQuantity) : "—"}
@@ -249,13 +250,13 @@ export default function ProductionOrderDetailPage() {
 
         {order && (
           <Panel title="Order details">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid-auto-fit gap-4">
               <DetailRow
                 label="Bill of materials"
                 value={
                   <Link
                     href={`/bom/${order.bom.id}`}
-                    className="text-primary hover:underline"
+                    className="text-primary hover:text-info"
                   >
                     {order.bom.bomNumber} v{order.bom.version}
                     {order.bom.revision}
@@ -355,7 +356,7 @@ export default function ProductionOrderDetailPage() {
               >
                 <Link
                   href={`/materials/requisitions/${(createRequisition.data?.data as { id: number } | undefined)?.id ?? ""}`}
-                  className="font-medium underline"
+                  className="font-medium text-primary transition-colors hover:text-info"
                 >
                   Open it to issue material
                 </Link>
@@ -373,7 +374,7 @@ export default function ProductionOrderDetailPage() {
                   cell: row => (
                     <Link
                       href={`/inventory/stock/${row.productId}`}
-                      className="text-primary hover:underline"
+                      className="text-primary hover:text-info"
                     >
                       <span className="font-mono text-xs">
                         {row.product.code}
@@ -408,7 +409,7 @@ export default function ProductionOrderDetailPage() {
                   align: "right",
                   cell: row =>
                     Number(row.wastedQuantity) > 0 ? (
-                      <span className="text-red-700">
+                      <span className="text-error-foreground">
                         {formatQuantity(row.wastedQuantity)}
                       </span>
                     ) : (
@@ -422,11 +423,11 @@ export default function ProductionOrderDetailPage() {
                     const outstanding =
                       Number(row.requiredQuantity) - Number(row.issuedQuantity);
                     return outstanding > 0 ? (
-                      <span className="font-semibold text-amber-700">
+                      <span className="font-semibold text-warning-foreground">
                         {formatQuantity(outstanding)}
                       </span>
                     ) : (
-                      <span className="text-emerald-700">issued</span>
+                      <span className="text-success-foreground">issued</span>
                     );
                   },
                 },
@@ -470,7 +471,7 @@ export default function ProductionOrderDetailPage() {
               isLoading={availabilityLoading}
               rows={availabilityData?.data.lines ?? []}
               keyOf={row => row.productId}
-              rowClassName={row => (row.isShort ? "bg-red-50/40" : "")}
+              rowClassName={row => (row.isShort ? "bg-error-surface/40" : "")}
               empty="Nothing to check."
               columns={[
                 {
@@ -497,11 +498,11 @@ export default function ProductionOrderDetailPage() {
                   align: "right",
                   cell: row =>
                     Number(row.shortfallQuantity) > 0 ? (
-                      <span className="font-semibold text-red-700">
+                      <span className="font-semibold text-error-foreground">
                         {formatQuantity(row.shortfallQuantity)}
                       </span>
                     ) : (
-                      <span className="text-emerald-700">covered</span>
+                      <span className="text-success-foreground">covered</span>
                     ),
                 },
                 {
@@ -541,7 +542,7 @@ export default function ProductionOrderDetailPage() {
               keyOf={row => row.id}
               empty="Nothing has been consumed against this order yet."
               rowClassName={row =>
-                row.consumptionType === "WASTED" ? "bg-red-50/30" : ""
+                row.consumptionType === "WASTED" ? "bg-error-surface/30" : ""
               }
               columns={[
                 { header: "When", cell: row => formatDateTime(row.occurredAt) },
@@ -558,7 +559,7 @@ export default function ProductionOrderDetailPage() {
                   header: "Type",
                   cell: row =>
                     row.consumptionType === "WASTED" ? (
-                      <span className="text-xs font-medium text-red-700">
+                      <span className="text-xs font-medium text-error-foreground">
                         Scrap
                       </span>
                     ) : (
@@ -624,7 +625,7 @@ export default function ProductionOrderDetailPage() {
               rows={varianceData?.data.lines ?? []}
               keyOf={row => row.productId}
               rowClassName={row =>
-                Number(row.varianceQuantity) > 0 ? "bg-red-50/30" : ""
+                Number(row.varianceQuantity) > 0 ? "bg-error-surface/30" : ""
               }
               empty="No variance to report yet."
               columns={[
@@ -660,8 +661,8 @@ export default function ProductionOrderDetailPage() {
                       <span
                         className={
                           variance > 0
-                            ? "font-semibold text-red-700"
-                            : "font-semibold text-emerald-700"
+                            ? "font-semibold text-error-foreground"
+                            : "font-semibold text-success-foreground"
                         }
                       >
                         {variance > 0 ? "+" : ""}
@@ -684,7 +685,7 @@ export default function ProductionOrderDetailPage() {
             />
           </Panel>
         )}
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

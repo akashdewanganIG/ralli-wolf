@@ -1,25 +1,25 @@
 "use client";
 
 import * as React from "react";
-import { User, Bell, LogOut, Circle, KeyRound } from "lucide-react";
+import { User, Bell, LogOut, KeyRound } from "@repo/ui/icons";
 import { Avatar, AvatarFallback, AvatarImage } from "../avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../dropdown-menu";
-import { Button } from "../button";
 import { cn } from "@repo/ui/lib/utils";
+import { Tag } from "@repo/ui/components/ui/tag";
+import { roleTone } from "@repo/ui/components/ui/status-badge";
+import { MENU_ITEM_DESTRUCTIVE } from "@repo/ui/components/ui/form-control";
 
 export interface UserProfile {
   name: string;
   email: string;
   role: string;
   avatar?: string;
-  isOnline?: boolean;
 }
 
 export interface ProfileDropdownProps {
@@ -28,118 +28,132 @@ export interface ProfileDropdownProps {
   onManageNotifications?: () => void;
   onChangePassword?: () => void;
   onLogout?: () => void;
+  /** Rendered in its own group, e.g. the theme switch. */
+  preferences?: React.ReactNode;
   className?: string;
 }
 
+/**
+ * Account menu.
+ *
+ * Two regions, one rule: the top identifies who is signed in, everything below
+ * is something you can do. The previous version mixed the two — an online dot
+ * and a role sat inside the header block while the email hung underneath it,
+ * and an 44px avatar was repeated at the top of a menu whose trigger was
+ * already that avatar. Connectivity moved out entirely; it belongs to the
+ * system-status menu next door, not to the person signed in.
+ */
 export function ProfileDropdown({
   user,
   onEditProfile,
   onManageNotifications,
   onChangePassword,
   onLogout,
+  preferences,
   className,
 }: ProfileDropdownProps) {
-  const initials = user.name
-    .split(" ")
-    .map(n => n[0])
-    .join("")
-    .toUpperCase();
+  const initials =
+    user.name
+      .split(" ")
+      .map(part => part[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "?";
+
+  const hasActions = Boolean(
+    onEditProfile || onManageNotifications || onChangePassword
+  );
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn("relative rounded-full", className)}
+        <button
+          type="button"
+          className={cn(
+            // Matches the header's other controls so the two menu triggers read
+            // as a pair rather than as an icon button beside an avatar.
+            "inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-surface outline-none transition-[background-color,border-color] duration-150 hover:border-border-strong hover:bg-surface-subtle focus-visible:ring-2 focus-visible:ring-ring/30",
+            className
+          )}
           aria-label={`Open account menu for ${user.name}`}
         >
-          <Avatar className="size-9">
-            <AvatarImage src={user.avatar} alt={user.name} />
-            <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
+          <Avatar className="size-7">
+            <AvatarImage src={user.avatar} alt="" />
+            <AvatarFallback className="bg-primary text-[0.6875rem] font-semibold text-primary-foreground">
               {initials}
             </AvatarFallback>
           </Avatar>
-          {user.isOnline && (
-            <div className="absolute bottom-0 right-0 size-3 rounded-full border-2 border-background bg-success" />
-          )}
-        </Button>
+        </button>
       </DropdownMenuTrigger>
+
       <DropdownMenuContent
-        className="w-[min(18rem,calc(100vw-2rem))]"
+        className="w-[min(15rem,calc(100vw-2rem))] p-1"
         align="end"
-        forceMount
+        sideOffset={6}
       >
-        <DropdownMenuLabel className="font-normal">
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-3">
-              <Avatar className="size-11">
-                <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="text-lg bg-primary text-primary-foreground font-semibold">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex flex-col">
-                <p className="text-sm font-medium leading-none">{user.name}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {user.role}
-                </p>
-                <div className="mt-1 flex items-center">
-                  <Circle
-                    className={cn(
-                      "mr-1 size-2",
-                      user.isOnline
-                        ? "fill-success text-success"
-                        : "fill-muted-foreground text-muted-foreground"
-                    )}
-                  />
-                  <span className="text-xs text-muted-foreground">
-                    {user.isOnline ? "Online" : "Offline"}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <p
-              className="mt-2 truncate text-xs text-muted-foreground"
-              title={user.email}
-            >
-              {user.email}
-            </p>
-          </div>
-        </DropdownMenuLabel>
-        {(onEditProfile || onManageNotifications) && <DropdownMenuSeparator />}
+        {/* Identity — not a menu item, so it is not focusable and does not
+            respond to hover. */}
+        <div className="px-2 py-1.5">
+          <p className="truncate text-[0.8125rem] font-semibold leading-5 text-foreground">
+            {user.name}
+          </p>
+          <p
+            className="truncate text-xs leading-4 text-muted-foreground"
+            title={user.email}
+          >
+            {user.email}
+          </p>
+          <Tag tone={roleTone(user.role)} className="mt-1">
+            {user.role}
+          </Tag>
+        </div>
+
+        {hasActions ? <DropdownMenuSeparator /> : null}
+
         {onEditProfile && (
-          <DropdownMenuItem onClick={onEditProfile} className="cursor-pointer">
-            <User className="size-4" />
-            <span>Edit Profile</span>
+          <DropdownMenuItem onClick={onEditProfile}>
+            <User aria-hidden="true" className="size-4" />
+            <span>Profile</span>
           </DropdownMenuItem>
         )}
         {onManageNotifications && (
-          <DropdownMenuItem
-            onClick={onManageNotifications}
-            className="cursor-pointer"
-          >
-            <Bell className="size-4" />
-            <span>Manage Notifications</span>
+          <DropdownMenuItem onClick={onManageNotifications}>
+            <Bell aria-hidden="true" className="size-4" />
+            <span>Notifications</span>
           </DropdownMenuItem>
         )}
         {onChangePassword && (
-          <DropdownMenuItem
-            onClick={onChangePassword}
-            className="cursor-pointer"
-          >
-            <KeyRound className="size-4" />
-            <span>Change Password</span>
+          <DropdownMenuItem onClick={onChangePassword}>
+            <KeyRound aria-hidden="true" className="size-4" />
+            <span>Change password</span>
           </DropdownMenuItem>
         )}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onClick={onLogout}
-          className="cursor-pointer text-error-foreground focus:bg-error-surface focus:text-error-foreground"
-        >
-          <LogOut className="size-4" />
-          <span>Logout</span>
-        </DropdownMenuItem>
+
+        {preferences ? (
+          <>
+            <DropdownMenuSeparator />
+            <div className="px-2 py-1.5">
+              <p className="mb-1.5 text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                Appearance
+              </p>
+              {preferences}
+            </div>
+          </>
+        ) : null}
+
+        {onLogout ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={onLogout}
+              className={MENU_ITEM_DESTRUCTIVE}
+            >
+              <LogOut aria-hidden="true" className="size-4" />
+              <span>Sign out</span>
+            </DropdownMenuItem>
+          </>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );

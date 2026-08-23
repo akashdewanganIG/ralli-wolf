@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, Loader2 } from "lucide-react";
-import { Label } from "@repo/ui/components/ui/label";
+import { CheckCircle2 } from "@repo/ui/icons";
 import { Alert } from "@repo/ui/components/ui/alert";
 import {
   Select,
@@ -73,40 +72,38 @@ export default function CurrencySettings() {
   };
 
   return (
-    <div className="grid gap-4 sm:grid-cols-[minmax(0,22rem)_1fr] sm:items-end sm:gap-8">
-      <div className="space-y-2">
-        <Label htmlFor="workspace-currency">Workspace currency</Label>
-        {isLoading ? (
-          <Skeleton className="h-10 w-full rounded-lg" />
-        ) : loadError ? (
-          <Alert tone="error">Currencies could not be loaded.</Alert>
-        ) : (
-          <Select
-            value={currency}
-            onValueChange={handleCurrencyChange}
-            disabled={isPending || !canManageWorkspace}
+    <div className="space-y-2">
+      {isLoading ? (
+        <Skeleton className="h-10 w-full rounded-lg" />
+      ) : loadError ? (
+        <Alert tone="error">Currencies could not be loaded.</Alert>
+      ) : (
+        <Select
+          value={currency}
+          onValueChange={handleCurrencyChange}
+          disabled={isPending || !canManageWorkspace}
+        >
+          <SelectTrigger
+            id="workspace-currency"
+            aria-label="Workspace currency"
+            className="w-full"
           >
-            <SelectTrigger
-              id="workspace-currency"
-              aria-label="Workspace currency"
-            >
-              <SelectValue placeholder="Select a currency" />
-            </SelectTrigger>
-            <SelectContent>
-              {currencies.map(option => (
-                <SelectItem key={option.code} value={option.code}>
-                  {option.code} · {option.name} ({option.symbol})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-      </div>
+            <SelectValue placeholder="Select a currency" />
+          </SelectTrigger>
+          <SelectContent>
+            {currencies.map(option => (
+              <SelectItem key={option.code} value={option.code}>
+                {option.code} · {option.name} ({option.symbol})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
 
-      <div className="flex items-start gap-2 text-xs leading-5 text-muted-foreground sm:pb-2">
-        {isPending ? (
-          <Loader2 className="mt-0.5 size-3.5 shrink-0 animate-spin text-primary" />
-        ) : (
+      {/* Reads as a caption under the control it describes. It used to be a
+          second grid column, which is what held the select down to 22rem. */}
+      <div className="flex items-start gap-2 pt-0.5 text-xs leading-5 text-muted-foreground">
+        {isPending ? null : (
           <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-success" />
         )}
         <span>

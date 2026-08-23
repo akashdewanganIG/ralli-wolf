@@ -21,6 +21,8 @@ import {
   humanizeEnum,
 } from "@/lib/utils/decimal";
 import type { ItemType } from "@/lib/api/types/supplyChain";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { Tag } from "@repo/ui/components/ui/tag";
 
 const MATERIAL_TYPES: ItemType[] = [
   "RAW_MATERIAL",
@@ -57,7 +59,7 @@ export default function ConsumptionReportPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title="Consumption & wastage"
           subtitle="Review material issues, production usage, and write-offs."
@@ -98,7 +100,7 @@ export default function ConsumptionReportPage() {
 
         <ErrorBanner error={error} />
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid-auto-fit gap-3">
           <StatCard
             label="Consumed value"
             value={isLoading ? "—" : formatMoney(report?.totals.consumedValue)}
@@ -135,7 +137,7 @@ export default function ConsumptionReportPage() {
             keyOf={row => row.productId}
             empty="No material was issued, scrapped or written off in this period."
             rowClassName={row =>
-              Number(row.wastagePercent) > 10 ? "bg-red-50/40" : ""
+              Number(row.wastagePercent) > 10 ? "bg-error-surface/40" : ""
             }
             columns={[
               {
@@ -143,14 +145,17 @@ export default function ConsumptionReportPage() {
                 cell: row => (
                   <Link
                     href={`/inventory/stock/${row.productId}`}
-                    className="text-primary hover:underline"
+                    className="text-primary hover:text-info"
                   >
                     <span className="font-mono text-xs">{row.productCode}</span>
                     <span className="ml-2 text-sm">{row.productName}</span>
                   </Link>
                 ),
               },
-              { header: "Type", cell: row => humanizeEnum(row.itemType) },
+              {
+                header: "Type",
+                cell: row => (row.itemType ? <Tag>{row.itemType}</Tag> : "—"),
+              },
               { header: "UoM", cell: row => row.uomCode ?? "—" },
               {
                 header: "Consumed",
@@ -179,9 +184,9 @@ export default function ConsumptionReportPage() {
                   <span
                     className={
                       Number(row.wastagePercent) > 10
-                        ? "font-semibold text-red-700"
+                        ? "font-semibold text-error-foreground"
                         : Number(row.wastagePercent) > 5
-                          ? "font-semibold text-amber-700"
+                          ? "font-semibold text-warning-foreground"
                           : ""
                     }
                   >
@@ -206,7 +211,7 @@ export default function ConsumptionReportPage() {
             ]}
           />
         </Panel>
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

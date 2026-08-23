@@ -179,7 +179,7 @@ export function CreateOpportunityDialog({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2 md:col-span-2">
             <Label>
-              Opportunity Name <span className="text-red-500">*</span>
+              Opportunity Name <span className="text-destructive">*</span>
             </Label>
             <Input
               value={name}
@@ -187,7 +187,7 @@ export function CreateOpportunityDialog({
               placeholder="Enter opportunity name"
             />
             {showErrors && !name.trim() && (
-              <p className="text-xs text-red-500">
+              <p className="text-xs text-destructive">
                 Opportunity name is required
               </p>
             )}
@@ -195,7 +195,7 @@ export function CreateOpportunityDialog({
 
           <div className="space-y-2 relative" ref={accountSearchRef}>
             <Label>
-              Account Name <span className="text-red-500">*</span>
+              Account Name <span className="text-destructive">*</span>
             </Label>
             <Input
               value={accountSearch}
@@ -211,12 +211,12 @@ export function CreateOpportunityDialog({
               <p className="text-xs text-muted-foreground mt-1">Searching...</p>
             )}
             {showAccountResults && accountResults.length > 0 && (
-              <div className="absolute z-50 top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto overflow-x-auto rounded-md border border-gray-200 bg-white shadow-lg">
+              <div className="absolute z-50 top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto overflow-x-auto rounded-md border border-border bg-surface shadow-lg">
                 {accountResults.map(account => (
                   <button
                     key={account.id}
                     type="button"
-                    className="flex w-full items-center whitespace-nowrap px-3 py-2 text-left text-sm hover:bg-gray-100 cursor-pointer transition-colors"
+                    className="flex w-full items-center whitespace-nowrap px-3 py-2 text-left text-sm hover:bg-surface-secondary cursor-pointer transition-colors"
                     onClick={() => handleSelectAccount(account)}
                   >
                     {account.name}
@@ -228,14 +228,16 @@ export function CreateOpportunityDialog({
               accountResults.length === 0 &&
               accountSearch.trim().length >= 2 &&
               !isSearching && (
-                <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-md border border-gray-200 bg-white shadow-lg">
+                <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-md border border-border bg-surface shadow-lg">
                   <p className="px-3 py-2 text-sm text-muted-foreground">
                     No accounts found
                   </p>
                 </div>
               )}
             {showErrors && !accountId && (
-              <p className="text-xs text-red-500">Account name is required</p>
+              <p className="text-xs text-destructive">
+                Account name is required
+              </p>
             )}
           </div>
 
@@ -268,7 +270,7 @@ export function CreateOpportunityDialog({
 
           <div className="space-y-2">
             <Label>
-              Close Date <span className="text-red-500">*</span>
+              Close Date <span className="text-destructive">*</span>
             </Label>
             <Input
               type="date"
@@ -276,7 +278,7 @@ export function CreateOpportunityDialog({
               onChange={e => setCloseDate(e.target.value)}
             />
             {showErrors && !closeDate && (
-              <p className="text-xs text-red-500">Close date is required</p>
+              <p className="text-xs text-destructive">Close date is required</p>
             )}
           </div>
 
@@ -318,7 +320,7 @@ export function CreateOpportunityDialog({
               value={description}
               onChange={e => setDescription(e.target.value)}
               placeholder="Enter description"
-              className="min-h-[110px]"
+              className="min-h-[6.875rem]"
             />
           </div>
         </div>

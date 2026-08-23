@@ -7,6 +7,10 @@ import { cn } from "@repo/ui/lib/utils";
 export interface HeaderProps extends React.HTMLAttributes<HTMLElement> {
   icon?: React.ReactNode;
   notificationSlot?: React.ReactNode;
+  /** Rendered left of the notification bell; used for the system-status menu. */
+  actionSlot?: React.ReactNode;
+  /** Passed through to the account menu, e.g. the theme switch. */
+  preferences?: React.ReactNode;
   user?: UserProfile;
   onEditProfile?: () => void;
   onManageNotifications?: () => void;
@@ -19,11 +23,13 @@ export function Header({
   className,
   icon,
   notificationSlot,
+  actionSlot,
   user,
   onEditProfile,
   onManageNotifications,
   onChangePassword,
   onLogout,
+  preferences,
   tabs,
   ...props
 }: HeaderProps) {
@@ -53,7 +59,9 @@ export function Header({
         {tabs && <div className="flex-1 flex justify-center">{tabs}</div>}
 
         {/* Right side - Notifications and Profile */}
-        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+        <div className="flex shrink-0 items-center gap-2">
+          {actionSlot}
+
           {/* Notification bell — rendered by the app layer so it can use app hooks */}
           {notificationSlot}
 
@@ -65,6 +73,7 @@ export function Header({
               onManageNotifications={onManageNotifications}
               onChangePassword={onChangePassword}
               onLogout={onLogout}
+              preferences={preferences}
             />
           )}
         </div>

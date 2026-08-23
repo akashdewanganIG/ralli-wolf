@@ -21,6 +21,7 @@ import {
 import { useQuoteLineItemsStore } from "./use-quote-line-items-store";
 import { useQuotesStore } from "./use-quotes-store";
 import { DUMMY_PRICEBOOKS, DUMMY_PRODUCTS } from "./quote-dummy-data";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 type QuoteLineItemDetailPageProps = {
   quoteId: string;
@@ -86,7 +87,7 @@ export function QuoteLineItemDetailPage({
 
   if (!quote || !lineItem || lineItem.quoteId !== quote.id) {
     return (
-      <div className="space-y-5 p-4">
+      <PageShell>
         <div className="text-lg font-semibold">Line item not found</div>
         <Button
           variant="outline"
@@ -94,7 +95,7 @@ export function QuoteLineItemDetailPage({
         >
           Back to Quote
         </Button>
-      </div>
+      </PageShell>
     );
   }
 
@@ -118,7 +119,7 @@ export function QuoteLineItemDetailPage({
   };
 
   return (
-    <div className="space-y-5 p-4">
+    <PageShell>
       <DetailPageHeader
         title={lineItem.lineName}
         onBack={() => router.push(`/sales/quotes/${quoteId}`)}
@@ -255,6 +256,6 @@ export function QuoteLineItemDetailPage({
           )}
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

@@ -38,7 +38,7 @@ import {
   Globe,
   Clock,
   Calendar,
-} from "lucide-react";
+} from "@repo/ui/icons";
 import { toast } from "@/lib/toast";
 import { useRouter } from "next/navigation";
 import { useAnalyticsByLead } from "../hooks/useAnalytics";
@@ -60,6 +60,7 @@ import {
   TableSkeleton,
 } from "./skeletons";
 import { displayPhone } from "../lib/phone-formatter";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 interface LeadDetailPageProps {
   leadId: number;
@@ -198,12 +199,6 @@ export function LeadDetailPage({
     }
   };
 
-  const getStatusVariant = (status: string) => {
-    const normalized = String(status || "").toUpperCase() as LeadStatus;
-    const config = getLeadStatusConfig(normalized);
-    return config?.variant || "secondary";
-  };
-
   const actions = React.useMemo(() => {
     const actionList = [];
 
@@ -239,7 +234,7 @@ export function LeadDetailPage({
   // Loading and error states - AFTER all hooks are called
   if (leadLoading) {
     return (
-      <div className="space-y-5 p-4">
+      <PageShell>
         <DetailHeaderSkeleton />
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <div className="lg:col-span-2 space-y-4">
@@ -256,7 +251,7 @@ export function LeadDetailPage({
             <DetailSidebarSkeleton items={3} />
           </div>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
@@ -264,7 +259,7 @@ export function LeadDetailPage({
     return (
       <div className="min-h-[60vh] p-4 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-red-600 mb-4">Failed to load lead details</p>
+          <p className="text-destructive mb-4">Failed to load lead details</p>
           <Button onClick={onBack} variant="outline">
             Go Back
           </Button>
@@ -278,15 +273,14 @@ export function LeadDetailPage({
   // Get status with default to OPEN
   const currentStatus = lead.status || "OPEN";
   const statusConfig = getLeadStatusConfig(currentStatus as LeadStatus);
-  const statusLabel = statusConfig?.label || "OPEN";
-  const statusVariant = getStatusVariant(currentStatus);
+  const statusLabel = statusConfig.label;
 
   return (
     <div className="p-4">
       <DetailPageHeader
         title={displayName}
         status={statusLabel}
-        statusVariant={statusVariant}
+        statusTone={statusConfig.tone}
         onBack={onBack}
         actions={actions}
       />
@@ -312,41 +306,41 @@ export function LeadDetailPage({
           >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-brand-pale-aqua">
-                  <User className="h-3.5 w-3.5 text-brand-teal" />
+                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary-surface">
+                  <User className="h-3.5 w-3.5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                     Lead Name
                   </p>
-                  <p className="text-sm font-medium text-gray-700">
+                  <p className="text-sm font-medium text-text-secondary">
                     {displayName || "N/A"}
                   </p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-brand-pale-aqua">
-                  <Building2 className="h-3.5 w-3.5 text-brand-teal" />
+                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary-surface">
+                  <Building2 className="h-3.5 w-3.5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                     Company
                   </p>
-                  <p className="text-sm font-medium text-gray-700">
+                  <p className="text-sm font-medium text-text-secondary">
                     {lead?.companyName || "N/A"}
                   </p>
                 </div>
               </div>
               <div className="flex items-start gap-3 min-w-0">
-                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-brand-pale-aqua">
-                  <Mail className="h-3.5 w-3.5 text-brand-teal" />
+                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary-surface">
+                  <Mail className="h-3.5 w-3.5 text-primary" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                     Email
                   </p>
                   <p
-                    className="text-sm font-medium text-gray-700 truncate"
+                    className="text-sm font-medium text-text-secondary truncate"
                     title={lead?.email || "N/A"}
                   >
                     {lead?.email || "N/A"}
@@ -354,27 +348,27 @@ export function LeadDetailPage({
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-brand-pale-aqua">
-                  <Phone className="h-3.5 w-3.5 text-brand-teal" />
+                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary-surface">
+                  <Phone className="h-3.5 w-3.5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                     Phone
                   </p>
-                  <p className="text-sm font-medium text-gray-700">
+                  <p className="text-sm font-medium text-text-secondary">
                     {displayPhone(lead?.phone, lead?.countryCode)}
                   </p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-brand-pale-aqua">
-                  <User className="h-3.5 w-3.5 text-brand-teal" />
+                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary-surface">
+                  <User className="h-3.5 w-3.5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                     Assigned To
                   </p>
-                  <p className="text-sm font-medium text-gray-700">
+                  <p className="text-sm font-medium text-text-secondary">
                     {[lead?.owner?.firstName, lead?.owner?.lastName]
                       .filter(Boolean)
                       .join(" ") || "N/A"}
@@ -382,14 +376,14 @@ export function LeadDetailPage({
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-brand-pale-aqua">
-                  <Calendar className="h-3.5 w-3.5 text-brand-teal" />
+                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary-surface">
+                  <Calendar className="h-3.5 w-3.5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                     Assigned On
                   </p>
-                  <p className="text-sm font-medium text-gray-700">
+                  <p className="text-sm font-medium text-text-secondary">
                     {lead?.assignedAt
                       ? new Date(lead.assignedAt).toLocaleString("en-GB", {
                           day: "2-digit",
@@ -404,27 +398,27 @@ export function LeadDetailPage({
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-brand-pale-aqua">
-                  <Globe className="h-3.5 w-3.5 text-brand-teal" />
+                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary-surface">
+                  <Globe className="h-3.5 w-3.5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                     Source
                   </p>
-                  <p className="text-sm font-medium text-gray-700">
+                  <p className="text-sm font-medium text-text-secondary">
                     {lead?.source ? getLeadSourceLabel(lead.source) : "N/A"}
                   </p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-brand-pale-aqua">
-                  <Clock className="h-3.5 w-3.5 text-brand-teal" />
+                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary-surface">
+                  <Clock className="h-3.5 w-3.5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                     Created At
                   </p>
-                  <p className="text-sm font-medium text-gray-700">
+                  <p className="text-sm font-medium text-text-secondary">
                     {lead?.createdAt
                       ? new Date(lead.createdAt).toLocaleString("en-GB", {
                           day: "2-digit",
@@ -460,7 +454,7 @@ export function LeadDetailPage({
               </>
             }
           >
-            <div className="max-h-[400px] overflow-y-auto space-y-0">
+            <div className="max-h-[25rem] overflow-y-auto space-y-0">
               {analyticsLoading ? (
                 <ActivityFeedSkeleton items={3} />
               ) : formattedActivities.length > 0 ? (
@@ -511,14 +505,14 @@ export function LeadDetailPage({
                         <Link
                           href={`/leads/accounts/${account.id}`}
                           prefetch={true}
-                          className="flex items-center justify-between gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+                          className="flex items-center justify-between gap-3 p-3 border rounded-lg cursor-pointer hover:bg-surface-elevated transition-colors"
                         >
                           <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-10 h-10 bg-brand-pale-aqua rounded-full flex items-center justify-center shrink-0">
-                              <Building2 className="h-5 w-5 text-brand-teal" />
+                            <div className="w-10 h-10 bg-primary-surface rounded-full flex items-center justify-center shrink-0">
+                              <Building2 className="h-5 w-5 text-primary" />
                             </div>
                             <div className="min-w-0">
-                              <h4 className="font-medium text-brand-teal hover:text-brand-indigo truncate">
+                              <h4 className="font-medium text-primary hover:text-foreground truncate">
                                 {account.name || "N/A"}
                               </h4>
                               <p className="text-sm text-muted-foreground truncate">
@@ -536,7 +530,7 @@ export function LeadDetailPage({
                             <p className="text-sm text-muted-foreground truncate">
                               {account.phone || "N/A"}
                             </p>
-                            <p className="text-xs text-brand-teal mt-1">
+                            <p className="text-xs text-primary mt-1">
                               Click to view details
                             </p>
                           </div>
@@ -558,8 +552,8 @@ export function LeadDetailPage({
                       </div>
                     ) : (
                       <div className="text-center py-8">
-                        <div className="w-16 h-16 bg-gray-200 rounded-full mx-auto mb-4 flex items-center justify-center">
-                          <Building2 className="h-8 w-8 text-gray-400" />
+                        <div className="w-16 h-16 bg-active rounded-full mx-auto mb-4 flex items-center justify-center">
+                          <Building2 className="h-8 w-8 text-muted-foreground" />
                         </div>
                         <h3 className="font-medium mb-2">No Account Linked</h3>
                         <p className="text-sm text-muted-foreground mb-4">
@@ -570,8 +564,8 @@ export function LeadDetailPage({
                     )
                   ) : (
                     <div className="text-center py-8">
-                      <div className="w-16 h-16 bg-gray-200 rounded-full mx-auto mb-4 flex items-center justify-center">
-                        <Building2 className="h-8 w-8 text-gray-400" />
+                      <div className="w-16 h-16 bg-active rounded-full mx-auto mb-4 flex items-center justify-center">
+                        <Building2 className="h-8 w-8 text-muted-foreground" />
                       </div>
                       <h3 className="font-medium mb-2">Lead Not Converted</h3>
                       <p className="text-sm text-muted-foreground mb-4">
@@ -588,14 +582,14 @@ export function LeadDetailPage({
                         <Link
                           href={`/leads/contacts/${contact.id}`}
                           prefetch={true}
-                          className="flex items-center justify-between gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+                          className="flex items-center justify-between gap-3 p-3 border rounded-lg cursor-pointer hover:bg-surface-elevated transition-colors"
                         >
                           <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-10 h-10 bg-brand-pale-aqua rounded-full flex items-center justify-center shrink-0">
-                              <User className="h-5 w-5 text-brand-indigo" />
+                            <div className="w-10 h-10 bg-primary-surface rounded-full flex items-center justify-center shrink-0">
+                              <User className="h-5 w-5 text-foreground" />
                             </div>
                             <div className="min-w-0">
-                              <h4 className="font-medium text-brand-indigo hover:text-brand-teal truncate">
+                              <h4 className="font-medium text-foreground hover:text-primary truncate">
                                 {contact.name || "N/A"}
                               </h4>
                               <p className="text-sm text-muted-foreground truncate">
@@ -613,7 +607,7 @@ export function LeadDetailPage({
                             <p className="text-sm text-muted-foreground truncate">
                               {displayPhone(contact.phone, contact.countryCode)}
                             </p>
-                            <p className="text-xs text-brand-indigo mt-1">
+                            <p className="text-xs text-foreground mt-1">
                               Click to view details
                             </p>
                           </div>
@@ -635,8 +629,8 @@ export function LeadDetailPage({
                       </div>
                     ) : (
                       <div className="text-center py-8">
-                        <div className="w-16 h-16 bg-gray-200 rounded-full mx-auto mb-4 flex items-center justify-center">
-                          <User className="h-8 w-8 text-gray-400" />
+                        <div className="w-16 h-16 bg-active rounded-full mx-auto mb-4 flex items-center justify-center">
+                          <User className="h-8 w-8 text-muted-foreground" />
                         </div>
                         <h3 className="font-medium mb-2">Contact Not Found</h3>
                         <p className="text-sm text-muted-foreground mb-4">
@@ -646,8 +640,8 @@ export function LeadDetailPage({
                     )
                   ) : (
                     <div className="text-center py-8">
-                      <div className="w-16 h-16 bg-gray-200 rounded-full mx-auto mb-4 flex items-center justify-center">
-                        <User className="h-8 w-8 text-gray-400" />
+                      <div className="w-16 h-16 bg-active rounded-full mx-auto mb-4 flex items-center justify-center">
+                        <User className="h-8 w-8 text-muted-foreground" />
                       </div>
                       <h3 className="font-medium mb-2">Lead Not Converted</h3>
                       <p className="text-sm text-muted-foreground mb-4">
@@ -684,12 +678,12 @@ export function LeadDetailPage({
 
       {/* Enhanced Convert Dialog */}
       {showConvertDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-4 w-full max-w-md mx-4">
+        <div className="fixed inset-0 bg-foreground bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-surface rounded-lg p-4 w-full max-w-md mx-4">
             <h2 className="text-lg font-semibold mb-4">
               Convert Lead to Contact
             </h2>
-            <p className="text-sm text-gray-600 mb-4">
+            <p className="text-sm text-text-secondary mb-4">
               Convert &ldquo;{displayName || "this lead"}&rdquo; to a contact.
               You can optionally assign keywords.
             </p>

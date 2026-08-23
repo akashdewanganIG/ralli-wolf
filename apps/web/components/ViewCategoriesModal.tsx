@@ -36,7 +36,7 @@ export const ViewCategoriesModal: React.FC<Props> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContentAny className="sm:max-w-[600px]">
+      <DialogContentAny className="sm:max-w-[37.5rem]">
         <DialogHeaderAny>
           <DialogTitleAny>All Categories</DialogTitleAny>
           <DialogDescriptionAny>

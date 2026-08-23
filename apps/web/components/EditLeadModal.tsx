@@ -216,19 +216,19 @@ export const EditLeadModal: React.FC<Props> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContentAny className="sm:max-w-[720px]">
+      <DialogContentAny className="sm:max-w-[45rem]">
         <DialogHeaderAny className="text-center">
           <DialogTitleAny className="text-center">Edit Lead</DialogTitleAny>
           <DialogDescriptionAny className="text-center">
             Update lead details. Fields marked with{" "}
-            <span className="text-red-500">*</span> are required.
+            <span className="text-destructive">*</span> are required.
           </DialogDescriptionAny>
         </DialogHeaderAny>
         <div className="space-y-4 text-center">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="firstName">
-                First Name<span className="text-red-500">*</span>
+                First Name<span className="text-destructive">*</span>
               </Label>
               <Input
                 id="firstName"
@@ -242,7 +242,10 @@ export const EditLeadModal: React.FC<Props> = ({
                 }
               />
               {errors.firstName && (
-                <p id="firstName-error" className="text-xs text-red-600 mt-1">
+                <p
+                  id="firstName-error"
+                  className="text-xs text-destructive mt-1"
+                >
                   {errors.firstName}
                 </p>
               )}
@@ -260,14 +263,17 @@ export const EditLeadModal: React.FC<Props> = ({
                 }
               />
               {errors.lastName && (
-                <p id="lastName-error" className="text-xs text-red-600 mt-1">
+                <p
+                  id="lastName-error"
+                  className="text-xs text-destructive mt-1"
+                >
                   {errors.lastName}
                 </p>
               )}
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="email">
-                Email<span className="text-red-500">*</span>
+                Email<span className="text-destructive">*</span>
               </Label>
               <Input
                 id="email"
@@ -279,14 +285,14 @@ export const EditLeadModal: React.FC<Props> = ({
                 aria-describedby={errors.email ? "email-error" : undefined}
               />
               {errors.email && (
-                <p id="email-error" className="text-xs text-red-600 mt-1">
+                <p id="email-error" className="text-xs text-destructive mt-1">
                   {errors.email}
                 </p>
               )}
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="phone">
-                Phone<span className="text-red-500">*</span>
+                Phone<span className="text-destructive">*</span>
               </Label>
               <Input
                 id="phone"
@@ -297,7 +303,7 @@ export const EditLeadModal: React.FC<Props> = ({
                 aria-describedby={errors.phone ? "phone-error" : undefined}
               />
               {errors.phone && (
-                <p id="phone-error" className="text-xs text-red-600 mt-1">
+                <p id="phone-error" className="text-xs text-destructive mt-1">
                   {errors.phone}
                 </p>
               )}
@@ -410,7 +416,7 @@ export const EditLeadModal: React.FC<Props> = ({
         </div>
         <DialogFooterAny>
           {submitError && (
-            <p className="text-sm text-red-600 mr-auto" role="alert">
+            <p className="text-sm text-destructive mr-auto" role="alert">
               {submitError}
             </p>
           )}
@@ -426,10 +432,7 @@ export const EditLeadModal: React.FC<Props> = ({
             disabled={updateLead.isPending || hasErrors}
           >
             {updateLead.isPending ? (
-              <span className="inline-flex items-center gap-2">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground" />
-                Saving...
-              </span>
+              <span className="inline-flex items-center gap-2">Saving...</span>
             ) : (
               "Save Changes"
             )}

@@ -9,6 +9,8 @@ import type { QuoteListItem } from "@/lib/api/types";
 import { Alert } from "@repo/ui/components/ui/alert";
 import { TablePageSkeleton } from "@/components/skeletons";
 import { PageHeader } from "@repo/ui/components/ui/page-header";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { DEFAULT_PAGE_SIZE } from "@/components/data-table";
 
 export type QuoteTableRow = {
   id: string;
@@ -48,7 +50,7 @@ function mapQuoteToTableRow(quote: QuoteListItem): QuoteTableRow {
 export default function QuotesPage() {
   const router = useRouter();
   const [page, setPage] = React.useState(1);
-  const [itemsPerPage, setItemsPerPage] = React.useState(10);
+  const [itemsPerPage, setItemsPerPage] = React.useState(DEFAULT_PAGE_SIZE);
 
   const {
     data: quotes = [],
@@ -72,7 +74,7 @@ export default function QuotesPage() {
         key: "quoteNumber",
         label: "Quote Number",
         render: value => (
-          <span className="text-muted-foreground hover:underline hover:text-blue-400">
+          <span className="text-muted-foreground hover:text-info">
             {String(value)}
           </span>
         ),
@@ -157,7 +159,7 @@ export default function QuotesPage() {
 
   return (
     <RoleGuard allowedRoles={["ADMIN", "ADMIN", "SALES"]}>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title="Quotes"
           description={`${totalItems} quote${totalItems === 1 ? "" : "s"} across the sales workspace.`}
@@ -176,7 +178,7 @@ export default function QuotesPage() {
           onRowClick={item => router.push(`/sales/quotes/${item.id}`)}
           getRowHref={item => `/sales/quotes/${item.id}`}
         />
-      </div>
+      </PageShell>
     </RoleGuard>
   );
 }

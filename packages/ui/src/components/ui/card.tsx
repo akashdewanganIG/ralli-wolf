@@ -21,7 +21,7 @@ function CardHeader({
     <div
       // Tighter gap to the content below than to the card edges, so a heading
       // reads as attached to its own section rather than floating between two.
-      className={cn("flex flex-col gap-1 px-4 pb-2.5 pt-4", className)}
+      className={cn("flex flex-col gap-0.5 px-4 pb-2.5 pt-3.5", className)}
       {...props}
     />
   );
@@ -34,7 +34,7 @@ function CardTitle({
   return (
     <h3
       className={cn(
-        "text-base font-semibold leading-6 tracking-tight",
+        "text-sm font-semibold leading-5 tracking-tight",
         className
       )}
       {...props}
@@ -48,7 +48,7 @@ function CardDescription({
 }: React.HTMLAttributes<HTMLParagraphElement>) {
   return (
     <p
-      className={cn("text-sm leading-5 text-muted-foreground", className)}
+      className={cn("text-xs leading-4 text-muted-foreground", className)}
       {...props}
     />
   );
@@ -58,7 +58,7 @@ function CardContent({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("px-4 pb-4 pt-0", className)} {...props} />;
+  return <div className={cn("px-4 pb-3.5 pt-0", className)} {...props} />;
 }
 
 function CardFooter({
@@ -67,7 +67,7 @@ function CardFooter({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("flex items-center px-4 pb-4 pt-0", className)}
+      className={cn("flex items-center px-4 pb-3.5 pt-0", className)}
       {...props}
     />
   );

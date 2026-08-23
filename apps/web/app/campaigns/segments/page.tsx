@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@repo/ui/components/ui/table";
-import { Loader2, Plus, Eye, Pencil, Trash } from "lucide-react";
+import { Plus, Eye, Pencil, Trash } from "@repo/ui/icons";
 import { toast } from "@/lib/toast";
 import { segmentService } from "@/lib/api/services";
 import { Segment, SegmentPayload } from "@/lib/api/types";
@@ -26,6 +26,7 @@ import {
   SegmentFormModal,
   SegmentFormValues,
 } from "@/components/segment-form-modal";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 function getRuleSummary(segment: Segment) {
   if (!segment.rules?.length) return "No rules";
@@ -134,10 +135,12 @@ export default function SegmentsPage() {
   };
 
   return (
-    <div className="space-y-5 p-4">
+    <PageShell>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Segments</h1>
+          <h1 className="text-base sm:text-lg font-semibold tracking-tight">
+            Segments
+          </h1>
           <p className="text-muted-foreground">
             Define reusable audiences for WhatsApp campaigns
           </p>
@@ -152,7 +155,7 @@ export default function SegmentsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[220px]">Name</TableHead>
+              <TableHead className="w-[13.75rem]">Name</TableHead>
               <TableHead>Rules</TableHead>
               <TableHead>Logic</TableHead>
               <TableHead>Updated</TableHead>
@@ -164,7 +167,6 @@ export default function SegmentsPage() {
               <TableRow>
                 <TableCell colSpan={5} className="text-center py-8">
                   <div className="flex items-center justify-center gap-2 text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
                     Loading segments...
                   </div>
                 </TableCell>
@@ -251,6 +253,6 @@ export default function SegmentsPage() {
         isSubmitting={createMutation.isPending || updateMutation.isPending}
         title={modalTitle}
       />
-    </div>
+    </PageShell>
   );
 }

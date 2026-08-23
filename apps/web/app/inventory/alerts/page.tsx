@@ -15,6 +15,7 @@ import {
   SimpleTable,
   StatCard,
   StatusBadge,
+  DEFAULT_PAGE_SIZE,
 } from "@/components/supply-chain/shared";
 import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
 import { useInventoryMutations, useStockAlerts } from "@/hooks/useSupplyChain";
@@ -24,6 +25,9 @@ import {
   humanizeEnum,
 } from "@/lib/utils/decimal";
 import type { StockAlertType } from "@/lib/api/types/supplyChain";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { DashboardToolbar } from "@repo/ui/components/ui/dashboard-toolbar";
+import { Tag } from "@repo/ui/components/ui/tag";
 
 const ALERT_TYPES: StockAlertType[] = [
   "STOCKOUT",
@@ -44,7 +48,7 @@ export default function StockAlertsPage() {
 
   const { alerts, pagination, summary, isLoading, error } = useStockAlerts({
     page,
-    limit: 25,
+    limit: DEFAULT_PAGE_SIZE,
     status: status || undefined,
     severity: severity || undefined,
     alertType: alertType || undefined,
@@ -56,7 +60,7 @@ export default function StockAlertsPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title="Stock alerts"
           subtitle="Review and resolve replenishment and expiry exceptions."
@@ -85,7 +89,7 @@ export default function StockAlertsPage() {
             {evaluateAlerts.data.data.requisitionsCreated > 0 ? (
               <Link
                 href="/purchasing/requisitions"
-                className="font-medium underline"
+                className="font-medium text-primary transition-colors hover:text-info"
               >
                 {evaluateAlerts.data.data.requisitionsCreated} purchase
                 requisition(s) raised
@@ -96,7 +100,7 @@ export default function StockAlertsPage() {
           </Alert>
         )}
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid-auto-fit gap-3">
           <StatCard
             label="Critical"
             value={summary.CRITICAL ?? 0}
@@ -111,77 +115,71 @@ export default function StockAlertsPage() {
           <StatCard label="Low" value={summary.LOW ?? 0} />
         </div>
 
-        <Panel>
-          <div className="mb-4 grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
-            <div className="w-full sm:w-44">
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Status
-              </label>
-              <SelectField
-                value={status}
-                onChange={event => {
-                  setStatus(event.target.value);
-                  setPage(1);
-                }}
-              >
-                <option value="">Open and acknowledged</option>
-                <option value="OPEN">Open</option>
-                <option value="ACKNOWLEDGED">Acknowledged</option>
-                <option value="RESOLVED">Resolved</option>
-                <option value="DISMISSED">Dismissed</option>
-              </SelectField>
-            </div>
-            <div className="w-full sm:w-40">
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Severity
-              </label>
-              <SelectField
-                value={severity}
-                onChange={event => {
-                  setSeverity(event.target.value);
-                  setPage(1);
-                }}
-              >
-                <option value="">Any</option>
-                <option value="CRITICAL">Critical</option>
-                <option value="HIGH">High</option>
-                <option value="MEDIUM">Medium</option>
-                <option value="LOW">Low</option>
-              </SelectField>
-            </div>
-            <div className="w-full sm:w-52">
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Alert type
-              </label>
-              <SelectField
-                value={alertType}
-                onChange={event => {
-                  setAlertType(event.target.value);
-                  setPage(1);
-                }}
-              >
-                <option value="">Any</option>
-                {ALERT_TYPES.map(type => (
-                  <option key={type} value={type}>
-                    {humanizeEnum(type)}
-                  </option>
-                ))}
-              </SelectField>
-            </div>
-            <div className="w-full sm:w-56">
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Warehouse
-              </label>
-              <WarehouseFilter
-                value={warehouseId}
-                onChange={value => {
-                  setWarehouseId(value);
-                  setPage(1);
-                }}
-              />
-            </div>
-          </div>
-
+        <Panel
+          actions={
+            <DashboardToolbar
+              actions={[
+                <SelectField
+                  key="status"
+                  aria-label="Filter by status"
+                  className="w-full sm:w-44"
+                  value={status}
+                  onChange={event => {
+                    setStatus(event.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <option value="">Open and acknowledged</option>
+                  <option value="OPEN">Open</option>
+                  <option value="ACKNOWLEDGED">Acknowledged</option>
+                  <option value="RESOLVED">Resolved</option>
+                  <option value="DISMISSED">Dismissed</option>
+                </SelectField>,
+                <SelectField
+                  key="severity"
+                  aria-label="Filter by severity"
+                  className="w-full sm:w-36"
+                  value={severity}
+                  onChange={event => {
+                    setSeverity(event.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <option value="">Any severity</option>
+                  <option value="CRITICAL">Critical</option>
+                  <option value="HIGH">High</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="LOW">Low</option>
+                </SelectField>,
+                <SelectField
+                  key="alert-type"
+                  aria-label="Filter by alert type"
+                  className="w-full sm:w-48"
+                  value={alertType}
+                  onChange={event => {
+                    setAlertType(event.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <option value="">Any type</option>
+                  {ALERT_TYPES.map(type => (
+                    <option key={type} value={type}>
+                      {humanizeEnum(type)}
+                    </option>
+                  ))}
+                </SelectField>,
+                <WarehouseFilter
+                  key="warehouse"
+                  value={warehouseId}
+                  onChange={value => {
+                    setWarehouseId(value);
+                    setPage(1);
+                  }}
+                />,
+              ]}
+            />
+          }
+        >
           <SimpleTable
             isLoading={isLoading}
             rows={alerts}
@@ -192,13 +190,16 @@ export default function StockAlertsPage() {
                 header: "Severity",
                 cell: row => <SeverityBadge severity={row.severity} />,
               },
-              { header: "Type", cell: row => humanizeEnum(row.alertType) },
+              {
+                header: "Type",
+                cell: row => (row.alertType ? <Tag>{row.alertType}</Tag> : "—"),
+              },
               {
                 header: "Item",
                 cell: row => (
                   <Link
                     href={`/inventory/stock/${row.product.id}?warehouseId=${row.warehouse.id}`}
-                    className="text-primary hover:underline"
+                    className="text-primary hover:text-info"
                   >
                     <span className="font-mono text-xs">
                       {row.product.code}
@@ -225,7 +226,7 @@ export default function StockAlertsPage() {
                   <span
                     className={
                       Number(row.shortfallQuantity) > 0
-                        ? "font-semibold text-red-700"
+                        ? "font-semibold text-error-foreground"
                         : ""
                     }
                   >
@@ -284,11 +285,10 @@ export default function StockAlertsPage() {
           <Pager
             page={page}
             totalPages={pagination?.totalPages}
-            totalItems={pagination?.totalItems}
             onChange={setPage}
           />
         </Panel>
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

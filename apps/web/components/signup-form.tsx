@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "@repo/ui/icons";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
@@ -82,7 +82,7 @@ export function SignupForm({
   };
 
   return (
-    <div className={cn("flex flex-col gap-6", className)} {...props}>
+    <div className={cn("flex flex-col gap-4", className)} {...props}>
       <form onSubmit={handleSubmit}>
         <FieldGroup>
           <div className="flex flex-col items-center gap-2 text-center">
@@ -96,7 +96,7 @@ export function SignupForm({
                   alt="Company Logo"
                   width={400}
                   height={400}
-                  className="h-auto w-full max-w-[220px] object-contain"
+                  className="h-auto w-full max-w-[13.75rem] object-contain"
                 />
               </div>
               <span className="sr-only">
@@ -112,7 +112,7 @@ export function SignupForm({
             </FieldDescription>
           </div>
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md">
+            <div className="bg-error-surface border border-error-border text-destructive px-4 py-3 rounded-md">
               {error}
             </div>
           )}
@@ -132,7 +132,7 @@ export function SignupForm({
                 }
               />
               {validationErrors.name && (
-                <p id="name-error" className="text-xs text-red-600 mt-1">
+                <p id="name-error" className="text-xs text-destructive mt-1">
                   {validationErrors.name}
                 </p>
               )}
@@ -152,7 +152,7 @@ export function SignupForm({
                 }
               />
               {validationErrors.email && (
-                <p id="email-error" className="text-xs text-red-600 mt-1">
+                <p id="email-error" className="text-xs text-destructive mt-1">
                   {validationErrors.email}
                 </p>
               )}
@@ -172,7 +172,7 @@ export function SignupForm({
                 <button
                   type="button"
                   onClick={togglePasswordVisibility}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  className="absolute right-3 inset-y-0 my-auto h-fit text-muted-foreground hover:text-foreground transition-colors"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {!showPassword ? (

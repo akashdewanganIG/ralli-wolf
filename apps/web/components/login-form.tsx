@@ -1,52 +1,189 @@
 "use client";
 
-import {
-  ArrowRight,
-  CheckCircle2,
-  Eye,
-  EyeOff,
-  KeyRound,
-  Loader2,
-  LockKeyhole,
-  Mail,
-} from "lucide-react";
+import { ArrowLeft, Eye, EyeOff } from "@repo/ui/icons";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@repo/ui/components/ui/button";
-import { Checkbox } from "@repo/ui/components/ui/checkbox";
 import { Input } from "@repo/ui/components/ui/input";
-import { SegmentedControl } from "@repo/ui/components/ui/segmented-control";
 import { cn } from "@repo/ui/lib/utils";
 import ralliWolfLogo from "../app/assets/images/logos/ralli-wolf-logo.png";
 import { useAuth } from "../contexts/AuthContext";
+import type { ApiError } from "../lib/api/types";
 import { validateEmailBasic } from "../lib/validation";
 import { toast } from "@/lib/toast";
-import BrandPanel from "./BrandPanel";
+import LoginShowcase from "./LoginShowcase";
+import LoginProviders from "./LoginProviders";
+import LoginFaq from "./LoginFaq";
+import LoginFooter from "./LoginFooter";
 
-type LoginMethod = "password" | "otp";
+/** Sign-in is two steps: password, then whichever second factor is enrolled. */
+type Step = "credentials" | "code";
+type Factor = "totp" | "email";
+
+const RESEND_COOLDOWN_SECONDS = 30;
+
+function asApiError(error: unknown): ApiError | null {
+  return error && typeof error === "object" && "status" in error
+    ? (error as ApiError)
+    : null;
+}
+
+/**
+ * Turns a sign-in failure into copy that names what the user can act on.
+ *
+ * Bad credentials stay deliberately vague: the API will not say whether the
+ * email or the password was wrong, because that would let anyone test which
+ * addresses hold accounts. Every other failure is named precisely.
+ */
+function describeLoginError(error: unknown): {
+  title: string;
+  description: string;
+} {
+  const apiError = asApiError(error);
+
+  if (!apiError) {
+    return {
+      title: "Could not reach the server",
+      description: "Check your connection and try again.",
+    };
+  }
+
+  switch (apiError.code) {
+    case "INVALID_CREDENTIALS":
+      return {
+        title: "Invalid email or password",
+        description:
+          "Check both and try again. You can reset a forgotten password from “Forgot password”.",
+      };
+    case "ACCOUNT_DEACTIVATED":
+      return {
+        title: "Account deactivated",
+        description:
+          "This account no longer has access. Contact your administrator to restore it.",
+      };
+    case "OTP_DELIVERY_FAILED":
+      return {
+        title: "Could not send your code",
+        description:
+          "Your password was correct, but the email did not go out. Try again in a moment.",
+      };
+    default:
+      break;
+  }
+
+  if (apiError.status === 403) {
+    return {
+      title: "Sign-in blocked",
+      description: apiError.message || "This account cannot sign in here.",
+    };
+  }
+  if (apiError.status === 429) {
+    return {
+      title: "Too many attempts",
+      description:
+        "This account is temporarily locked out. Wait a few minutes before trying again.",
+    };
+  }
+  if (apiError.status >= 500) {
+    return {
+      title: "Something went wrong on our end",
+      description: "Please try signing in again shortly.",
+    };
+  }
+
+  return {
+    title: "Could not sign you in",
+    description: apiError.message || "Please check your details and try again.",
+  };
+}
+
+/** Same idea for the second step, where the failure modes are all about the code. */
+function describeOtpError(error: unknown): {
+  title: string;
+  description: string;
+  sessionExpired: boolean;
+} {
+  const apiError = asApiError(error);
+
+  if (!apiError) {
+    return {
+      title: "Could not reach the server",
+      description: "Check your connection and try again.",
+      sessionExpired: false,
+    };
+  }
+
+  switch (apiError.code) {
+    case "INVALID_OTP": {
+      const left = apiError.attemptsRemaining;
+      return {
+        title: "That code is incorrect",
+        description:
+          typeof left === "number" && left > 0
+            ? `${left} ${left === 1 ? "attempt" : "attempts"} left before you will need a new code.`
+            : "Check the six digits and try again.",
+        sessionExpired: false,
+      };
+    }
+    case "OTP_EXPIRED":
+      return {
+        title: "That code has expired",
+        description: "Codes last 10 minutes. Send yourself a new one.",
+        sessionExpired: false,
+      };
+    case "OTP_ATTEMPTS_EXCEEDED":
+      return {
+        title: "Too many incorrect codes",
+        description: "Request a new code to continue signing in.",
+        sessionExpired: false,
+      };
+    case "MFA_SESSION_EXPIRED":
+      return {
+        title: "Your sign-in session expired",
+        description: "Enter your password again to start over.",
+        sessionExpired: true,
+      };
+    default:
+      break;
+  }
+
+  if (apiError.status === 429) {
+    return {
+      title: "Too many attempts",
+      description: "Wait a few minutes before trying this code again.",
+      sessionExpired: false,
+    };
+  }
+
+  return {
+    title: "Could not verify that code",
+    description: apiError.message || "Please try again.",
+    sessionExpired: false,
+  };
+}
 
 export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
-  const [method, setMethod] = useState<LoginMethod>("password");
+  const [step, setStep] = useState<Step>("credentials");
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
-  const [otpEmail, setOtpEmail] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
+  const [mfaToken, setMfaToken] = useState("");
+  const [maskedEmail, setMaskedEmail] = useState("");
+  const [factor, setFactor] = useState<Factor>("email");
+  const [availableFactors, setAvailableFactors] = useState<Factor[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resendIn, setResendIn] = useState(0);
   const otpInputRef = useRef<HTMLInputElement>(null);
   const {
     login,
-    requestLoginOtp,
+    resendLoginOtp,
     loginWithOtp,
-    error,
     clearError,
     user,
     isAuthenticated,
@@ -75,28 +212,87 @@ export function LoginForm({
   }, [resendIn]);
 
   useEffect(() => {
-    if (otpSent) otpInputRef.current?.focus();
-  }, [otpSent]);
+    if (step === "code") otpInputRef.current?.focus();
+  }, [step]);
 
-  const redirectAfterLogin = (role?: string) => {
-    router.replace(role?.toUpperCase() === "SALES" ? "/sales-user" : "/");
+  const returnToCredentials = () => {
+    setStep("credentials");
+    setOtp("");
+    setMfaToken("");
+    setMaskedEmail("");
+    setResendIn(0);
+    clearError();
   };
 
-  const requestOtp = async () => {
-    if (!email || emailError) return;
+  const submitCredentials = async () => {
+    const normalizedEmail = email.trim().toLowerCase();
     setIsSubmitting(true);
     clearError();
     try {
-      await requestLoginOtp(email.trim().toLowerCase());
-      setOtpEmail(email.trim().toLowerCase());
+      const challenge = await login({ email: normalizedEmail, password });
+      setMfaToken(challenge.mfaToken);
+      setMaskedEmail(challenge.maskedEmail);
+      setFactor(challenge.factor);
+      setAvailableFactors(challenge.availableFactors ?? []);
       setOtp("");
-      setOtpSent(true);
-      setResendIn(30);
-      toast.info("Sign-in code sent", {
-        description: `Check ${email.trim().toLowerCase()} for your six-digit code.`,
+      setStep("code");
+      // Only an emailed code has a delivery to wait on.
+      setResendIn(challenge.factor === "email" ? RESEND_COOLDOWN_SECONDS : 0);
+      if (challenge.factor === "email") {
+        toast.info("Check your email for a code", {
+          description: `We sent a 6-digit code to ${challenge.maskedEmail}. It expires in 10 minutes.`,
+        });
+      } else {
+        toast.info("Enter your authenticator code", {
+          description:
+            "Open your authenticator app for the current 6-digit code.",
+        });
+      }
+    } catch (error) {
+      const { title, description } = describeLoginError(error);
+      toast.error(title, { description });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const submitOtp = async () => {
+    setIsSubmitting(true);
+    clearError();
+    try {
+      const loggedInUser = await loginWithOtp({ mfaToken, otp });
+      toast.success("Welcome back", {
+        description: "You are signed in to Ralli Wolf.",
       });
-    } catch {
-      // The shared authentication context exposes a safe message below.
+      router.replace(
+        loggedInUser.role?.toUpperCase() === "SALES" ? "/sales-user" : "/"
+      );
+    } catch (error) {
+      const { title, description, sessionExpired } = describeOtpError(error);
+      toast.error(title, { description });
+      if (sessionExpired) returnToCredentials();
+      else setOtp("");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const resendCode = async () => {
+    setIsSubmitting(true);
+    clearError();
+    try {
+      const result = await resendLoginOtp(mfaToken);
+      setOtp("");
+      setFactor("email");
+      setResendIn(RESEND_COOLDOWN_SECONDS);
+      toast.info("New code sent", {
+        description: `A fresh 6-digit code is on its way to ${result.maskedEmail}.`,
+      });
+      otpInputRef.current?.focus();
+    } catch (error) {
+      const { title, description, sessionExpired } = describeOtpError(error);
+      toast.error(title, { description });
+      if (sessionExpired) returnToCredentials();
     } finally {
       setIsSubmitting(false);
     }
@@ -104,292 +300,260 @@ export function LoginForm({
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!email || emailError) return;
-
-    if (method === "otp" && !otpSent) {
-      await requestOtp();
+    if (step === "credentials") {
+      if (!email || emailError || !password) return;
+      await submitCredentials();
       return;
     }
-
-    setIsSubmitting(true);
-    clearError();
-    try {
-      const loggedInUser =
-        method === "password"
-          ? await login(
-              { email: email.trim().toLowerCase(), password },
-              rememberMe
-            )
-          : await loginWithOtp({ email: otpEmail, otp }, rememberMe);
-      toast.success("Welcome back", {
-        description: "You are signed in to Ralli Wolf.",
-      });
-      redirectAfterLogin(loggedInUser.role);
-    } catch {
-      // The shared authentication context exposes a safe message below.
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const switchMethod = (nextMethod: LoginMethod) => {
-    setMethod(nextMethod);
-    setOtpSent(false);
-    setOtp("");
-    setResendIn(0);
-    clearError();
+    if (otp.length !== 6) return;
+    await submitOtp();
   };
 
   if (isLoading && !isSubmitting) {
     return (
-      <div className="flex min-h-svh items-center justify-center bg-white">
-        <Loader2
-          className="size-7 animate-spin text-primary"
-          aria-label="Loading session"
-        />
-      </div>
+      <div className="flex min-h-svh items-center justify-center bg-background"></div>
     );
   }
 
   const submitDisabled =
     isSubmitting ||
-    !!emailError ||
-    !email ||
-    (method === "password" ? !password : otpSent ? otp.length !== 6 : false);
+    (step === "credentials"
+      ? !!emailError || !email || !password
+      : otp.length !== 6);
+
+  const canFallBackToEmail =
+    step === "code" && factor === "totp" && availableFactors.includes("email");
 
   return (
     <div
       className={cn(
-        "grid min-h-svh w-full gap-4 bg-white p-2 lg:grid-cols-[minmax(0,1.3fr)_minmax(28rem,0.7fr)] lg:gap-6 lg:p-3 lg:pr-6",
+        // `login-page` scopes the page's own surface tokens; everything
+        // above the footer shares one flat colour.
+        "login-page flex min-h-svh w-full flex-col bg-[var(--login-bg)]",
         className
       )}
       {...props}
     >
-      <BrandPanel />
+      {/* Brand top-left, theme switch top-right, both clear of the form. */}
 
-      <main className="flex min-h-[calc(100svh-1rem)] items-center justify-center px-4 py-8 sm:px-8 lg:min-h-[calc(100svh-1.5rem)] lg:px-12 xl:px-20">
-        <div className="w-full max-w-[24rem]">
+      {/* Form on the left, video panel on the right. The panel is portrait,
+          so the right column is the narrower of the two. */}
+      <div className="mx-auto grid min-h-svh w-full max-w-[100rem] flex-1 items-stretch gap-8 p-5 sm:p-6 lg:grid-cols-[minmax(0,0.78fr)_minmax(0,1.22fr)] lg:gap-6 lg:p-6">
+        <main className="flex flex-col">
           <Image
             src={ralliWolfLogo}
             alt="Ralli Wolf"
-            width={200}
-            height={38}
+            width={800}
+            height={150}
             priority
-            className="h-8 w-auto object-contain"
+            className="h-6 w-auto shrink-0 self-start object-contain"
           />
 
-          <div className="mt-12">
-            <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
-              Welcome back
-            </h1>
-            <p className="mt-2 text-sm text-zinc-500">
-              Sign in to your account to continue.
-            </p>
-          </div>
-
-          <SegmentedControl
-            value={method}
-            onValueChange={switchMethod}
-            label="Sign-in method"
-            className="mt-8 w-full grid-cols-2"
-            items={[
-              { value: "password", label: "Password", icon: LockKeyhole },
-              { value: "otp", label: "Email code", icon: KeyRound },
-            ]}
-          />
-
-          <form onSubmit={handleSubmit} className="mt-4 space-y-4" noValidate>
-            {error && (
-              <div
-                role="alert"
-                aria-live="polite"
-                className="rounded-lg border border-error/20 bg-error-surface px-4 py-3 text-sm text-error-foreground"
-              >
-                {error}
+          <div className="my-auto w-full lg:pl-12">
+            <div className="mx-auto w-full max-w-[22rem] pt-10">
+              <div>
+                <h1 className="font-brand text-xl tracking-tight text-foreground">
+                  {step === "credentials"
+                    ? "Partner portal"
+                    : "Confirm it is you"}
+                </h1>
+                {/* Only the second factor gets a sub-line, and only because it
+                    has to say where the code went. The first step stands on the
+                    heading alone. */}
+                {step === "credentials" ? null : (
+                  <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                    {factor === "totp" ? (
+                      "Enter the current 6-digit code from your authenticator app."
+                    ) : (
+                      <>
+                        Enter the 6-digit code sent to{" "}
+                        <span className="font-medium text-foreground">
+                          {maskedEmail}
+                        </span>
+                        .
+                      </>
+                    )}
+                  </p>
+                )}
               </div>
-            )}
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <label
-                  htmlFor="email"
-                  className="text-sm font-medium text-foreground"
+              <form
+                onSubmit={handleSubmit}
+                className="mt-5 space-y-3"
+                noValidate
+              >
+                {step === "credentials" ? (
+                  <>
+                    <LoginProviders disabled={isSubmitting} />
+
+                    <div className="space-y-1.5">
+                      <label
+                        htmlFor="email"
+                        className="block text-xs font-medium text-foreground"
+                      >
+                        Work email
+                      </label>
+                      <Input
+                        id="email"
+                        type="email"
+                        autoComplete="email"
+                        placeholder="you@company.com"
+                        value={email}
+                        onChange={event => setEmail(event.target.value)}
+                        required
+                        aria-invalid={!!emailError}
+                        aria-describedby={
+                          emailError ? "email-error" : undefined
+                        }
+                        className="h-9 rounded-md text-sm"
+                      />
+                      {emailError && (
+                        <p
+                          id="email-error"
+                          className="text-xs text-destructive"
+                        >
+                          {emailError}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <label
+                          htmlFor="password"
+                          className="block text-xs font-medium text-foreground"
+                        >
+                          Password
+                        </label>
+                        <Link
+                          href="/forgot-password"
+                          className="rounded-sm text-xs font-medium text-primary outline-none hover:text-info focus-visible:ring-2 focus-visible:ring-ring/30"
+                        >
+                          Forgot password?
+                        </Link>
+                      </div>
+                      <div className="relative">
+                        <Input
+                          id="password"
+                          type={showPassword ? "text" : "password"}
+                          autoComplete="current-password"
+                          placeholder="Enter your password"
+                          value={password}
+                          onChange={event => setPassword(event.target.value)}
+                          required
+                          className="h-9 rounded-md pr-10 text-sm"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(visible => !visible)}
+                          className="absolute right-1 top-1/2 inline-flex size-7 -translate-y-1/2 items-center justify-center rounded text-muted-foreground outline-none transition-colors hover:bg-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30"
+                          aria-label={
+                            showPassword ? "Hide password" : "Show password"
+                          }
+                        >
+                          {showPassword ? (
+                            <Eye className="size-4" />
+                          ) : (
+                            <EyeOff className="size-4" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-1.5">
+                    <label
+                      htmlFor="login-otp"
+                      className="block text-xs font-medium text-foreground"
+                    >
+                      {factor === "totp"
+                        ? "Authenticator code"
+                        : "Verification code"}
+                    </label>
+                    <Input
+                      ref={otpInputRef}
+                      id="login-otp"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      placeholder="000000"
+                      value={otp}
+                      onChange={event =>
+                        setOtp(
+                          event.target.value.replace(/\D/g, "").slice(0, 6)
+                        )
+                      }
+                      className="h-10 rounded-md text-center font-mono text-base tracking-[0.3em]"
+                      aria-describedby="otp-help"
+                      required
+                    />
+                    <div
+                      id="otp-help"
+                      className="flex items-center justify-between gap-3 text-xs text-muted-foreground"
+                    >
+                      <span>Single-use code</span>
+                      {factor === "email" ? (
+                        <button
+                          type="button"
+                          disabled={resendIn > 0 || isSubmitting}
+                          onClick={resendCode}
+                          className="rounded-sm font-medium text-primary outline-none hover:text-info focus-visible:ring-2 focus-visible:ring-ring/30 disabled:text-text-disabled disabled:no-underline"
+                        >
+                          {resendIn > 0
+                            ? `Resend in ${resendIn}s`
+                            : "Resend code"}
+                        </button>
+                      ) : canFallBackToEmail ? (
+                        <button
+                          type="button"
+                          disabled={isSubmitting}
+                          onClick={resendCode}
+                          className="rounded-sm font-medium text-primary outline-none hover:text-info focus-visible:ring-2 focus-visible:ring-ring/30 disabled:text-text-disabled"
+                        >
+                          Email a code instead
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                )}
+
+                <Button
+                  type="submit"
+                  variant="raised"
+                  disabled={submitDisabled}
+                  className="mt-1 h-10 w-full rounded-md text-sm font-semibold"
                 >
-                  Work email
-                </label>
-                {method === "otp" && otpSent ? (
+                  {isSubmitting
+                    ? step === "credentials"
+                      ? "Checking…"
+                      : "Signing in…"
+                    : step === "credentials"
+                      ? "Continue"
+                      : "Verify and sign in"}
+                </Button>
+
+                {step === "code" ? (
                   <button
                     type="button"
-                    onClick={() => {
-                      setOtpSent(false);
-                      setOtp("");
-                      setResendIn(0);
-                      clearError();
-                    }}
-                    className="rounded-sm text-xs font-medium text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary/30 whitespace-nowrap"
+                    onClick={returnToCredentials}
+                    disabled={isSubmitting}
+                    className="mx-auto flex items-center gap-1 rounded-sm pt-0.5 text-xs font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30 disabled:opacity-50"
                   >
-                    Change email
+                    <ArrowLeft className="size-3" />
+                    Use a different account
                   </button>
                 ) : null}
-              </div>
-              <div className="relative">
-                <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="email"
-                  type="email"
-                  autoComplete="email"
-                  placeholder="you@company.com"
-                  value={email}
-                  onChange={event => setEmail(event.target.value)}
-                  disabled={method === "otp" && otpSent}
-                  required
-                  aria-invalid={!!emailError}
-                  aria-describedby={emailError ? "email-error" : undefined}
-                  className="pl-10"
-                />
-              </div>
-              {emailError && (
-                <p id="email-error" className="text-xs text-destructive">
-                  {emailError}
-                </p>
-              )}
+              </form>
             </div>
+          </div>
+        </main>
 
-            {method === "password" ? (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-3">
-                  <label
-                    htmlFor="password"
-                    className="text-sm font-medium text-foreground"
-                  >
-                    Password
-                  </label>
-                  <Link
-                    href="/forgot-password"
-                    className="rounded-sm text-xs font-medium text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary/30 whitespace-nowrap"
-                  >
-                    Forgot password?
-                  </Link>
-                </div>
-                <div className="relative">
-                  <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="current-password"
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={event => setPassword(event.target.value)}
-                    required
-                    className="pl-10 pr-11"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(visible => !visible)}
-                    className="absolute right-2 top-1/2 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30"
-                    aria-label={
-                      showPassword ? "Hide password" : "Show password"
-                    }
-                  >
-                    {showPassword ? (
-                      <Eye className="size-4" />
-                    ) : (
-                      <EyeOff className="size-4" />
-                    )}
-                  </button>
-                </div>
-              </div>
-            ) : otpSent ? (
-              <div className="space-y-4">
-                <div className="flex items-start gap-3 rounded-xl border border-success/20 bg-success-surface px-4 py-3.5 text-success-foreground">
-                  <CheckCircle2 className="mt-0.5 size-4 shrink-0" />
-                  <p className="text-xs leading-5">
-                    A 6-digit code was sent if this email belongs to an active
-                    account. It expires in 10 minutes.
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <label
-                    htmlFor="login-otp"
-                    className="text-sm font-medium text-foreground"
-                  >
-                    Verification code
-                  </label>
-                  <Input
-                    ref={otpInputRef}
-                    id="login-otp"
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    maxLength={6}
-                    placeholder="000000"
-                    value={otp}
-                    onChange={event =>
-                      setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))
-                    }
-                    className="text-center font-mono text-lg tracking-[0.28em]"
-                    aria-describedby="otp-help"
-                    required
-                  />
-                  <div
-                    id="otp-help"
-                    className="flex items-center justify-between gap-3 px-1 text-xs text-muted-foreground"
-                  >
-                    <span>Single-use code</span>
-                    <button
-                      type="button"
-                      disabled={resendIn > 0 || isSubmitting}
-                      onClick={requestOtp}
-                      className="rounded-sm font-medium text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary/30 disabled:text-zinc-400 disabled:no-underline whitespace-nowrap"
-                    >
-                      {resendIn > 0 ? `Resend in ${resendIn}s` : "Resend code"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <p className="rounded-xl border border-info/20 bg-info-surface px-4 py-3.5 text-sm leading-5 text-info-foreground">
-                We’ll email a single-use code to the address above. No password
-                is required.
-              </p>
-            )}
+        <LoginShowcase />
+      </div>
 
-            <label className="flex w-fit cursor-pointer items-center gap-2.5 px-1 text-sm text-zinc-600">
-              <Checkbox
-                id="remember-me"
-                checked={rememberMe}
-                onCheckedChange={checked => setRememberMe(checked === true)}
-              />
-              Keep me signed in for 7 days
-            </label>
-
-            <Button
-              type="submit"
-              size="lg"
-              disabled={submitDisabled}
-              className="h-11 w-full rounded-xl text-base shadow-sm"
-            >
-              {isSubmitting ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : null}
-              {isSubmitting
-                ? method === "otp" && !otpSent
-                  ? "Sending code…"
-                  : "Signing in…"
-                : method === "password"
-                  ? "Sign in"
-                  : otpSent
-                    ? "Verify and sign in"
-                    : "Send sign-in code"}
-              {!isSubmitting ? <ArrowRight className="ml-1 size-4" /> : null}
-            </Button>
-          </form>
-
-          <p className="mt-8 text-center text-xs text-muted-foreground">
-            © {new Date().getFullYear()} Ralli Wolf. Authorized access only.
-          </p>
-        </div>
-      </main>
+      <LoginFaq />
+      <LoginFooter />
     </div>
   );
 }

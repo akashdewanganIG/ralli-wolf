@@ -14,6 +14,7 @@ import {
   Panel,
   SelectField,
   SimpleTable,
+  DEFAULT_PAGE_SIZE,
 } from "@/components/supply-chain/shared";
 import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
 import {
@@ -26,6 +27,8 @@ import {
   useSuppliers,
 } from "@/hooks/useSupplyChain";
 import { formatDateTime, formatQuantity } from "@/lib/utils/decimal";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { FormDialog } from "@repo/ui/components/ui/form-dialog";
 
 export default function ReorderRulesPage() {
   const [page, setPage] = useState(1);
@@ -36,7 +39,7 @@ export default function ReorderRulesPage() {
 
   const { rules, pagination, isLoading, error } = useReorderRules({
     page,
-    limit: 25,
+    limit: DEFAULT_PAGE_SIZE,
     warehouseId: filterWarehouseId,
   });
   const { saveReorderRule, deleteReorderRule } = useInventoryMutations();
@@ -95,17 +98,17 @@ export default function ReorderRulesPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title="Reorder policies"
           subtitle="Manage replenishment policies by item and warehouse."
           actions={
             <Button
               type="button"
-              onClick={() => setShowForm(current => !current)}
+              onClick={() => setShowForm(true)}
               className="px-3 whitespace-nowrap"
             >
-              {showForm ? "Close" : "Add / update policy"}
+              Add / update policy
             </Button>
           }
         />
@@ -114,115 +117,111 @@ export default function ReorderRulesPage() {
         <ErrorBanner error={saveReorderRule.error} />
         <ErrorBanner error={deleteReorderRule.error} />
 
-        {showForm && (
-          <Panel
-            title="Reorder policy"
-            description="Saving for an item and warehouse that already has a policy updates it."
-          >
-            <form onSubmit={submit} className="grid gap-4 md:grid-cols-3">
-              <Field label="Item" className="md:col-span-2" composite>
-                <ProductPicker
-                  value={product}
-                  onChange={setProduct}
-                  autoFocus
-                />
-              </Field>
-              <Field label="Warehouse" composite>
-                <WarehouseFilter
-                  value={warehouseId}
-                  onChange={setWarehouseId}
-                  allowAll={false}
-                  required
-                />
-              </Field>
+        <FormDialog
+          open={showForm}
+          onOpenChange={setShowForm}
+          title="Reorder policy"
+          description="Saving for an item and warehouse that already has a policy updates it."
+        >
+          <form onSubmit={submit} className="grid gap-4 md:grid-cols-3">
+            <Field label="Item" className="md:col-span-2" composite>
+              <ProductPicker value={product} onChange={setProduct} autoFocus />
+            </Field>
+            <Field label="Warehouse" composite>
+              <WarehouseFilter
+                value={warehouseId}
+                onChange={setWarehouseId}
+                allowAll={false}
+                required
+              />
+            </Field>
 
-              <Field
-                label="Safety stock"
-                hint="The buffer you never want to dip below"
-              >
-                <Input
-                  value={safetyStock}
-                  onChange={e => setSafetyStock(e.target.value)}
-                  inputMode="decimal"
-                />
-              </Field>
-              <Field
-                label="Reorder point"
-                hint="Must be at or above safety stock"
-              >
-                <Input
-                  value={reorderPoint}
-                  onChange={e => setReorderPoint(e.target.value)}
-                  inputMode="decimal"
-                />
-              </Field>
-              <Field
-                label="Reorder quantity"
-                hint="How much to buy when triggered"
-              >
-                <Input
-                  value={reorderQuantity}
-                  onChange={e => setReorderQuantity(e.target.value)}
-                  inputMode="decimal"
-                />
-              </Field>
+            <Field
+              label="Safety stock"
+              hint="The buffer you never want to dip below"
+            >
+              <Input
+                value={safetyStock}
+                onChange={e => setSafetyStock(e.target.value)}
+                inputMode="decimal"
+              />
+            </Field>
+            <Field
+              label="Reorder point"
+              hint="Must be at or above safety stock"
+            >
+              <Input
+                value={reorderPoint}
+                onChange={e => setReorderPoint(e.target.value)}
+                inputMode="decimal"
+              />
+            </Field>
+            <Field
+              label="Reorder quantity"
+              hint="How much to buy when triggered"
+            >
+              <Input
+                value={reorderQuantity}
+                onChange={e => setReorderQuantity(e.target.value)}
+                inputMode="decimal"
+              />
+            </Field>
 
-              <Field
-                label="Maximum stock"
-                hint="Optional. Above this an overstock alert is raised."
+            <Field
+              label="Maximum stock"
+              hint="Optional. Above this an overstock alert is raised."
+            >
+              <Input
+                value={maximumStock}
+                onChange={e => setMaximumStock(e.target.value)}
+                inputMode="decimal"
+                placeholder="Not set"
+              />
+            </Field>
+            <Field label="Lead time (days)">
+              <Input
+                value={leadTimeDays}
+                onChange={e => setLeadTimeDays(e.target.value)}
+                inputMode="numeric"
+              />
+            </Field>
+            <Field label="Preferred supplier">
+              <SelectField
+                value={preferredSupplierId}
+                onChange={e => setPreferredSupplierId(e.target.value)}
               >
-                <Input
-                  value={maximumStock}
-                  onChange={e => setMaximumStock(e.target.value)}
-                  inputMode="decimal"
-                  placeholder="Not set"
-                />
-              </Field>
-              <Field label="Lead time (days)">
-                <Input
-                  value={leadTimeDays}
-                  onChange={e => setLeadTimeDays(e.target.value)}
-                  inputMode="numeric"
-                />
-              </Field>
-              <Field label="Preferred supplier">
-                <SelectField
-                  value={preferredSupplierId}
-                  onChange={e => setPreferredSupplierId(e.target.value)}
-                >
-                  <option value="">None</option>
-                  {suppliers.map(supplier => (
-                    <option key={supplier.id} value={supplier.id}>
-                      {supplier.code} — {supplier.name}
-                    </option>
-                  ))}
-                </SelectField>
-              </Field>
+                <option value="">None</option>
+                {suppliers.map(supplier => (
+                  <option key={supplier.id} value={supplier.id}>
+                    {supplier.code} — {supplier.name}
+                  </option>
+                ))}
+              </SelectField>
+            </Field>
 
-              <label className="flex items-center gap-2 text-sm md:col-span-3">
-                <Checkbox
-                  checked={autoRequisition}
-                  onCheckedChange={setAutoRequisition}
-                />
-                Raise a purchase requisition automatically when this item hits
-                its reorder point
-              </label>
+            <label className="flex items-center gap-2 text-sm md:col-span-3">
+              <Checkbox
+                checked={autoRequisition}
+                onCheckedChange={setAutoRequisition}
+              />
+              Raise a purchase requisition automatically when this item hits its
+              reorder point
+            </label>
 
-              <div className="flex gap-2 md:col-span-3">
-                <Button type="submit" disabled={!canSubmit}>
-                  {saveReorderRule.isPending ? "Saving…" : "Save policy"}
-                </Button>
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="rounded-lg border inline-flex items-center justify-center h-10 whitespace-nowrap px-4 text-sm hover:bg-muted"
-                >
-                  Clear
-                </button>
-              </div>
-            </form>
-          </Panel>
-        )}
+            <div className="md:col-span-3 dialog-form-actions">
+              <Button type="submit" disabled={!canSubmit}>
+                {saveReorderRule.isPending ? "Saving…" : "Save policy"}
+              </Button>
+              <button
+                type="button"
+                onClick={resetForm}
+                className="rounded-lg border inline-flex items-center justify-center h-10 whitespace-nowrap px-4 text-sm hover:bg-muted"
+              >
+                Clear
+              </button>
+            </div>
+          </form>
+        </FormDialog>
 
         <Panel
           actions={
@@ -249,7 +248,7 @@ export default function ReorderRulesPage() {
                 cell: row => (
                   <Link
                     href={`/inventory/stock/${row.product.id}`}
-                    className="text-primary hover:underline"
+                    className="text-primary hover:text-info"
                   >
                     <span className="font-mono text-xs">
                       {row.product.code}
@@ -267,7 +266,9 @@ export default function ReorderRulesPage() {
                   const below = available <= Number(row.reorderPoint);
                   return (
                     <span
-                      className={below ? "font-semibold text-amber-700" : ""}
+                      className={
+                        below ? "font-semibold text-warning-foreground" : ""
+                      }
                     >
                       {formatQuantity(row.currentAvailable ?? 0)}
                     </span>
@@ -308,7 +309,7 @@ export default function ReorderRulesPage() {
                 header: "Auto PR",
                 cell: row =>
                   row.autoRequisition ? (
-                    <span className="text-xs font-medium text-emerald-700">
+                    <span className="text-xs font-medium text-success-foreground">
                       Yes
                     </span>
                   ) : (
@@ -333,7 +334,7 @@ export default function ReorderRulesPage() {
                         deleteReorderRule.mutate(row.id);
                       }
                     }}
-                    className="rounded border px-2 py-1 text-xs text-red-700 hover:bg-red-50 whitespace-nowrap"
+                    className="rounded border px-2 py-1 text-xs text-error-foreground hover:bg-error-surface whitespace-nowrap"
                   >
                     Delete
                   </button>
@@ -344,11 +345,10 @@ export default function ReorderRulesPage() {
           <Pager
             page={page}
             totalPages={pagination?.totalPages}
-            totalItems={pagination?.totalItems}
             onChange={setPage}
           />
         </Panel>
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

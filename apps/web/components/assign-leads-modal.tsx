@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@repo/ui/components/ui/select";
-import { Filter, Loader2, Mail, Search, TrendingUp, Users } from "lucide-react";
+import { Filter, Mail, Search, TrendingUp, Users } from "@repo/ui/icons";
 import * as React from "react";
 
 interface AssignLeadsModalProps {
@@ -197,7 +197,7 @@ export function AssignLeadsModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[37.5rem]">
         <div>
           <DialogHeader className="text-center">
             <DialogTitle className="flex items-center justify-center gap-2">
@@ -213,7 +213,7 @@ export function AssignLeadsModal({
           {/* Search Bar and Region Filter */}
           <div className="space-y-3 mt-4">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-3 inset-y-0 my-auto h-fit h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search users by name, email, role, or region..."
                 value={searchQuery}
@@ -232,7 +232,7 @@ export function AssignLeadsModal({
               <Select value={selectedRegion} onValueChange={setSelectedRegion}>
                 <SelectTrigger
                   id="region-filter"
-                  className="w-full sm:w-[180px]"
+                  className="w-full sm:w-[11.25rem]"
                 >
                   <SelectValue placeholder="All Regions" />
                 </SelectTrigger>
@@ -249,11 +249,9 @@ export function AssignLeadsModal({
             </div>
           </div>
 
-          <div className="space-y-2 max-h-[400px] overflow-y-auto mt-4">
+          <div className="space-y-2 max-h-[25rem] overflow-y-auto mt-4">
             {loading && (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
+              <div className="flex items-center justify-center py-8"></div>
             )}
 
             {error && (
@@ -371,7 +369,7 @@ export function AssignLeadsModal({
                           <span className="text-muted-foreground">
                             Converted
                           </span>
-                          <span className="font-semibold text-green-600">
+                          <span className="font-semibold text-success-foreground">
                             {stats.totalConverted}
                           </span>
                         </div>
@@ -379,7 +377,7 @@ export function AssignLeadsModal({
                           <span className="text-muted-foreground">
                             Remaining
                           </span>
-                          <span className="font-semibold text-orange-600">
+                          <span className="font-semibold text-warning-foreground">
                             {stats.totalRemaining}
                           </span>
                         </div>
@@ -396,7 +394,7 @@ export function AssignLeadsModal({
 
                       {selectedSalesPerson === person.id && (
                         <div className="h-4 w-4 rounded-full bg-primary flex items-center justify-center">
-                          <div className="h-2 w-2 rounded-full bg-white"></div>
+                          <div className="h-2 w-2 rounded-full bg-surface"></div>
                         </div>
                       )}
                     </div>

@@ -39,7 +39,7 @@ const InfoField = React.forwardRef<HTMLDivElement, InfoFieldProps>(
                 href={href}
                 prefetch={true}
                 className={cn(
-                  "cursor-pointer font-medium text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/30"
+                  "cursor-pointer font-medium text-primary outline-none hover:text-info focus-visible:ring-2 focus-visible:ring-ring/30"
                 )}
               >
                 {value}
@@ -47,7 +47,7 @@ const InfoField = React.forwardRef<HTMLDivElement, InfoFieldProps>(
             ) : onClick ? (
               <button
                 type="button"
-                className="cursor-pointer rounded-sm font-medium text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/30"
+                className="cursor-pointer rounded-sm font-medium text-primary outline-none hover:text-info focus-visible:ring-2 focus-visible:ring-ring/30"
                 onClick={onClick}
               >
                 {value}

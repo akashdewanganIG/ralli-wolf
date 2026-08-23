@@ -13,7 +13,6 @@ import {
   SearchableSelect,
   Textarea,
 } from "@repo/ui";
-import { Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useApprovers } from "@/hooks/useApprovals";
 import { useSubmitQuoteForApproval } from "@/hooks/useQuotes";
@@ -132,7 +131,6 @@ export function ApplyForApprovalDialog({
             <Label>Assign to Admin</Label>
             {approversLoading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
                 Loading admins…
               </div>
             ) : (
@@ -165,7 +163,7 @@ export function ApplyForApprovalDialog({
               value={comment}
               onChange={e => setComment(e.target.value)}
               placeholder="Note to approver"
-              className="min-h-[80px]"
+              className="min-h-[5rem]"
             />
           </div>
           {errorMessage && (
@@ -183,14 +181,7 @@ export function ApplyForApprovalDialog({
             Cancel
           </Button>
           <Button onClick={handleSend} disabled={!canSubmit}>
-            {submitMutation.isPending ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Sending…
-              </>
-            ) : (
-              "Send for Approval"
-            )}
+            {submitMutation.isPending ? <>Sending…</> : "Send for Approval"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -16,6 +16,7 @@ import {
   SelectField,
   SimpleTable,
   StatusBadge,
+  DEFAULT_PAGE_SIZE,
 } from "@/components/supply-chain/shared";
 import {
   ProductPicker,
@@ -23,6 +24,8 @@ import {
 } from "@/components/supply-chain/ProductPicker";
 import { useBomMutations, useBoms } from "@/hooks/useSupplyChain";
 import { formatDate, formatMoney, formatQuantity } from "@/lib/utils/decimal";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { FormDialog } from "@repo/ui/components/ui/form-dialog";
 
 export default function BomListPage() {
   const router = useRouter();
@@ -40,7 +43,7 @@ export default function BomListPage() {
 
   const { boms, pagination, isLoading, error } = useBoms({
     page,
-    limit: 25,
+    limit: DEFAULT_PAGE_SIZE,
     search: search || undefined,
     status: status || undefined,
   });
@@ -72,17 +75,17 @@ export default function BomListPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title="Bills of materials"
           subtitle="Manage product structures, components, substitutes, and revisions."
           actions={
             <Button
               type="button"
-              onClick={() => setShowForm(current => !current)}
+              onClick={() => setShowForm(true)}
               className="px-3 whitespace-nowrap"
             >
-              {showForm ? "Close" : "New BOM"}
+              New BOM
             </Button>
           }
         />
@@ -90,71 +93,71 @@ export default function BomListPage() {
         <ErrorBanner error={error} />
         <ErrorBanner error={create.error} />
 
-        {showForm && (
-          <Panel
-            title="New bill of materials"
-            description="Created as a draft. Add its components on the next screen, then activate it — an active BOM is frozen so production orders stay reproducible."
-          >
-            <form onSubmit={submit} className="grid gap-4 md:grid-cols-3">
-              <Field
-                label="Product this BOM builds"
-                className="md:col-span-2"
-                composite
+        <FormDialog
+          open={showForm}
+          onOpenChange={setShowForm}
+          title="New bill of materials"
+          description="Created as a draft. Add its components on the next screen, then activate it — an active BOM is frozen so production orders stay reproducible."
+        >
+          <form onSubmit={submit} className="grid gap-4 md:grid-cols-3">
+            <Field
+              label="Product this BOM builds"
+              className="md:col-span-2"
+              composite
+            >
+              <ProductPicker
+                value={product}
+                onChange={setProduct}
+                placeholder="Search the finished tool or assembly…"
+                autoFocus
+              />
+            </Field>
+            <Field label="BOM name">
+              <Input
+                required
+                value={name}
+                onChange={event => setName(event.target.value)}
+                placeholder="e.g. 18V Drill — standard build"
+              />
+            </Field>
+            <Field
+              label="Output quantity"
+              hint="How many units one run of this BOM produces"
+            >
+              <Input
+                value={outputQuantity}
+                onChange={event => setOutputQuantity(event.target.value)}
+                inputMode="decimal"
+              />
+            </Field>
+            <Field label="Labour cost per unit">
+              <Input
+                value={laborCost}
+                onChange={event => setLaborCost(event.target.value)}
+                inputMode="decimal"
+              />
+            </Field>
+            <Field label="Overhead per unit">
+              <Input
+                value={overheadCost}
+                onChange={event => setOverheadCost(event.target.value)}
+                inputMode="decimal"
+              />
+            </Field>
+            <label className="flex items-center gap-2 text-sm md:col-span-3">
+              <Checkbox checked={isDefault} onCheckedChange={setIsDefault} />
+              Make this the default BOM for the product
+            </label>
+            <div className="md:col-span-3 dialog-form-actions">
+              <Button
+                type="submit"
+                disabled={!product || !name || create.isPending}
               >
-                <ProductPicker
-                  value={product}
-                  onChange={setProduct}
-                  placeholder="Search the finished tool or assembly…"
-                  autoFocus
-                />
-              </Field>
-              <Field label="BOM name">
-                <Input
-                  required
-                  value={name}
-                  onChange={event => setName(event.target.value)}
-                  placeholder="e.g. 18V Drill — standard build"
-                />
-              </Field>
-              <Field
-                label="Output quantity"
-                hint="How many units one run of this BOM produces"
-              >
-                <Input
-                  value={outputQuantity}
-                  onChange={event => setOutputQuantity(event.target.value)}
-                  inputMode="decimal"
-                />
-              </Field>
-              <Field label="Labour cost per unit">
-                <Input
-                  value={laborCost}
-                  onChange={event => setLaborCost(event.target.value)}
-                  inputMode="decimal"
-                />
-              </Field>
-              <Field label="Overhead per unit">
-                <Input
-                  value={overheadCost}
-                  onChange={event => setOverheadCost(event.target.value)}
-                  inputMode="decimal"
-                />
-              </Field>
-              <label className="flex items-center gap-2 text-sm md:col-span-3">
-                <Checkbox checked={isDefault} onCheckedChange={setIsDefault} />
-                Make this the default BOM for the product
-              </label>
-              <div className="md:col-span-3">
-                <Button
-                  type="submit"
-                  disabled={!product || !name || create.isPending}
-                >
-                  {create.isPending ? "Creating…" : "Create draft BOM"}
-                </Button>
-              </div>
-            </form>
-          </Panel>
-        )}
+                {create.isPending ? "Creating…" : "Create draft BOM"}
+              </Button>
+            </div>
+          </form>
+        </FormDialog>
 
         <Panel
           actions={
@@ -265,11 +268,10 @@ export default function BomListPage() {
           <Pager
             page={page}
             totalPages={pagination?.totalPages}
-            totalItems={pagination?.totalItems}
             onChange={setPage}
           />
         </Panel>
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

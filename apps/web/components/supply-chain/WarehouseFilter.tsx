@@ -46,7 +46,7 @@ export function WarehouseFilter({
         Create one under{" "}
         <Link
           href="/warehouse"
-          className="font-semibold underline underline-offset-2 outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+          className="font-semibold text-primary outline-none transition-colors hover:text-info focus-visible:ring-2 focus-visible:ring-ring/30"
         >
           Warehouse Management
         </Link>{" "}

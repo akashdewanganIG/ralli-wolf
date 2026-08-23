@@ -3,6 +3,8 @@
 import React from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../contexts/AuthContext";
+import { Tag } from "@repo/ui/components/ui/tag";
+import { roleTone } from "@repo/ui/components/ui/status-badge";
 
 export default function UnauthorizedPage() {
   const router = useRouter();
@@ -10,11 +12,11 @@ export default function UnauthorizedPage() {
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center">
-      <div className="max-w-md w-full space-y-6 p-8 bg-white rounded-lg shadow-lg">
+      <div className="max-w-md w-full space-y-4 p-8 bg-surface rounded-lg shadow-lg">
         <div className="text-center">
-          <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100">
+          <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-error-surface">
             <svg
-              className="h-10 w-10 text-red-600"
+              className="h-10 w-10 text-destructive"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -27,16 +29,16 @@ export default function UnauthorizedPage() {
               />
             </svg>
           </div>
-          <h2 className="mt-4 text-3xl font-extrabold text-gray-900">
+          <h2 className="text-base sm:text-lg mt-4 font-extrabold text-foreground">
             Access Denied
           </h2>
-          <p className="mt-2 text-sm text-gray-600">
+          <p className="mt-2 text-sm text-text-secondary">
             You don't have permission to access this page.
           </p>
           {user && (
-            <p className="mt-4 text-sm text-gray-500">
+            <p className="mt-4 text-sm text-muted-foreground">
               Your current role:{" "}
-              <span className="font-semibold">{user.role}</span>
+              <Tag tone={roleTone(user.role)}>{user.role}</Tag>
             </p>
           )}
         </div>
@@ -44,14 +46,14 @@ export default function UnauthorizedPage() {
           <button
             type="button"
             onClick={() => router.back()}
-            className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 whitespace-nowrap"
+            className="w-full flex justify-center py-2 px-4 border border-input rounded-md shadow-sm text-sm font-medium text-text-secondary bg-surface hover:bg-surface-elevated focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring whitespace-nowrap"
           >
             Go Back
           </button>
           <button
             type="button"
             onClick={() => router.push("/")}
-            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 whitespace-nowrap"
+            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-primary-foreground bg-primary hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring whitespace-nowrap"
           >
             Go to Dashboard
           </button>

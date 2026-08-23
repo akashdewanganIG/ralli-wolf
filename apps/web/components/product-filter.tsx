@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from "@repo/ui/components/ui/select";
 import { cn } from "@repo/ui/lib/utils";
-import { Filter } from "lucide-react";
+import { Filter } from "@repo/ui/icons";
 import React, { useEffect, useState } from "react";
 
 export interface ProductFilterValues {
@@ -68,17 +68,16 @@ export const ProductFilter: React.FC<ProductFilterProps> = ({
     <>
       <Button
         variant="outline"
-        size="sm"
         onClick={() => setOpen(true)}
         className={cn("relative", hasActive && "bg-primary/10 border-primary")}
       >
-        <Filter className="h-4 w-4 mr-2" />
+        <Filter className="size-4" />
         Filter
         {hasActive && <span className="ml-1 h-2 w-2 bg-primary rounded-full" />}
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[31.25rem]">
           <DialogHeader>
             <DialogTitle>Filter Products</DialogTitle>
           </DialogHeader>

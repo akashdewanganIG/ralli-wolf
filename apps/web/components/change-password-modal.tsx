@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, Eye, EyeOff, Loader2 } from "lucide-react";
+import { CheckCircle2, Eye, EyeOff } from "@repo/ui/icons";
 import { Button } from "@repo/ui/components/ui/button";
 import {
   Dialog,
@@ -190,7 +190,7 @@ export function ChangePasswordModal({
     <button
       type="button"
       onClick={toggle}
-      className="absolute right-1 top-1/2 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30"
+      className="absolute right-1 inset-y-0 my-auto h-fit inline-flex size-8 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30"
       aria-label={`${shown ? "Hide" : "Show"} ${label}`}
     >
       {shown ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
@@ -374,7 +374,7 @@ export function ChangePasswordModal({
               Never received that password?{" "}
               <Link
                 href="/forgot-password"
-                className="font-medium text-primary underline underline-offset-4"
+                className="font-medium text-primary transition-colors hover:text-info"
               >
                 Reset it with an email code
               </Link>{" "}
@@ -402,7 +402,6 @@ export function ChangePasswordModal({
                 !confirmPassword
               }
             >
-              {submitting && <Loader2 className="size-4 animate-spin" />}
               {submitting ? "Updating…" : "Update password"}
             </Button>
           </DialogFooter>

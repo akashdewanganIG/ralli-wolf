@@ -1,11 +1,9 @@
 "use client";
 
 import React from "react";
-import { Badge } from "@repo/ui/components/ui/badge";
-import { Button } from "@repo/ui/components/ui/button";
-import { X } from "lucide-react";
 import { LeadFilterValues } from "./lead-filter";
 import { useKeywords } from "../hooks/useKeywords";
+import { Tag } from "@repo/ui/components/ui/tag";
 
 interface FilterBadgesProps {
   filters: LeadFilterValues;
@@ -53,83 +51,43 @@ export const FilterBadges: React.FC<FilterBadgesProps> = ({
   // Status filter badge
   if (filters.status) {
     badges.push(
-      <Badge
-        key="status"
-        variant="secondary"
-        className="bg-blue-100 text-blue-800 hover:bg-blue-100"
-      >
+      <Tag key="status" onRemove={onStatusRemove} removeLabel="Remove filter">
         Status: {filters.status}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="ml-2 h-4 w-4 p-0 hover:bg-blue-200"
-          onClick={onStatusRemove}
-        >
-          <X className="h-3 w-3" />
-        </Button>
-      </Badge>
+      </Tag>
     );
   }
 
   // Source filter badge
   if (filters.source) {
     badges.push(
-      <Badge
-        key="source"
-        variant="secondary"
-        className="bg-green-100 text-green-800 hover:bg-green-100"
-      >
+      <Tag key="source" onRemove={onSourceRemove} removeLabel="Remove filter">
         Source: {filters.source}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="ml-2 h-4 w-4 p-0 hover:bg-green-200"
-          onClick={onSourceRemove}
-        >
-          <X className="h-3 w-3" />
-        </Button>
-      </Badge>
+      </Tag>
     );
   }
 
   // Date range filter badges
   if (filters.createdFrom) {
     badges.push(
-      <Badge
+      <Tag
         key="createdFrom"
-        variant="secondary"
-        className="bg-purple-100 text-purple-800 hover:bg-purple-100"
+        onRemove={onCreatedFromRemove}
+        removeLabel="Remove filter"
       >
         From: {formatDate(filters.createdFrom)}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="ml-2 h-4 w-4 p-0 hover:bg-purple-200"
-          onClick={onCreatedFromRemove}
-        >
-          <X className="h-3 w-3" />
-        </Button>
-      </Badge>
+      </Tag>
     );
   }
 
   if (filters.createdTo) {
     badges.push(
-      <Badge
+      <Tag
         key="createdTo"
-        variant="secondary"
-        className="bg-purple-100 text-purple-800 hover:bg-purple-100"
+        onRemove={onCreatedToRemove}
+        removeLabel="Remove filter"
       >
         To: {formatDate(filters.createdTo)}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="ml-2 h-4 w-4 p-0 hover:bg-purple-200"
-          onClick={onCreatedToRemove}
-        >
-          <X className="h-3 w-3" />
-        </Button>
-      </Badge>
+      </Tag>
     );
   }
 
@@ -145,30 +103,22 @@ export const FilterBadges: React.FC<FilterBadgesProps> = ({
 
     selectedKeywords.forEach(keyword => {
       badges.push(
-        <Badge
+        <Tag
           key={`keyword-${keyword.id}`}
-          variant="secondary"
-          className="bg-orange-100 text-orange-800 hover:bg-orange-100"
+          onRemove={() => {
+            if (onKeywordIdRemove) {
+              onKeywordIdRemove(keyword.id);
+            } else {
+              onKeywordIdsRemove();
+            }
+          }}
+          removeLabel={`Remove keyword ${keyword.name}`}
         >
           Keyword: {keyword.name}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="ml-2 h-4 w-4 p-0 hover:bg-orange-200"
-            onClick={() => {
-              if (onKeywordIdRemove) {
-                onKeywordIdRemove(keyword.id);
-              } else {
-                onKeywordIdsRemove();
-              }
-            }}
-          >
-            <X className="h-3 w-3" />
-          </Button>
-        </Badge>
+        </Tag>
       );
     });
   }
 
-  return <div className="flex flex-wrap gap-2 min-h-[32px]">{badges}</div>;
+  return <div className="flex flex-wrap gap-2 min-h-[2rem]">{badges}</div>;
 };

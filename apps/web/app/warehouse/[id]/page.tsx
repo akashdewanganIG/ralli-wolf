@@ -7,7 +7,7 @@ import { useParams } from "next/navigation";
 import Image from "next/image";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { WarehouseImagePicker } from "@/components/supply-chain/WarehouseImagePicker";
-import { ImageIcon, Loader2, Maximize2, Trash2 } from "lucide-react";
+import { ImageIcon, Maximize2, Trash2 } from "@repo/ui/icons";
 import { ConfirmationDialog } from "@repo/ui/components/ui/confirmation-dialog";
 import { SearchFilterToolbar } from "@repo/ui/components/ui/toolbar";
 import {
@@ -42,6 +42,10 @@ import {
   formatQuantity,
   humanizeEnum,
 } from "@/lib/utils/decimal";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { buttonVariants } from "@repo/ui/components/ui/button";
+import { cn } from "@repo/ui/lib/utils";
+import { Tag } from "@repo/ui/components/ui/tag";
 
 const ZONE_TYPES = [
   "RECEIVING",
@@ -141,7 +145,7 @@ export default function WarehouseDetailPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title={
             isLoading
@@ -264,11 +268,9 @@ export default function WarehouseDetailPage() {
                       }
                     )
                   }
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                  data-slot="button"
+                  className={cn(buttonVariants({ variant: "default" }))}
                 >
-                  {addImages.isPending && (
-                    <Loader2 className="size-4 animate-spin" />
-                  )}
                   {addImages.isPending
                     ? "Uploading…"
                     : `Upload ${pendingImages.length} image${pendingImages.length === 1 ? "" : "s"}`}
@@ -278,7 +280,7 @@ export default function WarehouseDetailPage() {
           </Panel>
         )}
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid-auto-fit gap-3">
           <StatCard label="Zones" value={zones.length} />
           <StatCard
             label="Bins"
@@ -394,7 +396,11 @@ export default function WarehouseDetailPage() {
                     ),
                   },
                   { header: "Name", cell: row => row.name },
-                  { header: "Type", cell: row => humanizeEnum(row.zoneType) },
+                  {
+                    header: "Type",
+                    cell: row =>
+                      row.zoneType ? <Tag>{row.zoneType}</Tag> : "—",
+                  },
                   {
                     header: "Bins",
                     align: "right",
@@ -523,7 +529,7 @@ export default function WarehouseDetailPage() {
                     </div>
                   </form>
                   {generateBins.isSuccess && generateBins.data && (
-                    <p className="mt-3 text-sm text-emerald-800">
+                    <p className="mt-3 text-sm text-success-foreground">
                       Created {generateBins.data.data.created} bin(s);{" "}
                       {generateBins.data.data.skippedExisting} already existed.
                     </p>
@@ -691,7 +697,8 @@ export default function WarehouseDetailPage() {
                       },
                       {
                         header: "Type",
-                        cell: row => humanizeEnum(row.binType),
+                        cell: row =>
+                          row.binType ? <Tag>{row.binType}</Tag> : "—",
                       },
                       {
                         header: "Pick seq",
@@ -716,30 +723,18 @@ export default function WarehouseDetailPage() {
                         cell: row => (
                           <div className="flex flex-wrap gap-1">
                             {row.isReceiving && (
-                              <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-800">
-                                receiving
-                              </span>
+                              <Tag tone="progress">receiving</Tag>
                             )}
                             {row.isShipping && (
-                              <span className="rounded bg-purple-100 px-1.5 py-0.5 text-[10px] text-purple-800">
-                                shipping
-                              </span>
+                              <Tag tone="neutral">shipping</Tag>
                             )}
                             {row.isPickFace && (
-                              <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] text-emerald-800">
-                                pick face
-                              </span>
+                              <Tag tone="active">pick face</Tag>
                             )}
                             {row.isQuarantine && (
-                              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-800">
-                                quarantine
-                              </span>
+                              <Tag tone="pending">quarantine</Tag>
                             )}
-                            {row.isBlocked && (
-                              <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] text-red-800">
-                                blocked
-                              </span>
-                            )}
+                            {row.isBlocked && <Tag tone="danger">blocked</Tag>}
                           </div>
                         ),
                       },
@@ -765,7 +760,6 @@ export default function WarehouseDetailPage() {
                   <Pager
                     page={binPage}
                     totalPages={binPagination?.totalPages}
-                    totalItems={binPagination?.totalItems}
                     onChange={setBinPage}
                   />
                 </Panel>
@@ -786,7 +780,7 @@ export default function WarehouseDetailPage() {
               rowClassName={row =>
                 row.weightUtilisationPercent &&
                 Number(row.weightUtilisationPercent) > 100
-                  ? "bg-red-50/40"
+                  ? "bg-error-surface/40"
                   : ""
               }
               empty="No bins configured yet."
@@ -838,9 +832,9 @@ export default function WarehouseDetailPage() {
                       <span
                         className={
                           Number(row.weightUtilisationPercent) > 100
-                            ? "font-semibold text-red-700"
+                            ? "font-semibold text-error-foreground"
                             : Number(row.weightUtilisationPercent) > 80
-                              ? "font-semibold text-amber-700"
+                              ? "font-semibold text-warning-foreground"
                               : ""
                         }
                       >
@@ -971,7 +965,7 @@ export default function WarehouseDetailPage() {
             if (!open) setPreviewImage(null);
           }}
         >
-          <DialogContent className="max-w-5xl overflow-hidden bg-slate-950 p-2 shadow-2xl [&>button]:bg-white/10 [&>button]:text-white [&>button]:hover:bg-white/20">
+          <DialogContent className="max-w-5xl overflow-hidden bg-foreground p-2 shadow-2xl [&>button]:bg-surface/10 [&>button]:text-background [&>button]:hover:bg-surface/20">
             <DialogTitle className="sr-only">
               Warehouse photo preview
             </DialogTitle>
@@ -979,7 +973,7 @@ export default function WarehouseDetailPage() {
               Enlarged preview of the selected warehouse photo.
             </DialogDescription>
             {previewImage && (
-              <div className="relative aspect-[16/10] max-h-[calc(100svh-3rem)] w-full overflow-hidden rounded-lg bg-black">
+              <div className="relative aspect-[16/10] max-h-[calc(100svh-3rem)] w-full overflow-hidden rounded-lg bg-foreground">
                 <Image
                   src={previewImage.url}
                   alt={previewImage.alt}
@@ -1009,7 +1003,7 @@ export default function WarehouseDetailPage() {
           variant="destructive"
           isLoading={deleteImage.isPending}
         />
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

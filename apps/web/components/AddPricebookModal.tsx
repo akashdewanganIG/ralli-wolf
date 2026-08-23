@@ -123,19 +123,19 @@ export const AddPricebookModal: React.FC<Props> = ({ open, onOpenChange }) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContentAny className="sm:max-w-[480px]">
+      <DialogContentAny className="sm:max-w-[30rem]">
         <DialogHeaderAny className="text-center">
           <DialogTitleAny className="text-center">Add Pricebook</DialogTitleAny>
           <DialogDescriptionAny className="text-center">
             Create a new pricebook by providing a name and an optional
             description. Fields marked with{" "}
-            <span className="text-red-500">*</span> are required.
+            <span className="text-destructive">*</span> are required.
           </DialogDescriptionAny>
         </DialogHeaderAny>
         <div className="space-y-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="name">
-              Name<span className="text-red-500">*</span>
+              Name<span className="text-destructive">*</span>
             </Label>
             <Input
               id="name"
@@ -152,7 +152,7 @@ export const AddPricebookModal: React.FC<Props> = ({ open, onOpenChange }) => {
               }
             />
             {shouldShowError("name") && errors.name && (
-              <p id="name-error" className="text-xs text-red-600 mt-1">
+              <p id="name-error" className="text-xs text-destructive mt-1">
                 {errors.name}
               </p>
             )}
@@ -175,7 +175,10 @@ export const AddPricebookModal: React.FC<Props> = ({ open, onOpenChange }) => {
               }
             />
             {shouldShowError("description") && errors.description && (
-              <p id="description-error" className="text-xs text-red-600 mt-1">
+              <p
+                id="description-error"
+                className="text-xs text-destructive mt-1"
+              >
                 {errors.description}
               </p>
             )}
@@ -186,7 +189,7 @@ export const AddPricebookModal: React.FC<Props> = ({ open, onOpenChange }) => {
               id="currencyISOCode"
               value={globalCurrency}
               disabled
-              className="bg-gray-100"
+              className="bg-surface-secondary"
             />
             <p className="text-xs text-muted-foreground mt-1">
               This field is configured as a global setting.
@@ -195,7 +198,7 @@ export const AddPricebookModal: React.FC<Props> = ({ open, onOpenChange }) => {
         </div>
         <DialogFooterAny>
           {submitError && (
-            <p className="text-sm text-red-600 mr-auto" role="alert">
+            <p className="text-sm text-destructive mr-auto" role="alert">
               {submitError}
             </p>
           )}
@@ -214,7 +217,6 @@ export const AddPricebookModal: React.FC<Props> = ({ open, onOpenChange }) => {
           >
             {createPricebook.isPending ? (
               <span className="inline-flex items-center gap-2">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground" />
                 Creating...
               </span>
             ) : (

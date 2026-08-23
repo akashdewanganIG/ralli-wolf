@@ -181,14 +181,14 @@ export const AddPricebookEntryModal: React.FC<Props> = ({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContentAny className="sm:max-w-[480px]">
+        <DialogContentAny className="sm:max-w-[30rem]">
           <DialogHeaderAny className="text-center">
             <DialogTitleAny className="text-center">
               Add Price Book Entry
             </DialogTitleAny>
             <DialogDescriptionAny className="text-center">
               Add a new price for this product in a price book. Fields marked
-              with <span className="text-red-500">*</span> are required.
+              with <span className="text-destructive">*</span> are required.
             </DialogDescriptionAny>
           </DialogHeaderAny>
           <div className="space-y-4">
@@ -207,7 +207,7 @@ export const AddPricebookEntryModal: React.FC<Props> = ({
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="pricebookId">
-                Price Book<span className="text-red-500">*</span>
+                Price Book<span className="text-destructive">*</span>
               </Label>
               <Select
                 value={form.pricebookId}
@@ -229,7 +229,10 @@ export const AddPricebookEntryModal: React.FC<Props> = ({
                           {pb.name}
                         </SelectItem>
                       ))}
-                      <SelectItem value="add-new" className="text-blue-600">
+                      <SelectItem
+                        value="add-new"
+                        className="text-info-foreground"
+                      >
                         + Add new price book
                       </SelectItem>
                     </>
@@ -237,14 +240,14 @@ export const AddPricebookEntryModal: React.FC<Props> = ({
                 </SelectContent>
               </Select>
               {shouldShowError("pricebookId") && errors.pricebookId && (
-                <p className="text-xs text-red-600 mt-1">
+                <p className="text-xs text-destructive mt-1">
                   {errors.pricebookId}
                 </p>
               )}
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="listPrice">
-                List Price<span className="text-red-500">*</span>
+                List Price<span className="text-destructive">*</span>
               </Label>
               <Input
                 id="listPrice"
@@ -258,7 +261,9 @@ export const AddPricebookEntryModal: React.FC<Props> = ({
                 }
               />
               {shouldShowError("listPrice") && errors.listPrice && (
-                <p className="text-xs text-red-600 mt-1">{errors.listPrice}</p>
+                <p className="text-xs text-destructive mt-1">
+                  {errors.listPrice}
+                </p>
               )}
             </div>
             <div className="flex items-center space-x-2">
@@ -277,7 +282,7 @@ export const AddPricebookEntryModal: React.FC<Props> = ({
           </div>
           <DialogFooterAny>
             {submitError && (
-              <p className="text-sm text-red-600 mr-auto" role="alert">
+              <p className="text-sm text-destructive mr-auto" role="alert">
                 {submitError}
               </p>
             )}

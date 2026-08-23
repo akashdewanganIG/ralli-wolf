@@ -19,6 +19,7 @@ import {
   TabsContent,
   TabsContents,
 } from "@repo/ui";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 const entryColumns: TableColumn<PriceBookEntry>[] = [
   {
@@ -98,31 +99,31 @@ export default function PriceBookDetailPage({ params }: PageProps) {
 
   if (pbError || !pb) {
     return (
-      <div className="space-y-5 p-4">
+      <PageShell>
         <div className="text-lg font-semibold">Price book not found</div>
         <button
           type="button"
-          className="text-sm underline text-muted-foreground"
+          className="text-sm text-muted-foreground transition-colors hover:text-info"
           onClick={() => router.push("/sales/price-books")}
         >
           Back to Price Books
         </button>
-      </div>
+      </PageShell>
     );
   }
   const entries = entriesData?.data ?? [];
 
   return (
-    <div className="space-y-5 p-4">
+    <PageShell>
       <DetailPageHeader
         title={pb.name}
         status={pb.isActive ? "Active" : "Inactive"}
-        statusVariant={pb.isActive ? "default" : "destructive"}
+        statusTone={pb.isActive ? "active" : "neutral"}
         onBack={() => router.push("/sales/price-books")}
       />
 
       <Tabs defaultValue="details">
-        <TabsList className="justify-start border-b border-gray-300">
+        <TabsList className="justify-start border-b border-input">
           <TabsTrigger value="details" className="text-base font-medium">
             Details
           </TabsTrigger>
@@ -139,7 +140,7 @@ export default function PriceBookDetailPage({ params }: PageProps) {
               <div className="lg:col-span-2 space-y-4">
                 <DetailCard
                   title="Price Book Information"
-                  className="bg-gray-50/50 border-gray-200"
+                  className="bg-surface-elevated/50 border-border"
                 >
                   <InfoGrid columns={2}>
                     <InfoField label="Name" value={pb.name} />
@@ -173,7 +174,7 @@ export default function PriceBookDetailPage({ params }: PageProps) {
               <div className="space-y-4">
                 <DetailCard
                   title="System Information"
-                  className="bg-gray-50/50 border-gray-200"
+                  className="bg-surface-elevated/50 border-border"
                 >
                   <InfoGrid columns={1}>
                     <InfoField
@@ -220,6 +221,6 @@ export default function PriceBookDetailPage({ params }: PageProps) {
           </TabsContent>
         </TabsContents>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

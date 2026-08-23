@@ -47,7 +47,10 @@ export function AppLayoutWrapper({ children }: AppLayoutWrapperProps) {
   }, [pathname]);
 
   if (isAuthPage) {
-    return <div className="min-h-svh w-full overflow-y-auto">{children}</div>;
+    // `h-svh`, not `min-h-svh`: the body is `overflow-hidden`, so a child that
+    // only sets a *minimum* height grows past it and gets clipped rather than
+    // scrolling. A fixed viewport height is what lets this container scroll.
+    return <div className="h-svh w-full overflow-y-auto">{children}</div>;
   }
 
   return (
@@ -56,14 +59,14 @@ export function AppLayoutWrapper({ children }: AppLayoutWrapperProps) {
         <button
           type="button"
           aria-label="Close navigation"
-          className="fixed inset-0 z-[60] bg-foreground/35 backdrop-blur-[1px] lg:hidden"
+          className="fixed inset-0 z-[60] bg-overlay backdrop-blur-[1px] lg:hidden"
           onClick={() => setMobileSidebarOpen(false)}
         />
       )}
 
       <div
-        className={`fixed inset-y-0 left-0 z-[70] h-full shrink-0 transform transition-transform duration-200 lg:static lg:z-auto lg:translate-x-0 ${
-          mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
+        className={`fixed inset-y-0 z-[70] h-full shrink-0 transition-[left] duration-200 lg:static lg:left-auto lg:z-auto ${
+          mobileSidebarOpen ? "left-0" : "-left-52"
         }`}
       >
         <AppSidebar onRequestClose={() => setMobileSidebarOpen(false)} />

@@ -28,6 +28,8 @@ import {
   humanizeEnum,
 } from "@/lib/utils/decimal";
 import type { AvailabilityLine } from "@/lib/api/types/supplyChain";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { Tag } from "@repo/ui/components/ui/tag";
 
 export default function MaterialAvailabilityPage() {
   const [product, setProduct] = useState<PickedProduct | null>(null);
@@ -52,7 +54,7 @@ export default function MaterialAvailabilityPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title="Material availability"
           subtitle="Check component availability for a planned build."
@@ -115,7 +117,7 @@ export default function MaterialAvailabilityPage() {
 
         {result && (
           <>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid-auto-fit gap-3">
               <StatCard
                 label="Can this build run?"
                 value={result.canBuild ? "Yes" : "No"}
@@ -157,7 +159,7 @@ export default function MaterialAvailabilityPage() {
               <SimpleTable<AvailabilityLine>
                 rows={result.lines}
                 keyOf={row => row.productId}
-                rowClassName={row => (row.isShort ? "bg-red-50/40" : "")}
+                rowClassName={row => (row.isShort ? "bg-error-surface/40" : "")}
                 empty="This bill of materials has no leaf components."
                 columns={[
                   {
@@ -165,7 +167,7 @@ export default function MaterialAvailabilityPage() {
                     cell: row => (
                       <Link
                         href={`/inventory/stock/${row.productId}`}
-                        className="text-primary hover:underline"
+                        className="text-primary hover:text-info"
                       >
                         <span className="font-mono text-xs">
                           {row.productCode}
@@ -174,7 +176,11 @@ export default function MaterialAvailabilityPage() {
                       </Link>
                     ),
                   },
-                  { header: "Type", cell: row => humanizeEnum(row.itemType) },
+                  {
+                    header: "Type",
+                    cell: row =>
+                      row.itemType ? <Tag>{row.itemType}</Tag> : "—",
+                  },
                   {
                     header: "Required",
                     align: "right",
@@ -196,11 +202,11 @@ export default function MaterialAvailabilityPage() {
                     align: "right",
                     cell: row =>
                       Number(row.shortfallQuantity) > 0 ? (
-                        <span className="font-semibold text-red-700">
+                        <span className="font-semibold text-error-foreground">
                           {formatQuantity(row.shortfallQuantity)}
                         </span>
                       ) : (
-                        <span className="text-emerald-700">covered</span>
+                        <span className="text-success-foreground">covered</span>
                       ),
                   },
                   {
@@ -208,7 +214,7 @@ export default function MaterialAvailabilityPage() {
                     align: "right",
                     cell: row =>
                       Number(row.netShortfallQuantity) > 0 ? (
-                        <span className="font-semibold text-red-700">
+                        <span className="font-semibold text-error-foreground">
                           {formatQuantity(row.netShortfallQuantity)}
                         </span>
                       ) : (
@@ -237,7 +243,7 @@ export default function MaterialAvailabilityPage() {
                                 : row.productId
                             )
                           }
-                          className="text-xs text-primary hover:underline"
+                          className="text-xs text-primary hover:text-info"
                         >
                           {row.substitutes.length} option(s)
                         </button>
@@ -271,7 +277,7 @@ export default function MaterialAvailabilityPage() {
                             cell: row => (
                               <Link
                                 href={`/inventory/stock/${row.productId}`}
-                                className="text-primary hover:underline"
+                                className="text-primary hover:text-info"
                               >
                                 <span className="font-mono text-xs">
                                   {row.productCode}
@@ -307,7 +313,7 @@ export default function MaterialAvailabilityPage() {
             </Panel>
           </>
         )}
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

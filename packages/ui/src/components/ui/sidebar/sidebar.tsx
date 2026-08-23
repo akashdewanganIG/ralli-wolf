@@ -15,7 +15,9 @@ export function Sidebar({
     <aside
       className={cn(
         "flex flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 ease-in-out",
-        open ? "w-64" : "w-16",
+        // Sized to the longest module name in the navigation rather than to a
+        // round number, so labels read in full instead of ellipsing.
+        open ? "w-[15.75rem]" : "w-14",
         className
       )}
       style={style}

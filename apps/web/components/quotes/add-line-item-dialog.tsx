@@ -169,7 +169,7 @@ export function AddLineItemDialog({
             <Textarea
               value={description}
               onChange={e => setDescription(e.target.value)}
-              className="min-h-[100px]"
+              className="min-h-[6.25rem]"
             />
           </div>
         </div>

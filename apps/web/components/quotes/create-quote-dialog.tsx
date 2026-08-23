@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { Loader2 } from "lucide-react";
 import {
   Button,
   Dialog,
@@ -76,9 +75,6 @@ export function CreateQuoteDialog({
             Cancel
           </Button>
           <Button onClick={handleConfirm} disabled={generateQuote.isPending}>
-            {generateQuote.isPending && (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            )}
             {generateQuote.isPending ? "Creating…" : "Confirm"}
           </Button>
         </DialogFooter>

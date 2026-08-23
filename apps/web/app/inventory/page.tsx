@@ -22,6 +22,9 @@ import {
 } from "@/hooks/useSupplyChain";
 import { formatMoney, formatQuantity, humanizeEnum } from "@/lib/utils/decimal";
 import { SeverityBadge } from "@/components/supply-chain/shared";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { CardActionButton } from "@repo/ui/components/ui/card-action-button";
+import { Tag } from "@repo/ui/components/ui/tag";
 
 export default function InventoryDashboardPage() {
   const [warehouseId, setWarehouseId] = useState<number | undefined>(undefined);
@@ -41,7 +44,7 @@ export default function InventoryDashboardPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title="Inventory"
           subtitle="Monitor live stock, availability, and value across locations."
@@ -90,7 +93,7 @@ export default function InventoryDashboardPage() {
           />
         ) : (
           <>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid-auto-fit gap-3">
               <StatCard
                 label="Stock value"
                 value={
@@ -163,7 +166,8 @@ export default function InventoryDashboardPage() {
                   columns={[
                     {
                       header: "Movement type",
-                      cell: row => humanizeEnum(row.movementType),
+                      cell: row =>
+                        row.movementType ? <Tag>{row.movementType}</Tag> : "—",
                     },
                     {
                       header: "Entries",
@@ -181,13 +185,10 @@ export default function InventoryDashboardPage() {
 
               <Panel
                 title="Alerts needing attention"
-                actions={
-                  <Link
-                    href="/inventory/alerts"
-                    className="text-xs font-medium text-primary hover:underline"
-                  >
+                footerAction={
+                  <CardActionButton href="/inventory/alerts">
                     View all
-                  </Link>
+                  </CardActionButton>
                 }
               >
                 {alertsLoading ? (
@@ -228,7 +229,7 @@ export default function InventoryDashboardPage() {
               </Panel>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid-auto-fit gap-3">
               {[
                 {
                   href: "/inventory/stock",
@@ -265,7 +266,7 @@ export default function InventoryDashboardPage() {
             </div>
           </>
         )}
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

@@ -26,6 +26,17 @@ export enum ErrorCode {
   FORBIDDEN = "FORBIDDEN",
   INVALID_CREDENTIALS = "INVALID_CREDENTIALS",
 
+  // Sign-in. Bad credentials collapse into INVALID_CREDENTIALS above so the
+  // route cannot be used to test which emails hold accounts.
+  ACCOUNT_DEACTIVATED = "ACCOUNT_DEACTIVATED",
+
+  // Second factor
+  MFA_SESSION_EXPIRED = "MFA_SESSION_EXPIRED",
+  INVALID_OTP = "INVALID_OTP",
+  OTP_EXPIRED = "OTP_EXPIRED",
+  OTP_ATTEMPTS_EXCEEDED = "OTP_ATTEMPTS_EXCEEDED",
+  OTP_DELIVERY_FAILED = "OTP_DELIVERY_FAILED",
+
   // Resources
   NOT_FOUND = "NOT_FOUND",
   ALREADY_EXISTS = "ALREADY_EXISTS",
@@ -137,13 +148,16 @@ export function handleValidationError(
 export function handleUnauthorizedError(
   res: Response,
   message: string = "Authentication required",
-  context: string = "Operation"
+  context: string = "Operation",
+  code: ErrorCode = ErrorCode.UNAUTHORIZED,
+  details?: Record<string, unknown>
 ): void {
   console.error(`Unauthorized in ${context}:`, message);
 
   res.status(401).json({
     error: message,
-    code: ErrorCode.UNAUTHORIZED,
+    code,
+    ...details,
   } as ErrorResponse);
 }
 

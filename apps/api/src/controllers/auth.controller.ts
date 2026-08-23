@@ -5,6 +5,7 @@ import {
   generateToken,
   generateResetToken,
   verifyResetToken,
+  generateMfaToken,
 } from "../utils/jwt.utils.js";
 import { emailService } from "../services/email.service.js";
 import { recordAuditLog } from "../utils/audit.utils.js";
@@ -17,6 +18,7 @@ import {
   handleForbiddenError,
   handleConflictError,
   validateRequiredFields,
+  ErrorCode,
 } from "../utils/errorHandler.js";
 import {
   isValidEmail,
@@ -28,6 +30,18 @@ import {
   generateNumericOtp,
   generateUserPassword,
 } from "../utils/password.utils.js";
+import {
+  issueLoginOtp,
+  maskEmail,
+  OTP_EXPIRES_MS,
+  OtpDeliveryError,
+} from "../services/loginOtp.service.js";
+import {
+  clearFailedAttempts,
+  describeRequest,
+  recordFailedAttempt,
+} from "../services/loginSecurity.service.js";
+import { secondFactorFor } from "../services/authMethods.service.js";
 
 const developerEmailConfigured = process.env.DEVELOPER_LOGIN_EMAIL?.trim();
 const developerEmailNormalized = developerEmailConfigured
@@ -38,11 +52,18 @@ const developerNameConfigured =
   process.env.DEVELOPER_LOGIN_NAME || "Developer Access";
 
 export class AuthController {
+  /**
+   * Step one of two. Verifies the password, then emails a one-time code and
+   * hands back a short-lived MFA token; no session token is issued here.
+   *
+   * An unknown email and a wrong password are reported identically, so this
+   * route cannot be used to discover which addresses hold accounts. When the
+   * address *is* real, repeated failures warn its owner by email instead.
+   */
   async login(req: Request, res: Response) {
     try {
       const { email, password } = req.body;
 
-      // Validate required fields
       if (
         !validateRequiredFields(req.body, ["email", "password"], res, "Login")
       ) {
@@ -64,11 +85,26 @@ export class AuthController {
         });
       }
 
-      if (!user || user.deletedAt) {
-        return handleUnauthorizedError(
+      // One shape for every credential failure: revealing which half was
+      // wrong would turn this route into an account-existence oracle.
+      const rejectCredentials = () =>
+        handleUnauthorizedError(
           res,
           "Invalid email or password",
-          "Login"
+          "Login",
+          ErrorCode.INVALID_CREDENTIALS
+        );
+
+      if (!user) {
+        return rejectCredentials();
+      }
+
+      if (user.deletedAt) {
+        return handleUnauthorizedError(
+          res,
+          "This account has been deactivated. Contact your administrator to restore access.",
+          "Login",
+          ErrorCode.ACCOUNT_DEACTIVATED
         );
       }
 
@@ -90,35 +126,60 @@ export class AuthController {
         );
       }
 
-      // Compare password using bcrypt
+      if (!user.passwordHash) {
+        return rejectCredentials();
+      }
+
       const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
 
       if (!isPasswordValid) {
-        return handleUnauthorizedError(
-          res,
-          "Invalid email or password",
-          "Login"
-        );
+        // The address is real, so its owner is the one who should hear about
+        // a run of failures.
+        recordFailedAttempt(user, "password", describeRequest(req));
+        return rejectCredentials();
       }
 
-      // Generate JWT token
-      const token = generateToken(user.id, user.email);
+      clearFailedAttempts(user.id);
 
-      // Return user data (excluding password hash) and token
-      const userResponse = {
-        id: user.id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        createdAt: user.createdAt,
-        role: user.role,
-        mustChangePassword: user.mustChangePassword,
-      };
+      // Password checked out. Everything past this point is the second
+      // factor, so a session token is only minted by /login/otp/verify.
+      const factor = secondFactorFor(user);
 
-      res.json({
-        token,
-        user: userResponse,
-        isDeveloper: false,
+      // An enrolled authenticator needs no email round-trip; only fall back
+      // to a mailed code when that is what the account actually has.
+      let otpId = 0;
+      if (factor.preferred === "email") {
+        try {
+          ({ otpId } = await issueLoginOtp(user));
+        } catch (otpError) {
+          if (otpError instanceof OtpDeliveryError) {
+            return res.status(503).json({
+              error:
+                "We could not email your sign-in code. Please try again in a moment.",
+              code: ErrorCode.OTP_DELIVERY_FAILED,
+            });
+          }
+          throw otpError;
+        }
+      }
+
+      await recordAuditLog({
+        action: "LOGIN_PASSWORD_VERIFIED",
+        changedBy: user.id,
+        entityType: "USER_AUTH",
+        entityId: user.id,
+        oldValues: null,
+        newValues: null,
+      });
+
+      return res.json({
+        mfaRequired: true,
+        mfaToken: generateMfaToken(user.id, otpId),
+        maskedEmail: maskEmail(user.email),
+        expiresIn: OTP_EXPIRES_MS / 1000,
+        /** Which challenge the client should show, and what it may switch to. */
+        factor: factor.preferred ?? "email",
+        availableFactors: factor.available,
       });
     } catch (error) {
       handleError(error, res, "Login");

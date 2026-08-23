@@ -29,6 +29,9 @@ import {
   formatQuantity,
   humanizeEnum,
 } from "@/lib/utils/decimal";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { buttonVariants } from "@repo/ui/components/ui/button";
+import { cn } from "@repo/ui/lib/utils";
 
 export default function PurchaseRequisitionDetailPage() {
   const params = useParams<{ id: string }>();
@@ -58,7 +61,7 @@ export default function PurchaseRequisitionDetailPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title={
             requisition
@@ -109,7 +112,7 @@ export default function PurchaseRequisitionDetailPage() {
                       }}
                       disabled={setRequisitionStatus.isPending}
                       variant="outline"
-                      className="px-3 text-red-700 hover:bg-red-50 whitespace-nowrap"
+                      className="px-3 text-error-foreground hover:bg-error-surface whitespace-nowrap"
                     >
                       Reject
                     </Button>
@@ -130,7 +133,7 @@ export default function PurchaseRequisitionDetailPage() {
             configured reorder point.{" "}
             <Link
               href="/inventory/reorder-rules"
-              className="font-medium underline"
+              className="font-medium text-primary transition-colors hover:text-info"
             >
               Review the reorder policies
             </Link>
@@ -138,7 +141,7 @@ export default function PurchaseRequisitionDetailPage() {
           </Alert>
         )}
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid-auto-fit gap-3">
           <StatCard
             label="Lines"
             value={lines.length}
@@ -208,7 +211,11 @@ export default function PurchaseRequisitionDetailPage() {
               <button
                 type="submit"
                 disabled={!supplierId || convertRequisition.isPending}
-                className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50 sm:w-auto"
+                data-slot="button"
+                className={cn(
+                  buttonVariants({ variant: "default" }),
+                  "w-full sm:w-auto"
+                )}
               >
                 {convertRequisition.isPending
                   ? "Converting…"
@@ -220,7 +227,7 @@ export default function PurchaseRequisitionDetailPage() {
 
         {requisition && (
           <Panel title="Requisition details">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid-auto-fit gap-4">
               <DetailRow
                 label="Warehouse"
                 value={`${requisition.warehouse.code} — ${requisition.warehouse.name}`}
@@ -267,7 +274,7 @@ export default function PurchaseRequisitionDetailPage() {
                 cell: row => (
                   <Link
                     href={`/inventory/stock/${row.product.id}`}
-                    className="text-primary hover:underline"
+                    className="text-primary hover:text-info"
                   >
                     <span className="font-mono text-xs">
                       {row.product.code}
@@ -294,11 +301,11 @@ export default function PurchaseRequisitionDetailPage() {
                   const outstanding =
                     Number(row.quantity) - Number(row.orderedQuantity);
                   return outstanding > 0 ? (
-                    <span className="font-semibold text-amber-700">
+                    <span className="font-semibold text-warning-foreground">
                       {formatQuantity(outstanding)}
                     </span>
                   ) : (
-                    <span className="text-emerald-700">ordered</span>
+                    <span className="text-success-foreground">ordered</span>
                   );
                 },
               },
@@ -336,7 +343,7 @@ export default function PurchaseRequisitionDetailPage() {
                     cell: row => (
                       <Link
                         href={`/purchasing/orders/${row.id}`}
-                        className="font-mono text-xs text-primary hover:underline"
+                        className="font-mono text-xs text-primary hover:text-info"
                       >
                         {row.poNumber}
                       </Link>
@@ -355,7 +362,7 @@ export default function PurchaseRequisitionDetailPage() {
               />
             </Panel>
           )}
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

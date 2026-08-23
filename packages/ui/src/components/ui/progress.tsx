@@ -17,8 +17,8 @@ const Progress = React.forwardRef<
     {...props}
   >
     <div
-      className="h-full w-full flex-1 bg-primary transition-transform duration-300 ease-out"
-      style={{ transform: `translateX(-${100 - (value / max) * 100}%)` }}
+      className="h-full bg-primary transition-[width] duration-300 ease-out"
+      style={{ width: `${(value / max) * 100}%` }}
     />
   </div>
 ));

@@ -36,14 +36,49 @@ comes from the live application APIs. It now combines:
 
 The former hardcoded activity and campaign examples were removed.
 
+## Design tokens and theming
+
+- The whole product runs on one grayscale: Tailwind **Neutral**. `gray`,
+  `slate` and `zinc` are aliased onto it in `@theme`, so any utility still
+  spelled the old way resolves to the same ramp.
+- Colour is reserved for meaning — success, warning, error, info, destructive
+  intent, and charts. The decorative brand hues (purple, sky, lime, mint,
+  lavender, coral…) were removed, and the badges that used them are neutral.
+- Surfaces layer in four steps in both themes. Light layers *downward* from
+  white onto a tinted page; dark layers *upward* from a near-black page. Dark
+  mode is re-picked per token rather than inverted, and avoids pure black.
+- Components consume semantic tokens (`bg-surface`, `text-muted-foreground`,
+  `border-subtle`) rather than scale steps. Retheming means editing
+  `packages/ui/src/styles/globals.css` and nothing else.
+- `ThemeProvider` + `ThemeToggle` provide light / dark / system. A blocking
+  inline script stamps `.dark` before first paint so there is no flash.
+
+## Layout scaling
+
+- Card and stat grids use `.grid-auto-fit*` — `repeat(auto-fit, minmax(min(100%,
+  Nrem), 1fr))` — so the column count follows the space a card needs rather
+  than a viewport breakpoint. Raising the browser font size reflows the grid
+  instead of clipping the labels.
+- Typography and layout dimensions use rem; px is kept only for hairlines,
+  focus rings, scrollbar chrome and small icon detail.
+- Verified with no horizontal overflow from 375px to 2560px, at 125/150/200%
+  zoom, and at 20px and 24px root font sizes, in both themes.
+
 ## Sign-in
 
 - The page uses a responsive split layout with a Ralli Wolf operations panel
   and a focused sign-in form.
 - Unsupported Google/Microsoft buttons and the misleading demo link were
   removed.
-- **Keep me signed in** now controls whether the authentication cookie persists
-  for seven days; an unchecked session ends with the browser session.
+- **Keep me signed in** was removed; the authentication cookie is now always
+  session-scoped and ends with the browser session.
+- Sign-in is two steps. A correct password no longer creates a session: it
+  emails a single-use 6-digit code, which the second step exchanges for one.
+  The old password-or-email-code chooser, and the passwordless
+  `POST /auth/login/otp/request` endpoint behind it, are gone.
+- Sign-in failures are reported by toast, and name the actual problem
+  (unknown email, wrong password, deactivated account, expired code) rather
+  than a single "invalid email or password".
 
 ## Functional corrections found during the redesign
 

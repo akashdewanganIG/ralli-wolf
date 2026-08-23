@@ -17,7 +17,7 @@ import {
   Package,
   Plus,
   Tag,
-} from "lucide-react";
+} from "@repo/ui/icons";
 import React from "react";
 import { AddPricebookEntryModal } from "./AddPricebookEntryModal";
 import { EditPricebookEntryModal } from "./EditPricebookEntryModal";
@@ -31,6 +31,7 @@ import {
 } from "./skeletons";
 
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 interface ProductDetailPageProps {
   productId: number;
@@ -113,11 +114,7 @@ export function ProductDetailPage({
       key: "actions",
       label: "Actions",
       render: (_, item) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => handleEditPriceBookEntry(item)}
-        >
+        <Button variant="ghost" onClick={() => handleEditPriceBookEntry(item)}>
           <Edit className="h-4 w-4" />
         </Button>
       ),
@@ -133,89 +130,89 @@ export function ProductDetailPage({
       <div className="space-y-4 mt-4">
         <DetailCard
           title="Product Details"
-          className="bg-white border-gray-200"
+          className="bg-surface border-border"
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-50">
-                <Tag className="h-3.5 w-3.5 text-blue-500" />
+              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-info-surface">
+                <Tag className="h-3.5 w-3.5 text-info" />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                   Product Name
                 </p>
-                <p className="text-sm font-medium text-gray-700">
+                <p className="text-sm font-medium text-text-secondary">
                   {productDetails.name}
                 </p>
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-violet-50">
-                <Hash className="h-3.5 w-3.5 text-violet-500" />
+              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                <Hash className="h-3.5 w-3.5 text-muted-foreground" />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                   Product Code
                 </p>
-                <p className="text-sm font-medium text-gray-700">
+                <p className="text-sm font-medium text-text-secondary">
                   {productDetails.code}
                 </p>
               </div>
             </div>
             <div className="flex items-start gap-3">
               <div
-                className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${productDetails.active ? "bg-green-50" : "bg-red-50"}`}
+                className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${productDetails.active ? "bg-success-surface" : "bg-error-surface"}`}
               >
                 <CheckCircle2
-                  className={`h-3.5 w-3.5 ${productDetails.active ? "text-green-500" : "text-red-500"}`}
+                  className={`h-3.5 w-3.5 ${productDetails.active ? "text-success" : "text-destructive"}`}
                 />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                   Status
                 </p>
                 <p
-                  className={`text-sm font-medium ${productDetails.active ? "text-green-600" : "text-red-600"}`}
+                  className={`text-sm font-medium ${productDetails.active ? "text-success-foreground" : "text-destructive"}`}
                 >
                   {productDetails.active ? "Active" : "Inactive"}
                 </p>
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-orange-50">
-                <Package className="h-3.5 w-3.5 text-orange-500" />
+              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-warning-surface">
+                <Package className="h-3.5 w-3.5 text-warning" />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                   Product Type
                 </p>
-                <p className="text-sm font-medium text-gray-700">
+                <p className="text-sm font-medium text-text-secondary">
                   {productDetails.component ? "Component" : "Finished Product"}
                 </p>
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-sky-50">
-                <LayoutGrid className="h-3.5 w-3.5 text-sky-500" />
+              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                <LayoutGrid className="h-3.5 w-3.5 text-muted-foreground" />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                   Category
                 </p>
-                <p className="text-sm font-medium text-gray-700">
+                <p className="text-sm font-medium text-text-secondary">
                   {productDetails.category?.name ?? "—"}
                 </p>
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-50">
-                <Calendar className="h-3.5 w-3.5 text-blue-500" />
+              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-info-surface">
+                <Calendar className="h-3.5 w-3.5 text-info" />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                   Created At
                 </p>
-                <p className="text-sm font-medium text-gray-700">
+                <p className="text-sm font-medium text-text-secondary">
                   {new Date(productDetails.createdAt).toLocaleDateString(
                     "en-GB"
                   )}
@@ -223,14 +220,14 @@ export function ProductDetailPage({
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-purple-50">
-                <Clock className="h-3.5 w-3.5 text-purple-500" />
+              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                   Last Updated
                 </p>
-                <p className="text-sm font-medium text-gray-700">
+                <p className="text-sm font-medium text-text-secondary">
                   {new Date(productDetails.updatedAt).toLocaleDateString(
                     "en-GB"
                   )}
@@ -239,15 +236,15 @@ export function ProductDetailPage({
             </div>
           </div>
           {productDetails.description && (
-            <div className="mt-4 pt-4 border-t border-gray-100 flex items-start gap-3">
-              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-gray-100">
-                <FileText className="h-3.5 w-3.5 text-gray-500" />
+            <div className="mt-4 pt-4 border-t border-subtle flex items-start gap-3">
+              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                <FileText className="h-3.5 w-3.5 text-muted-foreground" />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                   Description
                 </p>
-                <p className="text-sm font-medium text-gray-700">
+                <p className="text-sm font-medium text-text-secondary">
                   {productDetails.description}
                 </p>
               </div>
@@ -255,7 +252,7 @@ export function ProductDetailPage({
           )}
         </DetailCard>
 
-        <div className="bg-white p-4 rounded-lg shadow-sm border">
+        <div className="bg-surface p-4 rounded-lg shadow-sm border">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold">Price Book Entries</h2>
             <Button
@@ -306,7 +303,7 @@ function HandleProductLoadError({
   return (
     <div className="min-h-[60vh] p-4 flex items-center justify-center">
       <div className="text-center">
-        <p className="text-red-600 mb-4">Failed to load Product details</p>
+        <p className="text-destructive mb-4">Failed to load Product details</p>
         {onBack && (
           <Button onClick={onBack} variant="outline">
             Go Back
@@ -319,7 +316,7 @@ function HandleProductLoadError({
 
 function HandleProductLoading() {
   return (
-    <div className="space-y-5 p-4">
+    <PageShell>
       <DetailHeaderSkeleton />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-4">
@@ -336,6 +333,6 @@ function HandleProductLoading() {
           <DetailSidebarSkeleton items={3} />
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

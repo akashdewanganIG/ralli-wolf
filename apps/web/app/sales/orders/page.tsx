@@ -8,6 +8,8 @@ import { DataTable, type TableColumn } from "@/components/data-table";
 import type { SalesOrderListItem } from "@/lib/api/types";
 import { PageHeader } from "@repo/ui/components/ui/page-header";
 import { TablePageSkeleton } from "@/components/skeletons";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { DEFAULT_PAGE_SIZE } from "@/components/data-table";
 
 function formatDate(iso: string) {
   if (!iso) return "—";
@@ -24,7 +26,7 @@ function formatDate(iso: string) {
 export default function OrdersPage() {
   const router = useRouter();
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_PAGE_SIZE);
 
   const {
     data: orders,
@@ -43,7 +45,7 @@ export default function OrdersPage() {
         <button
           type="button"
           onClick={() => router.push(`/sales/orders/${item.id}`)}
-          className="font-mono text-sm text-blue-600 hover:underline"
+          className="font-mono text-sm text-info-foreground hover:text-info"
         >
           {val as string}
         </button>
@@ -78,7 +80,7 @@ export default function OrdersPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title="Sales orders"
           description={`${pagination?.totalItems ?? orders.length} order${(pagination?.totalItems ?? orders.length) === 1 ? "" : "s"} created from accepted quotes.`}
@@ -98,7 +100,7 @@ export default function OrdersPage() {
             setCurrentPage(1);
           }}
         />
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

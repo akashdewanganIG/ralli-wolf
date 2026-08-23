@@ -2,14 +2,15 @@ import * as React from "react";
 import { cn } from "@repo/ui/lib/utils";
 import { Button } from "./button";
 import { Card, CardContent, CardHeader, CardTitle } from "./card";
-import { Badge, type BadgeProps } from "./badge";
 import { Progress } from "./progress";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "@repo/ui/icons";
+import { Tag, type TagTone } from "@repo/ui/components/ui/tag";
 
 interface DetailPageHeaderProps {
   title: string;
   status?: string;
-  statusVariant?: BadgeProps["variant"];
+  /** Semantic tone for the status tag. */
+  statusTone?: TagTone;
   onBack?: () => void;
   /** Rendered on the right, to the left of the action buttons */
   headerRight?: React.ReactNode;
@@ -36,7 +37,7 @@ const DetailPageHeader = React.forwardRef<
     {
       title,
       status,
-      statusVariant = "secondary",
+      statusTone = "neutral",
       onBack,
       headerRight,
       actions,
@@ -67,7 +68,7 @@ const DetailPageHeader = React.forwardRef<
           <h1 className="truncate text-2xl font-semibold leading-8 tracking-tight">
             {title}
           </h1>
-          {status && <Badge variant={statusVariant}>{status}</Badge>}
+          {status && <Tag tone={statusTone}>{status}</Tag>}
         </div>
       </div>
       {(headerRight || (actions && actions.length > 0)) && (

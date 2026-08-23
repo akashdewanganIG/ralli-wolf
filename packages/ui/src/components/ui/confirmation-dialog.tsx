@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "./dialog";
 import { Button } from "./button";
-import { AlertTriangle, ArrowRightLeft, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, Trash2 } from "@repo/ui/icons";
 
 interface ConfirmationDialogProps {
   open: boolean;
@@ -68,7 +68,7 @@ export function ConfirmationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[26.5625rem]">
         <DialogHeader>
           <div className="flex items-center gap-3">
             {icon || defaultIcon}

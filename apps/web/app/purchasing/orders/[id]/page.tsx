@@ -31,6 +31,9 @@ import {
   formatPercent,
   formatQuantity,
 } from "@/lib/utils/decimal";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { buttonVariants } from "@repo/ui/components/ui/button";
+import { cn } from "@repo/ui/lib/utils";
 
 export default function PurchaseOrderDetailPage() {
   const params = useParams<{ id: string }>();
@@ -93,7 +96,7 @@ export default function PurchaseOrderDetailPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title={order ? `Purchase order ${order.poNumber}` : "Purchase order"}
           subtitle={
@@ -176,7 +179,7 @@ export default function PurchaseOrderDetailPage() {
                     }}
                     disabled={setOrderStatus.isPending}
                     variant="outline"
-                    className="px-3 text-red-700 hover:bg-red-50 whitespace-nowrap"
+                    className="px-3 text-error-foreground hover:bg-error-surface whitespace-nowrap"
                   >
                     Cancel
                   </Button>
@@ -191,7 +194,7 @@ export default function PurchaseOrderDetailPage() {
         <ErrorBanner error={setOrderStatus.error} />
         <ErrorBanner error={createReceipt.error} />
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid-auto-fit gap-3">
           <StatCard
             label="Order value"
             value={
@@ -255,7 +258,11 @@ export default function PurchaseOrderDetailPage() {
                   submitForApproval.isPending ||
                   lines.length === 0
                 }
-                className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50 sm:w-auto"
+                data-slot="button"
+                className={cn(
+                  buttonVariants({ variant: "default" }),
+                  "w-full sm:w-auto"
+                )}
               >
                 {submitForApproval.isPending
                   ? "Submitting…"
@@ -400,13 +407,13 @@ export default function PurchaseOrderDetailPage() {
 
         {order && (
           <Panel title="Order details">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid-auto-fit gap-4">
               <DetailRow
                 label="Supplier"
                 value={
                   <Link
                     href={`/purchasing/suppliers/${order.supplierId}`}
-                    className="text-primary hover:underline"
+                    className="text-primary hover:text-info"
                   >
                     {order.supplier.code} — {order.supplier.name}
                   </Link>
@@ -456,7 +463,7 @@ export default function PurchaseOrderDetailPage() {
                   order.requisition ? (
                     <Link
                       href={`/purchasing/requisitions/${order.requisition.id}`}
-                      className="text-primary hover:underline"
+                      className="text-primary hover:text-info"
                     >
                       {order.requisition.requisitionNumber}
                     </Link>
@@ -489,7 +496,7 @@ export default function PurchaseOrderDetailPage() {
                 cell: row => (
                   <Link
                     href={`/inventory/stock/${row.product.id}`}
-                    className="text-primary hover:underline"
+                    className="text-primary hover:text-info"
                   >
                     <span className="font-mono text-xs">
                       {row.product.code}
@@ -539,7 +546,7 @@ export default function PurchaseOrderDetailPage() {
                 align: "right",
                 cell: row =>
                   Number(row.rejectedQuantity) > 0 ? (
-                    <span className="font-semibold text-red-700">
+                    <span className="font-semibold text-error-foreground">
                       {formatQuantity(row.rejectedQuantity)}
                     </span>
                   ) : (
@@ -635,7 +642,7 @@ export default function PurchaseOrderDetailPage() {
                   cell: row => (
                     <Link
                       href={`/purchasing/goods-receipts/${row.id}`}
-                      className="font-mono text-xs text-primary hover:underline"
+                      className="font-mono text-xs text-primary hover:text-info"
                     >
                       {row.grnNumber}
                     </Link>
@@ -672,11 +679,11 @@ export default function PurchaseOrderDetailPage() {
                         no due date
                       </span>
                     ) : row.isOnTime ? (
-                      <span className="text-xs font-medium text-emerald-700">
+                      <span className="text-xs font-medium text-success-foreground">
                         Yes
                       </span>
                     ) : (
-                      <span className="text-xs font-medium text-red-700">
+                      <span className="text-xs font-medium text-error-foreground">
                         Late
                       </span>
                     ),
@@ -685,7 +692,7 @@ export default function PurchaseOrderDetailPage() {
             />
           </Panel>
         )}
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

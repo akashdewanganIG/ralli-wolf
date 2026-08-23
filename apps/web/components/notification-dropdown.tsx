@@ -2,13 +2,15 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Bell, CheckCheck, Loader2 } from "lucide-react";
+import { Bell, CheckCheck } from "@repo/ui/icons";
 import {
   useNotifications,
   useMarkNotificationRead,
   useMarkAllNotificationsRead,
   type AppNotification,
 } from "@/hooks/useNotifications";
+import { Skeleton, SkeletonRegion } from "@repo/ui/components/ui/skeleton";
+import { Tag } from "@repo/ui/components/ui/tag";
 
 const TYPE_ICONS: Record<string, string> = {
   LEAD_ASSIGNED: "👤",
@@ -116,15 +118,15 @@ export function NotificationDropdown() {
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="relative flex size-10 items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30"
+        className="relative flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-muted-foreground outline-none transition-[background-color,border-color,color] duration-150 hover:border-border-strong hover:bg-surface-subtle hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30"
         aria-label="Notifications"
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls="notification-panel"
       >
-        <Bell className="size-5" />
+        <Bell className="size-4" />
         {unreadCount > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex size-5 items-center justify-center rounded-full bg-destructive text-[10px] font-semibold leading-none text-white">
+          <span className="absolute -right-0.5 -top-0.5 flex size-5 items-center justify-center rounded-full bg-destructive text-[0.625rem] font-semibold leading-none text-destructive-foreground">
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         )}
@@ -143,9 +145,9 @@ export function NotificationDropdown() {
             <span className="text-sm font-semibold text-foreground">
               Notifications
               {unreadCount > 0 && (
-                <span className="ml-2 inline-flex h-5 items-center justify-center rounded-full bg-accent px-1.5 text-xs font-semibold text-accent-foreground">
+                <Tag tone="neutral" className="ml-2 tabular-nums">
                   {unreadCount}
-                </span>
+                </Tag>
               )}
             </span>
             {unreadCount > 0 && (
@@ -153,13 +155,9 @@ export function NotificationDropdown() {
                 type="button"
                 onClick={() => markAllRead.mutate()}
                 disabled={markAllRead.isPending}
-                className="flex items-center gap-1 text-xs font-medium text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/30 disabled:opacity-50"
+                className="flex items-center gap-1 text-xs font-medium text-primary outline-none hover:text-info focus-visible:ring-2 focus-visible:ring-ring/30 disabled:opacity-50"
               >
-                {markAllRead.isPending ? (
-                  <Loader2 className="size-3 animate-spin" />
-                ) : (
-                  <CheckCheck className="size-3.5" />
-                )}
+                <CheckCheck aria-hidden="true" className="size-3.5" />
                 Mark all read
               </button>
             )}
@@ -168,14 +166,18 @@ export function NotificationDropdown() {
           {/* List */}
           <div className="max-h-[min(26rem,70svh)] overflow-y-auto">
             {isLoading ? (
-              <div className="flex items-center justify-center py-10">
-                <Loader2 className="size-5 animate-spin text-muted-foreground" />
-              </div>
-            ) : notifications.length === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-2 py-10 text-muted-foreground">
-                <Bell className="size-8 opacity-40" />
-                <p className="text-sm">No notifications yet</p>
-              </div>
+              <SkeletonRegion label="Loading notifications" className="p-2">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <div key={index} className="flex gap-2.5 px-2 py-2.5">
+                    <Skeleton className="size-4 shrink-0 rounded" />
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <Skeleton className="h-3.5 w-3/4" />
+                      <Skeleton className="h-3 w-full" />
+                      <Skeleton className="h-2.5 w-20" />
+                    </div>
+                  </div>
+                ))}
+              </SkeletonRegion>
             ) : (
               notifications.map(n => (
                 <NotificationItem

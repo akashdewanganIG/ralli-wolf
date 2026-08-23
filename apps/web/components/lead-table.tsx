@@ -9,6 +9,7 @@ import { DataTable, TableColumn } from "./data-table";
 import { FilterBadges } from "./filter-badges";
 import { LeadFilter, LeadFilterValues } from "./lead-filter";
 import { TableSkeleton, ToolbarSkeleton } from "./skeletons";
+import { Tag } from "@repo/ui/components/ui/tag";
 
 const REGION_LABELS: Record<string, string> = {
   SOUTH: "South",
@@ -76,11 +77,7 @@ interface LeadStatusBadgeProps {
 
 const LeadStatusBadge: React.FC<LeadStatusBadgeProps> = ({ status }) => {
   const config = getLeadStatusConfig(status as LeadStatusValue);
-  return (
-    <Badge variant={config.variant} className={config.className}>
-      {config.label}
-    </Badge>
-  );
+  return <Tag tone={config.tone}>{config.label}</Tag>;
 };
 
 interface LeadTableProps {
@@ -160,7 +157,7 @@ export const LeadTable: React.FC<LeadTableProps> = ({
       label: "Lead Name",
       render: (_value, item) => (
         <div className="flex items-center gap-2 py-2">
-          <span className="text-muted-foreground hover:underline hover:text-blue-400">
+          <span className="text-muted-foreground hover:text-info">
             {item.name ?? getLeadFullName(item.firstName, item.lastName)}
           </span>
         </div>
@@ -243,7 +240,7 @@ export const LeadTable: React.FC<LeadTableProps> = ({
     { label: "View Details", onClick: (lead: Lead) => onLeadClick?.(lead) },
     { label: "Edit Lead", onClick: () => {} },
     { label: "Assign Lead", onClick: () => {} },
-    { label: "Delete Lead", onClick: () => {}, className: "text-red-600" },
+    { label: "Delete Lead", onClick: () => {}, className: "text-destructive" },
   ];
 
   const filterComponent = (

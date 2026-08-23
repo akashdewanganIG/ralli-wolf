@@ -2,11 +2,15 @@
 
 import * as React from "react";
 import * as RadixSelect from "@radix-ui/react-select";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown } from "@repo/ui/icons";
 import { cn } from "@repo/ui/lib/utils";
 import {
   controlVariants,
   type ControlSize,
+} from "@repo/ui/components/ui/form-control";
+import {
+  MENU_ITEM,
+  MENU_ITEM_ACTIVE,
 } from "@repo/ui/components/ui/form-control";
 
 const Select = RadixSelect.Root;
@@ -49,24 +53,33 @@ SelectTrigger.displayName = RadixSelect.Trigger.displayName;
 const SelectContent = React.forwardRef<
   React.ElementRef<typeof RadixSelect.Content>,
   React.ComponentPropsWithoutRef<typeof RadixSelect.Content>
->(({ className, children, position = "popper", ...props }, ref) => (
-  <RadixSelect.Portal>
-    <RadixSelect.Content
-      ref={ref}
-      className={cn(
-        "z-50 w-[var(--radix-select-trigger-width)] min-w-[var(--radix-select-trigger-width)] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-border/80 bg-popover/95 text-popover-foreground shadow-xl shadow-black/10 backdrop-blur-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-1 data-[side=left]:slide-in-from-right-1 data-[side=right]:slide-in-from-left-1 data-[side=top]:slide-in-from-bottom-1",
-        position === "popper" && "data-[side=bottom]:translate-y-1",
-        className
-      )}
-      position={position}
-      {...props}
-    >
-      <RadixSelect.Viewport className="max-h-[min(20rem,var(--radix-select-content-available-height))] overflow-y-auto p-1">
-        {children}
-      </RadixSelect.Viewport>
-    </RadixSelect.Content>
-  </RadixSelect.Portal>
-));
+>(
+  (
+    { className, children, position = "popper", sideOffset = 6, ...props },
+    ref
+  ) => (
+    <RadixSelect.Portal>
+      <RadixSelect.Content
+        ref={ref}
+        className={cn(
+          "z-50 w-[var(--radix-select-trigger-width)] min-w-[var(--radix-select-trigger-width)] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-border/80 bg-popover/95 text-popover-foreground shadow-xl shadow-black/10 backdrop-blur-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-1 data-[side=left]:slide-in-from-right-1 data-[side=right]:slide-in-from-left-1 data-[side=top]:slide-in-from-bottom-1",
+          className
+        )}
+        position={position}
+        // Radix gaps whichever side it actually lands on, including when it
+        // flips upward near the bottom of the viewport. The `mt-1` this replaces
+        // only ever offset the downward case, so an upward menu sat flush
+        // against the trigger.
+        {...(position === "popper" ? { sideOffset } : {})}
+        {...props}
+      >
+        <RadixSelect.Viewport className="max-h-[min(20rem,var(--radix-select-content-available-height))] overflow-y-auto p-1">
+          {children}
+        </RadixSelect.Viewport>
+      </RadixSelect.Content>
+    </RadixSelect.Portal>
+  )
+);
 SelectContent.displayName = RadixSelect.Content.displayName;
 
 const SelectLabel = React.forwardRef<
@@ -91,7 +104,9 @@ const SelectItem = React.forwardRef<
   <RadixSelect.Item
     ref={ref}
     className={cn(
-      "relative mb-px flex min-h-9 w-full cursor-default select-none items-center rounded-lg py-2 pl-8 pr-2.5 text-sm text-foreground/80 outline-none transition-colors last:mb-0 focus:bg-secondary focus:text-foreground data-[state=checked]:bg-primary/[0.08] data-[state=checked]:font-semibold data-[state=checked]:text-primary data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      MENU_ITEM,
+      MENU_ITEM_ACTIVE,
+      "mb-px pl-8 pr-2.5 last:mb-0",
       className
     )}
     {...props}

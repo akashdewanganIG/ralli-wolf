@@ -6,12 +6,27 @@ import { humanizeEnum } from "@/lib/utils/decimal";
 import { Alert } from "@repo/ui/components/ui/alert";
 import { Button } from "@repo/ui/components/ui/button";
 import { PageHeader as SharedPageHeader } from "@repo/ui/components/ui/page-header";
+import { InfoHint } from "@repo/ui/components/ui/info-hint";
+import { CardActionButton } from "@repo/ui/components/ui/card-action-button";
+import {
+  MetricCard,
+  type MetricTone,
+} from "@repo/ui/components/ui/metric-card";
 export { SelectField } from "@repo/ui/components/ui/select-field";
 
 /**
  * Small building blocks shared by every supply-chain screen, so the five
  * modules read as one system rather than five bolted-on apps.
  */
+
+/**
+ * Rows a list screen requests per page.
+ *
+ * Re-exported from the CRM table so the two table families cannot drift: both
+ * show the same number of rows and neither needs an inner scrollbar to reach
+ * the last one.
+ */
+export { DEFAULT_PAGE_SIZE } from "../data-table";
 
 export function PageHeader({
   title,
@@ -109,189 +124,94 @@ export function FilterBar({
   );
 }
 
+/**
+ * Thin wrapper over the shared `MetricCard`.
+ *
+ * Kept because 40-odd supply-chain screens call `StatCard`, and because its
+ * `tone` vocabulary is the domain one. The tinted card surfaces it used to
+ * paint — amber for warnings, red for critical — are gone; tone now shows as
+ * the diagonal hatch that `MetricCard` draws into the corner, so a row of
+ * mixed-severity figures still reads as one row.
+ */
 export function StatCard({
   label,
   value,
   hint,
+  description,
   tone = "neutral",
   href,
 }: {
   label: string;
   value: React.ReactNode;
   hint?: React.ReactNode;
-  tone?: "neutral" | "positive" | "warning" | "critical" | "info";
+  description?: React.ReactNode;
+  tone?: MetricTone;
   href?: string;
 }) {
-  const toneClasses: Record<string, string> = {
-    neutral: "border-border bg-card",
-    positive: "border-primary/15 bg-primary/[0.035]",
-    warning: "border-warning/20 bg-warning-surface/70",
-    critical: "border-error/20 bg-error-surface/70",
-    info: "border-border bg-surface-subtle/70",
-  };
-
-  const body = (
-    <div
-      className={`flex min-h-[7.5rem] min-w-0 flex-col rounded-xl border p-4 shadow-sm shadow-foreground/[0.02] transition-[background-color,border-color,box-shadow,transform] duration-150 ${toneClasses[tone]} ${href ? "hover:-translate-y-0.5 hover:border-primary/25 hover:bg-surface-subtle hover:shadow-md" : ""}`}
-    >
-      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-        {label}
-      </p>
-      <p
-        className="mt-3 truncate text-2xl font-semibold leading-none tracking-tight tabular-nums text-foreground"
-        title={
-          typeof value === "string" || typeof value === "number"
-            ? String(value)
-            : undefined
-        }
-      >
-        {value}
-      </p>
-      {hint && (
-        <p className="mt-2 text-xs leading-4 text-muted-foreground">{hint}</p>
-      )}
-    </div>
-  );
-
-  return href ? (
-    <Link
+  return (
+    <MetricCard
+      label={label}
+      value={value}
+      hint={hint}
+      description={description}
+      tone={tone}
       href={href}
-      className="block h-full rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-    >
-      {body}
-    </Link>
-  ) : (
-    body
+    />
   );
 }
 
-const STATUS_TONES: Record<string, string> = {
-  // Healthy / complete
-  ACTIVE: "bg-success-surface text-success-foreground border-success/20",
-  COMPLETED: "bg-success-surface text-success-foreground border-success/20",
-  RECEIVED: "bg-success-surface text-success-foreground border-success/20",
-  APPROVED: "bg-success-surface text-success-foreground border-success/20",
-  PASS: "bg-success-surface text-success-foreground border-success/20",
-  ISSUED: "bg-success-surface text-success-foreground border-success/20",
-  SHIPPED: "bg-success-surface text-success-foreground border-success/20",
-  CONVERTED: "bg-success-surface text-success-foreground border-success/20",
-  RESOLVED: "bg-success-surface text-success-foreground border-success/20",
-  AVAILABLE: "bg-success-surface text-success-foreground border-success/20",
-
-  // In flight
-  IN_PROGRESS: "bg-info-surface text-info-foreground border-info/20",
-  RELEASED: "bg-info-surface text-info-foreground border-info/20",
-  SENT: "bg-info-surface text-info-foreground border-info/20",
-  ACKNOWLEDGED: "bg-info-surface text-info-foreground border-info/20",
-  PARTIALLY_RECEIVED: "bg-info-surface text-info-foreground border-info/20",
-  PARTIALLY_ISSUED: "bg-info-surface text-info-foreground border-info/20",
-  PARTIALLY_CONVERTED: "bg-info-surface text-info-foreground border-info/20",
-  PICKED: "bg-info-surface text-info-foreground border-info/20",
-  PACKED: "bg-info-surface text-info-foreground border-info/20",
-  ASSIGNED: "bg-info-surface text-info-foreground border-info/20",
-  QC_IN_PROGRESS: "bg-info-surface text-info-foreground border-info/20",
-
-  // Waiting
-  DRAFT: "bg-secondary text-secondary-foreground border-border",
-  PENDING: "bg-warning-surface text-warning-foreground border-warning/20",
-  PENDING_APPROVAL:
-    "bg-warning-surface text-warning-foreground border-warning/20",
-  PENDING_QC: "bg-warning-surface text-warning-foreground border-warning/20",
-  SUBMITTED: "bg-warning-surface text-warning-foreground border-warning/20",
-  PLANNED: "bg-warning-surface text-warning-foreground border-warning/20",
-  OPEN: "bg-warning-surface text-warning-foreground border-warning/20",
-  ACKNOWLEDGED_ALERT:
-    "bg-warning-surface text-warning-foreground border-warning/20",
-  ON_HOLD: "bg-warning-surface text-warning-foreground border-warning/20",
-  CONDITIONAL_PASS:
-    "bg-warning-surface text-warning-foreground border-warning/20",
-  QUARANTINE: "bg-warning-surface text-warning-foreground border-warning/20",
-
-  // Trouble
-  REJECTED: "bg-error-surface text-error-foreground border-error/20",
-  FAIL: "bg-error-surface text-error-foreground border-error/20",
-  CANCELLED: "bg-error-surface text-error-foreground border-error/20",
-  BLACKLISTED: "bg-error-surface text-error-foreground border-error/20",
-  EXPIRED: "bg-error-surface text-error-foreground border-error/20",
-  BLOCKED: "bg-error-surface text-error-foreground border-error/20",
-  DAMAGED: "bg-error-surface text-error-foreground border-error/20",
-
-  // Retired
-  OBSOLETE: "bg-secondary text-muted-foreground border-border",
-  CLOSED: "bg-secondary text-muted-foreground border-border",
-  INACTIVE: "bg-secondary text-muted-foreground border-border",
-  CONSUMED: "bg-secondary text-muted-foreground border-border",
-  DISMISSED: "bg-secondary text-muted-foreground border-border",
-};
-
-export function StatusBadge({
-  status,
-  className = "",
-}: {
-  status: string | null | undefined;
-  className?: string;
-}) {
-  if (!status) return <span className="text-muted-foreground">—</span>;
-  const tone =
-    STATUS_TONES[status] ??
-    "bg-secondary text-secondary-foreground border-border";
-  return (
-    <span
-      className={`inline-flex items-center whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium ${tone} ${className}`}
-    >
-      {humanizeEnum(status)}
-    </span>
-  );
-}
-
-const SEVERITY_TONES: Record<string, string> = {
-  CRITICAL: "bg-error text-white border-error",
-  HIGH: "bg-error-surface text-error-foreground border-error/20",
-  MEDIUM: "bg-warning-surface text-warning-foreground border-warning/20",
-  LOW: "bg-secondary text-secondary-foreground border-border",
-};
-
-export function SeverityBadge({ severity }: { severity: string }) {
-  return (
-    <span
-      className={`inline-flex items-center whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-semibold ${
-        SEVERITY_TONES[severity] ?? SEVERITY_TONES.LOW
-      }`}
-    >
-      {humanizeEnum(severity)}
-    </span>
-  );
-}
+/**
+ * Status and severity pills come from the shared semantic system.
+ *
+ * This module used to own a 50-entry status map; Marketing and Sales owned
+ * their own, and equivalent states disagreed across them — Supply Chain drew
+ * `IN_PROGRESS` in info blue while the CRM drew the equivalent `in_process` in
+ * warning amber. One map now decides, and every module re-exports it.
+ */
+export {
+  StatusBadge,
+  SeverityBadge,
+  statusTone,
+  type SemanticTone,
+} from "@repo/ui/components/ui/status-badge";
 
 export function Panel({
   title,
   description,
   actions,
+  footerAction,
   children,
   className = "",
 }: {
   title?: string;
+  /** Supplementary explanation. Shown through the shared info tooltip. */
   description?: React.ReactNode;
+  /** Toolbar contents — search, filters, selects. */
   actions?: React.ReactNode;
+  /** Full-width action closing the panel, e.g. "View all orders". */
+  footerAction?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }) {
+  const hasHeader = Boolean(title || actions);
+
   return (
     <section
-      className={`overflow-hidden rounded-xl border border-border bg-card shadow-sm shadow-foreground/[0.02] ${className}`}
+      className={`flex min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm shadow-foreground/[0.02] ${className}`}
     >
-      {(title || actions) && (
-        <header className="flex flex-col items-start gap-3 border-b border-border px-4 pb-3 pt-4 sm:px-5 sm:pt-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0 lg:shrink-0">
-            {title && (
-              <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-            )}
-            {description && (
-              <p className="mt-0.5 text-xs leading-4 text-muted-foreground">
-                {description}
-              </p>
-            )}
-          </div>
+      {hasHeader && (
+        // One row wherever it fits. A title on its own line above a toolbar was
+        // two rows spending vertical space on a label the toolbar already
+        // implies, so the title sits inline and only wraps when it has to.
+        <header className="flex flex-col gap-2 border-b border-border p-3 lg:flex-row lg:items-center lg:gap-3">
+          {title && (
+            <div className="flex min-w-0 shrink-0 items-center gap-1.5">
+              <h2 className="min-w-0 truncate text-sm font-semibold leading-5 text-foreground">
+                {title}
+              </h2>
+              <InfoHint label={description} />
+            </div>
+          )}
           {actions && (
             <div className="flex w-full min-w-0 flex-1 flex-wrap items-center gap-2 lg:justify-end">
               {actions}
@@ -299,7 +219,15 @@ export function Panel({
           )}
         </header>
       )}
-      <div className="p-4 sm:p-5">{children}</div>
+      {/* Equal on all four sides: the old header/body split used px-4 pt-4 with
+          sm:px-5, so the gap above the first row never matched the gap beside
+          it. */}
+      <div className="min-w-0 flex-1 p-3">{children}</div>
+      {footerAction && (
+        <div className="flex flex-col border-t border-border p-3 pt-2.5">
+          {footerAction}
+        </div>
+      )}
     </section>
   );
 }
@@ -353,7 +281,7 @@ export function SimpleTable<T>({
 
   return (
     <div className="max-w-full overscroll-x-contain overflow-x-auto">
-      <table className="w-full min-w-[720px] border-collapse text-sm">
+      <table className="w-full min-w-[45rem] border-collapse text-sm">
         <thead>
           <tr className="border-b border-border bg-surface-subtle">
             {columns.map(column => (
@@ -416,31 +344,30 @@ export function SimpleTable<T>({
   );
 }
 
+/**
+ * Page control.
+ *
+ * No record count: the page indicator already says where you are in the set,
+ * and a bare "1,284 record(s)" under a table is a number nothing acts on. It
+ * renders nothing at all for single-page results rather than leaving an empty
+ * band under the table.
+ */
 export function Pager({
   page,
   totalPages,
-  totalItems,
   onChange,
 }: {
   page: number;
   totalPages: number | undefined;
-  totalItems: number | undefined;
   onChange: (page: number) => void;
 }) {
   const pages = totalPages ?? 1;
-  if (pages <= 1) {
-    return totalItems !== undefined ? (
-      <p className="px-1 py-2 text-xs text-muted-foreground">
-        {totalItems} record(s)
-      </p>
-    ) : null;
-  }
+  if (pages <= 1) return null;
 
   return (
-    <div className="flex flex-col gap-3 px-1 py-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-3 pt-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
       <span>
         Page {page} of {pages}
-        {totalItems !== undefined ? ` · ${totalItems} record(s)` : ""}
       </span>
       <div className="flex gap-2">
         <Button

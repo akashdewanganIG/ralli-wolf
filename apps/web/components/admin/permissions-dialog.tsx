@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Check, ShieldAlert } from "lucide-react";
+import { Check, ShieldAlert } from "@repo/ui/icons";
 import { Button } from "@repo/ui/components/ui/button";
 import { Checkbox } from "@repo/ui/components/ui/checkbox";
 import {

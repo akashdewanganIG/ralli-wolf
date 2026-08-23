@@ -28,6 +28,8 @@ import {
   formatQuantity,
   humanizeEnum,
 } from "@/lib/utils/decimal";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { Tag } from "@repo/ui/components/ui/tag";
 
 export default function GoodsReceiptDetailPage() {
   const params = useParams<{ id: string }>();
@@ -52,7 +54,7 @@ export default function GoodsReceiptDetailPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title={
             receipt ? `Goods receipt ${receipt.grnNumber}` : "Goods receipt"
@@ -105,7 +107,7 @@ export default function GoodsReceiptDetailPage() {
                         cancel.mutate({ id: grnId, reason });
                       }}
                       variant="outline"
-                      className="px-3 text-red-700 hover:bg-red-50 whitespace-nowrap"
+                      className="px-3 text-error-foreground hover:bg-error-surface whitespace-nowrap"
                     >
                       Cancel
                     </Button>
@@ -124,7 +126,10 @@ export default function GoodsReceiptDetailPage() {
         {post.isSuccess && (
           <Alert tone="success" title="Receipt posted">
             Stock is now on hand,{" "}
-            <Link href="/warehouse/putaway" className="font-medium underline">
+            <Link
+              href="/warehouse/putaway"
+              className="font-medium text-primary transition-colors hover:text-info"
+            >
               putaway tasks have been raised
             </Link>{" "}
             and the purchase order has advanced.
@@ -139,7 +144,7 @@ export default function GoodsReceiptDetailPage() {
           </Alert>
         )}
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid-auto-fit gap-3">
           <StatCard
             label="Received"
             value={
@@ -173,13 +178,13 @@ export default function GoodsReceiptDetailPage() {
 
         {receipt && (
           <Panel title="Receipt details">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid-auto-fit gap-4">
               <DetailRow
                 label="Supplier"
                 value={
                   <Link
                     href={`/purchasing/suppliers/${receipt.supplierId}`}
-                    className="text-primary hover:underline"
+                    className="text-primary hover:text-info"
                   >
                     {receipt.supplier.code} — {receipt.supplier.name}
                   </Link>
@@ -191,7 +196,7 @@ export default function GoodsReceiptDetailPage() {
                   receipt.purchaseOrder ? (
                     <Link
                       href={`/purchasing/orders/${receipt.purchaseOrder.id}`}
-                      className="text-primary hover:underline"
+                      className="text-primary hover:text-info"
                     >
                       {receipt.purchaseOrder.poNumber}
                     </Link>
@@ -249,9 +254,9 @@ export default function GoodsReceiptDetailPage() {
             keyOf={row => row.id}
             rowClassName={row =>
               row.qcResult === "FAIL"
-                ? "bg-red-50/40"
+                ? "bg-error-surface/40"
                 : row.qcResult === "PENDING"
-                  ? "bg-amber-50/30"
+                  ? "bg-warning-surface/30"
                   : ""
             }
             empty="This receipt has no lines."
@@ -262,7 +267,7 @@ export default function GoodsReceiptDetailPage() {
                 cell: row => (
                   <Link
                     href={`/inventory/stock/${row.product.id}`}
-                    className="text-primary hover:underline"
+                    className="text-primary hover:text-info"
                   >
                     <span className="font-mono text-xs">
                       {row.product.code}
@@ -273,7 +278,12 @@ export default function GoodsReceiptDetailPage() {
               },
               {
                 header: "Tracking",
-                cell: row => humanizeEnum(row.product.trackingType ?? "NONE"),
+                cell: row =>
+                  row.product.trackingType ? (
+                    <Tag>{row.product.trackingType}</Tag>
+                  ) : (
+                    "—"
+                  ),
               },
               {
                 header: "Batch / serials",
@@ -299,7 +309,7 @@ export default function GoodsReceiptDetailPage() {
                 align: "right",
                 cell: row =>
                   Number(row.rejectedQuantity) > 0 ? (
-                    <span className="font-semibold text-red-700">
+                    <span className="font-semibold text-error-foreground">
                       {formatQuantity(row.rejectedQuantity)}
                     </span>
                   ) : (
@@ -330,7 +340,7 @@ export default function GoodsReceiptDetailPage() {
                 header: "Posted",
                 cell: row =>
                   row.isPosted ? (
-                    <span className="text-xs font-medium text-emerald-700">
+                    <span className="text-xs font-medium text-success-foreground">
                       Yes
                     </span>
                   ) : (
@@ -487,7 +497,7 @@ export default function GoodsReceiptDetailPage() {
             />
           </Panel>
         )}
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

@@ -9,6 +9,7 @@ import { BrevoCampaign } from "@/lib/api/types";
 import { DeleteConfirmationDialog } from "@repo/ui";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { DEFAULT_PAGE_SIZE } from "@/components/data-table";
 
 function paginateArray<T>(
   array: T[],
@@ -66,7 +67,7 @@ export default function EmailCampaignsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filters, setFilters] = useState<CampaignFilterValues>({});
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_PAGE_SIZE);
   const { data, isLoading } = useBrevoCampaigns({ limit: 50, offset: 0 });
   const deleteCampaignMutation = useDeleteCampaign();
   const [showDelete, setShowDelete] = useState(false);

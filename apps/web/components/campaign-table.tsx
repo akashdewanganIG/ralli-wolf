@@ -13,11 +13,12 @@ import {
 import { PageHeader } from "@repo/ui/components/ui/page-header";
 import { SearchFilterToolbar } from "@repo/ui/components/ui/toolbar";
 import { cn } from "@repo/ui/lib/utils";
-import { MoreVertical } from "lucide-react";
+import { MoreVertical } from "@repo/ui/icons";
 import React from "react";
 import { CampaignFilter, CampaignFilterValues } from "./campaign-filter";
 import { DataTable, TableColumn } from "./data-table";
 import { TablePageSkeleton } from "./skeletons";
+import { StatusBadge } from "@repo/ui/components/ui/status-badge";
 
 export interface Campaign {
   id: string;
@@ -47,90 +48,6 @@ export interface Campaign {
     failed: number;
   };
 }
-
-interface StatusBadgeProps {
-  status: string;
-}
-
-const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
-  const normalizedStatus = status?.toLowerCase() || "";
-
-  const statusConfig: Record<
-    string,
-    { bg: string; text: string; hover: string }
-  > = {
-    draft: {
-      bg: "bg-gray-100",
-      text: "text-gray-800",
-      hover: "hover:bg-gray-100",
-    },
-    sent: {
-      bg: "bg-green-100",
-      text: "text-green-800",
-      hover: "hover:bg-green-100",
-    },
-    scheduled: {
-      bg: "bg-violet-100",
-      text: "text-violet-800",
-      hover: "hover:bg-violet-100",
-    },
-    running: {
-      bg: "bg-orange-100",
-      text: "text-orange-800",
-      hover: "hover:bg-orange-100",
-    },
-    in_process: {
-      bg: "bg-orange-100",
-      text: "text-orange-800",
-      hover: "hover:bg-orange-100",
-    },
-    archived: {
-      bg: "bg-gray-100",
-      text: "text-gray-800",
-      hover: "hover:bg-gray-100",
-    },
-    archive: {
-      bg: "bg-gray-100",
-      text: "text-gray-800",
-      hover: "hover:bg-gray-100",
-    },
-    suspended: {
-      bg: "bg-red-100",
-      text: "text-red-800",
-      hover: "hover:bg-red-100",
-    },
-    rejected: {
-      bg: "bg-red-100",
-      text: "text-red-800",
-      hover: "hover:bg-red-100",
-    },
-    cancelled: {
-      bg: "bg-red-100",
-      text: "text-red-800",
-      hover: "hover:bg-red-100",
-    },
-    canceled: {
-      bg: "bg-red-100",
-      text: "text-red-800",
-      hover: "hover:bg-red-100",
-    },
-  };
-
-  const config = statusConfig[normalizedStatus] || {
-    bg: "bg-gray-100",
-    text: "text-gray-800",
-    hover: "hover:bg-gray-100",
-  };
-
-  return (
-    <Badge
-      variant="outline"
-      className={`${config.bg} ${config.text} ${config.hover}`}
-    >
-      {status}
-    </Badge>
-  );
-};
 
 // Helper function to format time and date
 const formatTimeThenDate = (value?: string) => {
@@ -367,7 +284,7 @@ export const CampaignTable: React.FC<CampaignTableProps> = ({
           )}
           {canEdit && (
             <DropdownMenuItem
-              className="text-red-600"
+              className="text-destructive"
               onSelect={() => onDeleteClick?.(item)}
             >
               Delete

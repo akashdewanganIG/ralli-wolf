@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Search, X, Loader2 } from "lucide-react";
+import { Search, X } from "@repo/ui/icons";
 import { Input } from "@repo/ui/components/ui/input";
 import { Button } from "@repo/ui/components/ui/button";
 import { cn } from "@repo/ui/lib/utils";
@@ -61,7 +61,7 @@ export const LeadSearchInput: React.FC<LeadSearchInputProps> = React.memo(
     return (
       <div className={cn("relative w-full", className)}>
         <div className="relative w-full">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute left-3 inset-y-0 my-auto h-fit h-4 w-4 text-muted-foreground" />
           <Input
             ref={inputRef}
             type="text"
@@ -71,9 +71,7 @@ export const LeadSearchInput: React.FC<LeadSearchInputProps> = React.memo(
             className={cn("pl-10 pr-20", isSearching && "pr-16")}
           />
           {isSearching && (
-            <div className="absolute right-3 top-1/2 -translate-y-1/2">
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-            </div>
+            <div className="absolute right-3 inset-y-0 my-auto h-fit"></div>
           )}
           {showClearButton && (
             <Button
@@ -81,7 +79,7 @@ export const LeadSearchInput: React.FC<LeadSearchInputProps> = React.memo(
               variant="ghost"
               size="sm"
               onClick={handleClear}
-              className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 p-0 hover:bg-muted"
+              className="absolute right-1 inset-y-0 my-auto h-fit h-6 w-6 p-0 hover:bg-muted"
             >
               <X className="h-3 w-3" />
             </Button>

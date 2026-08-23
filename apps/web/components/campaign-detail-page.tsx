@@ -28,7 +28,7 @@ import {
   FileText,
   RefreshCw,
   Table,
-} from "lucide-react";
+} from "@repo/ui/icons";
 import React from "react";
 import { Campaign } from "./campaign-table";
 import { WhatsAppPreview } from "./whatsapp/whatsapp-preview";
@@ -75,9 +75,9 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, subValue }) => {
       lowerSubValue.includes("spam") ||
       lowerSubValue.includes("bounce")
     ) {
-      if (rate >= 2) return "text-red-600";
-      if (rate >= 1) return "text-orange-500";
-      return "text-green-600";
+      if (rate >= 2) return "text-destructive";
+      if (rate >= 1) return "text-warning";
+      return "text-success-foreground";
     }
 
     // Good metrics - green for high values (check both label and subValue)
@@ -90,10 +90,10 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, subValue }) => {
       lowerSubValue.includes("open") ||
       lowerSubValue.includes("click")
     ) {
-      if (rate >= 50) return "text-green-600";
-      if (rate >= 25) return "text-blue-600";
-      if (rate >= 10) return "text-blue-500";
-      return "text-orange-500";
+      if (rate >= 50) return "text-success-foreground";
+      if (rate >= 25) return "text-info-foreground";
+      if (rate >= 10) return "text-info";
+      return "text-warning";
     }
 
     return "text-muted-foreground";
@@ -104,10 +104,8 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, subValue }) => {
     : "text-muted-foreground";
 
   return (
-    <div className="relative h-full w-full min-w-0 overflow-hidden rounded-lg border bg-white p-4 shadow-sm">
+    <div className="relative h-full w-full min-w-0 overflow-hidden rounded-lg border bg-surface p-4 shadow-sm">
       {/* Glossy overlay effect */}
-      <div className="absolute inset-0 bg-gradient-to-br from-white/60 via-white/20 to-transparent pointer-events-none" />
-      <div className="absolute top-0 left-0 right-0 h-1/3 bg-gradient-to-b from-white/40 to-transparent pointer-events-none" />
 
       <div className="relative z-10">
         <div className="mb-1 text-sm leading-5 text-muted-foreground">
@@ -589,7 +587,7 @@ export function CampaignDetailPage({
                   <h2 className="text-xl font-semibold mb-4 max-w-sm">
                     Message Preview
                   </h2>
-                  <Card className="p-4 bg-gray-50">
+                  <Card className="p-4 bg-surface-elevated">
                     <WhatsAppPreview
                       components={buildPreviewComponents()}
                       templateName={template.name}
@@ -694,10 +692,8 @@ export function CampaignDetailPage({
 
       {/* Campaign Info */}
       <div className="space-y-4">
-        <div className="relative bg-white rounded-lg border p-4 shadow-lg overflow-hidden">
+        <div className="relative bg-surface rounded-lg border p-4 shadow-lg overflow-hidden">
           {/* Glossy overlay effect */}
-          <div className="absolute inset-0 bg-gradient-to-br from-white/60 via-white/20 to-transparent pointer-events-none" />
-          <div className="absolute top-0 left-0 right-0 h-1/3 bg-gradient-to-b from-white/40 to-transparent pointer-events-none" />
 
           <div className="relative z-10">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

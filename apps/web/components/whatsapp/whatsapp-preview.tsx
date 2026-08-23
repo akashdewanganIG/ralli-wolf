@@ -7,7 +7,7 @@ import {
   Video,
   FileText,
   MapPin,
-} from "lucide-react";
+} from "@repo/ui/icons";
 
 type TemplateComponent = {
   type: "HEADER" | "BODY" | "FOOTER" | "BUTTONS";
@@ -76,7 +76,7 @@ export function WhatsAppPreview({
         return (
           <code
             key={index}
-            className="bg-gray-200 px-1 rounded font-mono text-sm"
+            className="bg-active px-1 rounded font-mono text-sm"
           >
             {part.slice(3, -3)}
           </code>
@@ -105,27 +105,27 @@ export function WhatsAppPreview({
     const format = headerComponent.format;
 
     return (
-      <div className="bg-gray-200 rounded-t-lg flex items-center justify-center h-32">
+      <div className="bg-active rounded-t-lg flex items-center justify-center h-32">
         {format === "IMAGE" && (
-          <div className="text-center text-gray-500">
+          <div className="text-center text-muted-foreground">
             <Image className="w-8 h-8 mx-auto mb-1" />
             <span className="text-xs">Image</span>
           </div>
         )}
         {format === "VIDEO" && (
-          <div className="text-center text-gray-500">
+          <div className="text-center text-muted-foreground">
             <Video className="w-8 h-8 mx-auto mb-1" />
             <span className="text-xs">Video</span>
           </div>
         )}
         {format === "DOCUMENT" && (
-          <div className="text-center text-gray-500">
+          <div className="text-center text-muted-foreground">
             <FileText className="w-8 h-8 mx-auto mb-1" />
             <span className="text-xs">Document</span>
           </div>
         )}
         {format === "LOCATION" && (
-          <div className="text-center text-gray-500">
+          <div className="text-center text-muted-foreground">
             <MapPin className="w-8 h-8 mx-auto mb-1" />
             <span className="text-xs">Location</span>
           </div>
@@ -140,18 +140,20 @@ export function WhatsAppPreview({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="text-sm font-medium text-gray-600 mb-2">Preview</div>
+      <div className="text-sm font-medium text-text-secondary mb-2">
+        Preview
+      </div>
 
       {/* Phone frame */}
-      <div className="flex-1 bg-gray-100 rounded-2xl p-2 min-h-[400px] flex flex-col">
+      <div className="flex-1 bg-surface-secondary rounded-2xl p-2 min-h-[25rem] flex flex-col">
         {/* WhatsApp header */}
         <div className="bg-[#075e54] text-white px-4 py-3 rounded-t-xl flex items-center gap-3">
-          <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
-            <span className="text-gray-600 text-xs font-bold">WA</span>
+          <div className="w-8 h-8 bg-active rounded-full flex items-center justify-center">
+            <span className="text-text-secondary text-xs font-bold">WA</span>
           </div>
           <div>
             <div className="font-medium text-sm">WhatsApp Business</div>
-            <div className="text-xs text-green-200">online</div>
+            <div className="text-xs text-success">online</div>
           </div>
         </div>
 
@@ -164,7 +166,7 @@ export function WhatsAppPreview({
           }}
         >
           {!hasContent ? (
-            <div className="flex items-center justify-center h-full text-gray-500 text-sm">
+            <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
               Start typing to see preview
             </div>
           ) : (
@@ -201,7 +203,7 @@ export function WhatsAppPreview({
 
                   {/* Timestamp */}
                   <div className="px-3 pb-1 flex justify-end">
-                    <span className="text-[10px] text-[#667781]">
+                    <span className="text-[0.625rem] text-[#667781]">
                       {new Date().toLocaleTimeString([], {
                         hour: "2-digit",
                         minute: "2-digit",
@@ -217,7 +219,7 @@ export function WhatsAppPreview({
                       {buttonsComponent.buttons.map((button, index) => (
                         <div
                           key={index}
-                          className="bg-white rounded-lg shadow-sm px-3 py-2 flex items-center justify-center gap-2 text-[#00a5f4] text-sm font-medium cursor-pointer hover:bg-gray-50"
+                          className="bg-surface rounded-lg shadow-sm px-3 py-2 flex items-center justify-center gap-2 text-[#00a5f4] text-sm font-medium cursor-pointer hover:bg-surface-elevated"
                         >
                           {button.type === "URL" && (
                             <ExternalLink className="w-4 h-4" />
@@ -240,7 +242,7 @@ export function WhatsAppPreview({
 
         {/* Input area */}
         <div className="bg-[#f0f0f0] px-2 py-2 rounded-b-xl flex items-center gap-2">
-          <div className="flex-1 bg-white rounded-full px-4 py-2 text-sm text-gray-400">
+          <div className="flex-1 bg-surface rounded-full px-4 py-2 text-sm text-muted-foreground">
             Type a message
           </div>
           <div className="w-10 h-10 bg-[#075e54] rounded-full flex items-center justify-center">
@@ -256,7 +258,7 @@ export function WhatsAppPreview({
       </div>
 
       {templateName && (
-        <div className="mt-2 text-xs text-gray-500 text-center">
+        <div className="mt-2 text-xs text-muted-foreground text-center">
           Template: {templateName}
         </div>
       )}

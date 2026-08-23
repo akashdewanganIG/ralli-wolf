@@ -33,8 +33,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@repo/ui/components/ui/tooltip";
-import { ChartColumnIcon, Check, Copy, Plus } from "lucide-react";
+import { ChartColumnIcon, Check, Copy, Plus } from "@repo/ui/icons";
 import { useEffect, useState } from "react";
+import { DEFAULT_PAGE_SIZE } from "@/components/data-table";
+import { Tag } from "@repo/ui/components/ui/tag";
 
 export default function LandingPageTrackersPage() {
   const { user } = useAuth();
@@ -50,7 +52,7 @@ export default function LandingPageTrackersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_PAGE_SIZE);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
@@ -172,21 +174,33 @@ export default function LandingPageTrackersPage() {
   };
 
   const getStatusBadge = (status: string) => {
-    const variants: Record<string, { color: string; label: string }> = {
-      ACTIVE: { color: "bg-green-100 text-green-800", label: "Active" },
-      PAUSED: { color: "bg-indigo-100 text-yellow-800", label: "Paused" },
-      SCHEDULED: { color: "bg-blue-100 text-blue-800", label: "Scheduled" },
-      CLOSED: { color: "bg-gray-100 text-gray-800", label: "Closed" },
-      ARCHIVED: { color: "bg-red-100 text-red-800", label: "Archived" },
+    const variants: Record<
+      string,
+      { tone: React.ComponentProps<typeof Tag>["tone"]; label: string }
+    > = {
+      ACTIVE: {
+        tone: "active" as const,
+        label: "Active",
+      },
+      PAUSED: {
+        tone: "pending" as const,
+        label: "Paused",
+      },
+      SCHEDULED: {
+        tone: "progress" as const,
+        label: "Scheduled",
+      },
+      CLOSED: {
+        tone: "neutral" as const,
+        label: "Closed",
+      },
+      ARCHIVED: {
+        tone: "danger" as const,
+        label: "Archived",
+      },
     };
     const variant = variants[status] ?? variants.ACTIVE;
-    return (
-      <span
-        className={`px-2 py-1 rounded-full text-xs font-medium ${variant!.color}`}
-      >
-        {variant!.label}
-      </span>
-    );
+    return <Tag tone={variant!.tone}>{variant!.label}</Tag>;
   };
 
   const columns: TableColumn<LandingPageCampaign>[] = [
@@ -195,7 +209,7 @@ export default function LandingPageTrackersPage() {
       label: "Tracker Name",
       render: (_, tracker) => (
         <div className="flex items-center gap-2 py-2">
-          <span className="text-muted-foreground hover:underline hover:text-blue-400">
+          <span className="text-muted-foreground hover:text-info">
             {tracker.name}
           </span>
         </div>
@@ -208,7 +222,7 @@ export default function LandingPageTrackersPage() {
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="text-sm text-gray-500 truncate max-w-xs cursor-help">
+              <div className="text-sm text-muted-foreground truncate max-w-xs cursor-help">
                 {tracker.description || "No description"}
               </div>
             </TooltipTrigger>
@@ -226,11 +240,10 @@ export default function LandingPageTrackersPage() {
       label: "Unique ID",
       render: (_, tracker) => (
         <div className="flex items-center gap-2">
-          <code className="text-xs bg-gray-100 px-2 py-1 rounded">
+          <code className="text-xs bg-surface-secondary px-2 py-1 rounded">
             {tracker.uniqueId.substring(0, 12)}...
           </code>
           <Button
-            size="sm"
             variant="ghost"
             onClick={e => {
               e.stopPropagation();
@@ -238,7 +251,7 @@ export default function LandingPageTrackersPage() {
             }}
           >
             {copiedId === tracker.uniqueId ? (
-              <Check className="h-4 w-4 text-green-600" />
+              <Check className="h-4 w-4 text-success-foreground" />
             ) : (
               <Copy className="h-4 w-4" />
             )}
@@ -255,7 +268,7 @@ export default function LandingPageTrackersPage() {
       key: "createdAt",
       label: "Created",
       render: (_, tracker) => (
-        <div className="text-sm text-gray-600">
+        <div className="text-sm text-text-secondary">
           {new Date(tracker.createdAt).toLocaleDateString()}
         </div>
       ),
@@ -306,7 +319,7 @@ export default function LandingPageTrackersPage() {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-text-secondary">
                       Active Landing Pages
                     </p>
                     <p className="text-3xl font-bold mt-2">
@@ -326,8 +339,12 @@ export default function LandingPageTrackersPage() {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-600">Total Landing Pages</p>
-                    <p className="text-xs text-gray-500">(non-archived)</p>
+                    <p className="text-sm text-text-secondary">
+                      Total Landing Pages
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      (non-archived)
+                    </p>
                     <p className="text-3xl font-bold mt-2">
                       {stats.totalTrackers}
                     </p>
@@ -481,11 +498,10 @@ export default function LandingPageTrackersPage() {
                 <div>
                   <Label>Unique ID</Label>
                   <div className="flex items-center gap-2 mt-1">
-                    <code className="flex-1 text-sm bg-gray-100 px-3 py-2 rounded">
+                    <code className="flex-1 text-sm bg-surface-secondary px-3 py-2 rounded">
                       {selectedTracker.uniqueId}
                     </code>
                     <Button
-                      size="sm"
                       variant="outline"
                       onClick={() =>
                         handleCopyUniqueId(selectedTracker.uniqueId)
@@ -498,7 +514,7 @@ export default function LandingPageTrackersPage() {
                       )}
                     </Button>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     Use this ID in your landing page forms as a hidden field
                   </p>
                 </div>

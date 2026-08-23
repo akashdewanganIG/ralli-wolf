@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { useQueryStates, parseAsInteger } from "nuqs";
-import { Plus, RefreshCw } from "lucide-react";
+import { Plus, RefreshCw } from "@repo/ui/icons";
 import { RoleGuard } from "@/components/guards/RoleGuard";
 import { DataTable, type TableColumn } from "@/components/data-table";
 import { CreateOpportunityDialog } from "@/components/opportunities/create-opportunity-dialog";
@@ -15,6 +15,9 @@ import type { OpportunityListItem } from "@/lib/api/types";
 import { TablePageSkeleton } from "@/components/skeletons";
 import { Alert } from "@repo/ui/components/ui/alert";
 import { PageHeader } from "@repo/ui/components/ui/page-header";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { buttonVariants } from "@repo/ui/components/ui/button";
+import { cn } from "@repo/ui/lib/utils";
 
 function OpportunitiesContent() {
   const router = useRouter();
@@ -38,7 +41,7 @@ function OpportunitiesContent() {
         render: (value, item) => (
           <Link
             href={`/sales/opportunities/${item.id}`}
-            className="text-muted-foreground hover:underline hover:text-blue-400"
+            className="text-muted-foreground hover:text-info"
           >
             {String(value)}
           </Link>
@@ -100,7 +103,7 @@ function OpportunitiesContent() {
   }
 
   return (
-    <div className="space-y-5 p-4">
+    <PageShell>
       <PageHeader
         title="Opportunities"
         description="Track active deals from qualification through close."
@@ -108,7 +111,11 @@ function OpportunitiesContent() {
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
-            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground outline-none transition-colors duration-150 hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-2 whitespace-nowrap sm:w-auto"
+            data-slot="button"
+            className={cn(
+              buttonVariants({ variant: "default" }),
+              "w-full sm:w-auto"
+            )}
           >
             <Plus className="size-4" />
             Create Opportunity
@@ -135,7 +142,7 @@ function OpportunitiesContent() {
           router.push(`/sales/opportunities/${opportunity.id}`);
         }}
       />
-    </div>
+    </PageShell>
   );
 }
 

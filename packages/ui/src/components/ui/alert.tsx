@@ -1,5 +1,5 @@
 import * as React from "react";
-import { AlertCircle, CheckCircle2, Info, TriangleAlert } from "lucide-react";
+import { AlertCircle, CheckCircle2, Info, TriangleAlert } from "@repo/ui/icons";
 import { cn } from "@repo/ui/lib/utils";
 
 const tones = {

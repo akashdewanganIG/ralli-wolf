@@ -11,6 +11,7 @@ import {
   SelectField,
   SimpleTable,
   StatusBadge,
+  DEFAULT_PAGE_SIZE,
 } from "@/components/supply-chain/shared";
 import { usePackages } from "@/hooks/useSupplyChain";
 import {
@@ -18,6 +19,7 @@ import {
   formatQuantity,
   humanizeEnum,
 } from "@/lib/utils/decimal";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 export default function PackagesPage() {
   const [page, setPage] = useState(1);
@@ -25,13 +27,13 @@ export default function PackagesPage() {
 
   const { packages, pagination, isLoading, error } = usePackages({
     page,
-    limit: 25,
+    limit: DEFAULT_PAGE_SIZE,
     status: status || undefined,
   });
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title="Packages"
           subtitle="Track packed goods awaiting dispatch."
@@ -76,7 +78,7 @@ export default function PackagesPage() {
                   row.pickList ? (
                     <Link
                       href={`/warehouse/pick-lists/${row.pickList.id}`}
-                      className="text-primary hover:underline"
+                      className="text-primary hover:text-info"
                     >
                       {row.pickList.pickListNumber}
                     </Link>
@@ -117,11 +119,10 @@ export default function PackagesPage() {
           <Pager
             page={page}
             totalPages={pagination?.totalPages}
-            totalItems={pagination?.totalItems}
             onChange={setPage}
           />
         </Panel>
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

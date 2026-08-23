@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@repo/ui/components/ui/button";
-import { Mail } from "lucide-react";
+import { Mail } from "@repo/ui/icons";
 
 interface SelectedLeadsActionsProps {
   count: number;
@@ -27,7 +27,7 @@ export function SelectedLeadsActions({
       <span className="text-sm text-muted-foreground">{count} selected</span>
       {onSendToEmail && (
         <Button variant="outline" size="sm" onClick={onSendToEmail}>
-          <Mail className="h-4 w-4 mr-2" />
+          <Mail className="h-4 w-4" />
           Send to Email
         </Button>
       )}

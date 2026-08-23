@@ -57,7 +57,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({
       label: "Contact Name",
       render: value => (
         <div className="flex items-center gap-2 py-2">
-          <span className="text-muted-foreground hover:underline hover:text-blue-400">
+          <span className="text-muted-foreground hover:text-info">
             {value || "Unknown Contact"}
           </span>
         </div>
@@ -129,13 +129,9 @@ export const ContactTable: React.FC<ContactTableProps> = ({
     //     return (
     //       <div className="flex items-center gap-2">
     //         {contact.isConvertedLead ? (
-    //           <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-100">
     //             Converted
-    //           </Badge>
     //         ) : (
-    //           <Badge variant="secondary" className="bg-green-100 text-green-800 hover:bg-green-100">
     //             Direct Contact
-    //           </Badge>
     //         )}
     //       </div>
     //     )

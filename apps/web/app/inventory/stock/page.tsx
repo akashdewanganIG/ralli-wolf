@@ -13,11 +13,16 @@ import {
   SelectField,
   SimpleTable,
   StatusBadge,
+  DEFAULT_PAGE_SIZE,
 } from "@/components/supply-chain/shared";
 import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
 import { useStockPositions } from "@/hooks/useSupplyChain";
 import { formatMoney, formatQuantity, humanizeEnum } from "@/lib/utils/decimal";
 import type { ItemType, StockPositionRow } from "@/lib/api/types/supplyChain";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { DashboardToolbar } from "@repo/ui/components/ui/dashboard-toolbar";
+import { SearchInput } from "@repo/ui/components/ui/search-input";
+import { Tag } from "@repo/ui/components/ui/tag";
 
 const ITEM_TYPES: ItemType[] = [
   "FINISHED_GOOD",
@@ -39,7 +44,7 @@ export default function StockPositionsPage() {
 
   const { rows, pagination, isLoading, error } = useStockPositions({
     page,
-    limit: 25,
+    limit: DEFAULT_PAGE_SIZE,
     search: search || undefined,
     warehouseId,
     itemType: itemType || undefined,
@@ -50,7 +55,7 @@ export default function StockPositionsPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title="Stock positions"
           subtitle="Review on-hand, reserved, and available inventory."
@@ -58,64 +63,62 @@ export default function StockPositionsPage() {
 
         <ErrorBanner error={error} />
 
-        <Panel>
-          <div className="mb-4 grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
-            <div className="min-w-0 flex-[1_1_14rem]">
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Search
-              </label>
-              <Input
-                placeholder="Item code, name or barcode"
-                value={search}
-                onChange={event => {
-                  setSearch(event.target.value);
-                  resetToFirstPage();
-                }}
-              />
-            </div>
-            <div className="w-full sm:w-56">
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Warehouse
-              </label>
-              <WarehouseFilter
-                value={warehouseId}
-                onChange={value => {
-                  setWarehouseId(value);
-                  resetToFirstPage();
-                }}
-              />
-            </div>
-            <div className="w-full sm:w-48">
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Item type
-              </label>
-              <SelectField
-                value={itemType}
-                onChange={event => {
-                  setItemType(event.target.value);
-                  resetToFirstPage();
-                }}
-              >
-                <option value="">All types</option>
-                {ITEM_TYPES.map(type => (
-                  <option key={type} value={type}>
-                    {humanizeEnum(type)}
-                  </option>
-                ))}
-              </SelectField>
-            </div>
-            <label className="flex items-center gap-2 pb-2 text-sm">
-              <Checkbox
-                checked={belowReorder}
-                onCheckedChange={checked => {
-                  setBelowReorder(checked);
-                  resetToFirstPage();
-                }}
-              />
-              Below reorder point only
-            </label>
-          </div>
-
+        <Panel
+          actions={
+            <DashboardToolbar
+              search={
+                <SearchInput
+                  placeholder="Search item code, name or barcode"
+                  value={search}
+                  onChange={event => {
+                    setSearch(event.target.value);
+                    resetToFirstPage();
+                  }}
+                />
+              }
+              actions={[
+                <WarehouseFilter
+                  key="warehouse"
+                  value={warehouseId}
+                  onChange={value => {
+                    setWarehouseId(value);
+                    resetToFirstPage();
+                  }}
+                />,
+                <SelectField
+                  key="item-type"
+                  aria-label="Filter by item type"
+                  className="w-full sm:w-44"
+                  value={itemType}
+                  onChange={event => {
+                    setItemType(event.target.value);
+                    resetToFirstPage();
+                  }}
+                >
+                  <option value="">All types</option>
+                  {ITEM_TYPES.map(type => (
+                    <option key={type} value={type}>
+                      {humanizeEnum(type)}
+                    </option>
+                  ))}
+                </SelectField>,
+                <label
+                  key="below-reorder"
+                  className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap text-[0.8125rem]"
+                >
+                  <Checkbox
+                    checked={belowReorder}
+                    onCheckedChange={checked => {
+                      setBelowReorder(checked);
+                      resetToFirstPage();
+                    }}
+                  />
+                  Below reorder point
+                </label>,
+              ]}
+            />
+          }
+        >
           <SimpleTable<StockPositionRow>
             isLoading={isLoading}
             rows={rows}
@@ -127,9 +130,9 @@ export default function StockPositionsPage() {
             }
             rowClassName={row =>
               row.isStockedOut
-                ? "bg-red-50/40"
+                ? "bg-error-surface/40"
                 : row.isBelowSafetyStock
-                  ? "bg-amber-50/40"
+                  ? "bg-warning-surface/40"
                   : ""
             }
             empty={
@@ -151,7 +154,12 @@ export default function StockPositionsPage() {
               },
               {
                 header: "Type",
-                cell: row => humanizeEnum(row.product.itemType ?? ""),
+                cell: row =>
+                  row.product.itemType ? (
+                    <Tag>{row.product.itemType}</Tag>
+                  ) : (
+                    "—"
+                  ),
               },
               { header: "UoM", cell: row => row.product.uom?.code ?? "—" },
               {
@@ -171,9 +179,9 @@ export default function StockPositionsPage() {
                   <span
                     className={
                       row.isStockedOut
-                        ? "font-semibold text-red-700"
+                        ? "font-semibold text-error-foreground"
                         : row.isBelowSafetyStock
-                          ? "font-semibold text-amber-700"
+                          ? "font-semibold text-warning-foreground"
                           : ""
                     }
                   >
@@ -207,7 +215,7 @@ export default function StockPositionsPage() {
                   row.isStockedOut ? (
                     <StatusBadge
                       status="BLOCKED"
-                      className="!bg-red-100 !text-red-800"
+                      className="!bg-error-surface !text-error-foreground"
                     />
                   ) : row.isBelowSafetyStock ? (
                     <StatusBadge status="PENDING" />
@@ -221,11 +229,10 @@ export default function StockPositionsPage() {
           <Pager
             page={page}
             totalPages={pagination?.totalPages}
-            totalItems={pagination?.totalItems}
             onChange={setPage}
           />
         </Panel>
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

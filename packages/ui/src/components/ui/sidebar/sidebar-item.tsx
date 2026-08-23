@@ -10,10 +10,10 @@ import {
   TooltipTrigger,
   TooltipProvider,
 } from "../tooltip";
-import type { LucideIcon } from "lucide-react";
+import type { IconComponent } from "@repo/ui/icons";
 
 interface SidebarItemProps {
-  icon?: LucideIcon;
+  icon?: IconComponent;
   label: string;
   href?: string;
   active?: boolean;
@@ -29,9 +29,9 @@ export function SidebarItem({
 }: SidebarItemProps) {
   const { open } = useSidebar();
   const className = cn(
-    "flex h-10 min-h-10 items-center rounded-lg text-sm font-medium text-sidebar-foreground outline-none transition-[background-color,color] duration-150 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring/25",
+    "flex h-9 min-h-9 items-center rounded-md text-[0.8125rem] font-medium text-sidebar-foreground outline-none transition-[background-color,color] duration-150 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring/25",
     // Collapsed rail: centre the icon instead of leaving it hugging the left edge.
-    open ? "gap-3 px-3" : "justify-center px-0",
+    open ? "gap-2.5 px-2.5" : "justify-center px-0",
     active &&
       "bg-sidebar-primary text-sidebar-primary-foreground font-semibold hover:bg-sidebar-primary hover:text-sidebar-primary-foreground"
   );
@@ -39,15 +39,16 @@ export function SidebarItem({
   const content = (
     <>
       {Icon && (
-        <span className="flex-shrink-0">
-          {React.createElement(Icon, { size: 18 })}
+        <span className="shrink-0">
+          {React.createElement(Icon, { size: 16 })}
         </span>
       )}
       <span
         className={cn(
-          "transition-opacity duration-150 ease-in-out whitespace-nowrap",
-          !open && "opacity-0 w-0 overflow-hidden"
+          "min-w-0 truncate transition-opacity duration-150 ease-in-out",
+          !open && "w-0 opacity-0"
         )}
+        title={typeof label === "string" ? label : undefined}
       >
         {label}
       </span>
@@ -72,12 +73,7 @@ export function SidebarItem({
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>{itemContent}</TooltipTrigger>
-          <TooltipContent
-            side="right"
-            className="bg-black text-white rounded-md px-2 py-1 text-xs border-none"
-          >
-            {label}
-          </TooltipContent>
+          <TooltipContent side="right">{label}</TooltipContent>
         </Tooltip>
       </TooltipProvider>
     );

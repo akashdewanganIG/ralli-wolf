@@ -17,11 +17,11 @@ const nextConfig = {
   distDir: process.env.NEXT_DIST_DIR || ".next",
 
   // Ensure shared client packages are transpiled by Next/Turbopack.
-  transpilePackages: ["@repo/ui", "lucide-react"],
+  transpilePackages: ["@repo/ui"],
 
   // Optimize package imports for better tree-shaking
   experimental: {
-    optimizePackageImports: ["lucide-react"],
+    optimizePackageImports: ["@phosphor-icons/react"],
   },
 
   // Image optimization configuration

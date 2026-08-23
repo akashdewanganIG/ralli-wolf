@@ -25,6 +25,7 @@ import {
   formatDateTime,
   formatQuantity,
 } from "@/lib/utils/decimal";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 export default function MaterialRequisitionDetailPage() {
   const params = useParams<{ id: string }>();
@@ -60,7 +61,7 @@ export default function MaterialRequisitionDetailPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title={
             requisition
@@ -143,7 +144,7 @@ export default function MaterialRequisitionDetailPage() {
 
         {requisition && (
           <Panel title="Requisition details">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid-auto-fit gap-4">
               <DetailRow
                 label="Warehouse"
                 value={`${requisition.warehouse.code} — ${requisition.warehouse.name}`}
@@ -159,7 +160,7 @@ export default function MaterialRequisitionDetailPage() {
                   requisition.productionOrder ? (
                     <Link
                       href={`/production/${requisition.productionOrder.id}`}
-                      className="text-primary hover:underline"
+                      className="text-primary hover:text-info"
                     >
                       {requisition.productionOrder.orderNumber}
                     </Link>
@@ -204,7 +205,7 @@ export default function MaterialRequisitionDetailPage() {
               row.availableQuantity !== undefined &&
               Number(row.availableQuantity) <
                 Number(row.requestedQuantity) - Number(row.issuedQuantity)
-                ? "bg-red-50/40"
+                ? "bg-error-surface/40"
                 : ""
             }
             columns={[
@@ -213,7 +214,7 @@ export default function MaterialRequisitionDetailPage() {
                 cell: row => (
                   <Link
                     href={`/inventory/stock/${row.product.id}`}
-                    className="text-primary hover:underline"
+                    className="text-primary hover:text-info"
                   >
                     <span className="font-mono text-xs">
                       {row.product.code}
@@ -256,8 +257,8 @@ export default function MaterialRequisitionDetailPage() {
                     <span
                       className={
                         short
-                          ? "font-semibold text-red-700"
-                          : "text-emerald-700"
+                          ? "font-semibold text-error-foreground"
+                          : "text-success-foreground"
                       }
                     >
                       {formatQuantity(row.availableQuantity)}
@@ -322,7 +323,7 @@ export default function MaterialRequisitionDetailPage() {
             ]}
           />
         </Panel>
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

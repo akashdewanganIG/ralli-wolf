@@ -13,6 +13,7 @@ import {
   SelectField,
   SimpleTable,
   StatusBadge,
+  DEFAULT_PAGE_SIZE,
 } from "@/components/supply-chain/shared";
 import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
 import { useGoodsReceipts, useSuppliers } from "@/hooks/useSupplyChain";
@@ -22,6 +23,7 @@ import {
   formatQuantity,
   humanizeEnum,
 } from "@/lib/utils/decimal";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 export default function GoodsReceiptsPage() {
   const router = useRouter();
@@ -33,7 +35,7 @@ export default function GoodsReceiptsPage() {
 
   const { receipts, pagination, isLoading, error } = useGoodsReceipts({
     page,
-    limit: 25,
+    limit: DEFAULT_PAGE_SIZE,
     status: status || undefined,
     search: search || undefined,
     supplierId: supplierId ? Number(supplierId) : undefined,
@@ -43,7 +45,7 @@ export default function GoodsReceiptsPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title="Goods receipts"
           subtitle="Track received goods, quality checks, posting, and putaway."
@@ -119,7 +121,7 @@ export default function GoodsReceiptsPage() {
               router.push(`/purchasing/goods-receipts/${row.id}`)
             }
             rowClassName={row =>
-              row.isOnTime === false ? "bg-amber-50/40" : ""
+              row.isOnTime === false ? "bg-warning-surface/40" : ""
             }
             empty="No goods receipts yet. Receive against a purchase order to create one."
             columns={[
@@ -141,11 +143,11 @@ export default function GoodsReceiptsPage() {
                   row.isOnTime === null ? (
                     <span className="text-xs text-muted-foreground">—</span>
                   ) : row.isOnTime ? (
-                    <span className="text-xs font-medium text-emerald-700">
+                    <span className="text-xs font-medium text-success-foreground">
                       Yes
                     </span>
                   ) : (
-                    <span className="text-xs font-medium text-red-700">
+                    <span className="text-xs font-medium text-error-foreground">
                       {row.delayDays}d late
                     </span>
                   ),
@@ -174,7 +176,7 @@ export default function GoodsReceiptsPage() {
                 align: "right",
                 cell: row =>
                   Number(row.totalRejectedQuantity) > 0 ? (
-                    <span className="font-semibold text-red-700">
+                    <span className="font-semibold text-error-foreground">
                       {formatQuantity(row.totalRejectedQuantity)}
                     </span>
                   ) : (
@@ -195,11 +197,10 @@ export default function GoodsReceiptsPage() {
           <Pager
             page={page}
             totalPages={pagination?.totalPages}
-            totalItems={pagination?.totalItems}
             onChange={setPage}
           />
         </Panel>
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

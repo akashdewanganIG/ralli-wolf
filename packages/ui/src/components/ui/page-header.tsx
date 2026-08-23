@@ -1,6 +1,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { cn } from "@repo/ui/lib/utils";
+import { InfoHint } from "@repo/ui/components/ui/info-hint";
 
 export function PageHeader({
   title,
@@ -10,6 +11,7 @@ export function PageHeader({
   breadcrumb,
   className,
   titleClassName,
+  descriptionInline = false,
 }: {
   title: React.ReactNode;
   description?: React.ReactNode;
@@ -18,10 +20,12 @@ export function PageHeader({
   breadcrumb?: Array<{ label: string; href?: string }>;
   className?: string;
   titleClassName?: string;
+  /** Keeps the supporting text visible instead of folding it into a tooltip. */
+  descriptionInline?: boolean;
 }) {
   const supportingText = description ?? subtitle;
   return (
-    <header className={cn("space-y-2", className)}>
+    <header className={cn("space-y-1.5", className)}>
       {breadcrumb?.length ? (
         <nav
           aria-label="Breadcrumb"
@@ -47,19 +51,26 @@ export function PageHeader({
         </nav>
       ) : null}
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-1.5">
           <h1
             className={cn(
-              "text-xl font-semibold leading-7 tracking-tight text-foreground sm:text-2xl sm:leading-8",
+              "min-w-0 text-base font-semibold leading-6 tracking-tight text-foreground sm:text-lg sm:leading-7",
               titleClassName
             )}
           >
             {title}
           </h1>
+          {/* The description lives behind the info icon rather than under the
+              title. It explains what a screen is, which matters once and is
+              noise on every later visit — and keeping it inline meant every
+              listing page opened with two rows of chrome before its toolbar.
+
+              `descriptionInline` is the escape hatch for the rare page whose
+              supporting text is an instruction rather than a description. */}
           {supportingText ? (
-            <div className="mt-1 max-w-3xl text-sm leading-5 text-muted-foreground">
-              {supportingText}
-            </div>
+            descriptionInline ? null : (
+              <InfoHint label={supportingText} />
+            )
           ) : null}
         </div>
         {actions ? (
@@ -68,6 +79,11 @@ export function PageHeader({
           </div>
         ) : null}
       </div>
+      {supportingText && descriptionInline ? (
+        <div className="max-w-3xl text-[0.8125rem] leading-5 text-muted-foreground">
+          {supportingText}
+        </div>
+      ) : null}
     </header>
   );
 }

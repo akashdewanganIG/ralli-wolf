@@ -20,7 +20,7 @@ import {
   FileText,
   MapPin,
   AlertCircle,
-} from "lucide-react";
+} from "@repo/ui/icons";
 import { WhatsAppPreview } from "./whatsapp-preview";
 
 type HeaderFormat =
@@ -670,7 +670,7 @@ export function CreateTemplateModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-foreground/45 p-4 backdrop-blur-[1px]"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-overlay p-4 backdrop-blur-[1px]"
       onClick={e => {
         // Prevent closing when clicking on the overlay
         e.stopPropagation();
@@ -688,7 +688,7 @@ export function CreateTemplateModal({
           <button
             type="button"
             onClick={handleClose}
-            className="text-gray-500 hover:text-gray-700"
+            className="text-muted-foreground hover:text-text-secondary"
             aria-label="Close create template dialog"
           >
             <X className="h-5 w-5" />
@@ -702,7 +702,7 @@ export function CreateTemplateModal({
             className="flex-1 p-4 space-y-4 overflow-y-auto"
           >
             {formError && (
-              <div className="border border-red-200 bg-red-50 text-red-700 rounded p-4 text-sm space-y-2">
+              <div className="border border-error-border bg-error-surface text-error-foreground rounded p-4 text-sm space-y-2">
                 <div className="flex items-center gap-2 font-medium">
                   <AlertCircle className="h-4 w-4" />
                   <span>{formError.title}</span>
@@ -734,7 +734,7 @@ export function CreateTemplateModal({
                   placeholder="e.g., welcome_message"
                   required
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   Use lowercase letters, numbers, and underscores only
                 </p>
               </div>
@@ -790,7 +790,7 @@ export function CreateTemplateModal({
                     min={30}
                     max={900}
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     How long Meta retries sending if undelivered (Default: 30
                     Days)
                   </p>
@@ -864,7 +864,7 @@ export function CreateTemplateModal({
                     {headerVariableCount > 0 && (
                       <Input
                         type="text"
-                        className="bg-gray-50"
+                        className="bg-surface-elevated"
                         value={headerSampleText}
                         onChange={e => setHeaderSampleText(e.target.value)}
                         placeholder="Sample value for header variable"
@@ -892,21 +892,21 @@ export function CreateTemplateModal({
                     <div
                       className={`p-3 rounded ${
                         headerFormat === "IMAGE"
-                          ? "bg-blue-50"
+                          ? "bg-info-surface"
                           : headerFormat === "VIDEO"
-                            ? "bg-purple-50"
-                            : "bg-orange-50"
+                            ? "bg-surface-secondary"
+                            : "bg-warning-surface"
                       }`}
                     >
                       <div className="flex items-center gap-2 mb-2">
                         {headerFormat === "IMAGE" && (
-                          <Image className="h-5 w-5 text-blue-500" />
+                          <Image className="h-5 w-5 text-info" />
                         )}
                         {headerFormat === "VIDEO" && (
-                          <Video className="h-5 w-5 text-purple-500" />
+                          <Video className="h-5 w-5 text-muted-foreground" />
                         )}
                         {headerFormat === "DOCUMENT" && (
-                          <FileText className="h-5 w-5 text-orange-500" />
+                          <FileText className="h-5 w-5 text-warning" />
                         )}
                         <span className="text-sm font-medium">
                           {headerFormat.charAt(0) +
@@ -914,7 +914,7 @@ export function CreateTemplateModal({
                           Header
                         </span>
                       </div>
-                      <p className="text-xs text-gray-600 mb-3">
+                      <p className="text-xs text-text-secondary mb-3">
                         Upload a sample {headerFormat.toLowerCase()} for Meta to
                         review during approval. The actual{" "}
                         {headerFormat.toLowerCase()} will be provided when
@@ -922,8 +922,8 @@ export function CreateTemplateModal({
                       </p>
 
                       {headerMediaHandle ? (
-                        <div className="flex items-center justify-between bg-white p-2 rounded border">
-                          <span className="text-sm text-green-600 truncate">
+                        <div className="flex items-center justify-between bg-surface p-2 rounded border">
+                          <span className="text-sm text-success-foreground truncate">
                             {headerMediaFileName}
                           </span>
                           <Button
@@ -954,8 +954,8 @@ export function CreateTemplateModal({
                 )}
 
                 {headerFormat === "LOCATION" && (
-                  <div className="flex items-center gap-2 text-sm text-gray-600 bg-green-50 p-3 rounded">
-                    <MapPin className="h-5 w-5 text-green-500" />
+                  <div className="flex items-center gap-2 text-sm text-text-secondary bg-success-surface p-3 rounded">
+                    <MapPin className="h-5 w-5 text-success" />
                     <span>
                       Location header - coordinates will be provided when
                       sending messages
@@ -969,7 +969,7 @@ export function CreateTemplateModal({
             {category === "AUTHENTICATION" ? (
               <div className="border rounded p-4 space-y-3">
                 <h3 className="font-medium">Authentication Settings</h3>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-text-secondary">
                   WhatsApp automatically formats the OTP message body. Configure
                   additional requirements below.
                 </p>
@@ -989,7 +989,7 @@ export function CreateTemplateModal({
                       )
                     }
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     Optional expiry hint shown to customers.
                   </p>
                 </div>
@@ -1059,13 +1059,13 @@ export function CreateTemplateModal({
                   placeholder="Enter message body. Use *bold*, _italic_, ~strike~, ```code```"
                   required
                 />
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted-foreground">
                   Use {"{{1}}"}, {"{{2}}"} for variables. Format: *bold*,
                   _italic_, ~strike~, ```code```
                 </p>
                 {bodyVariableCount > 0 && (
-                  <div className="space-y-2 bg-gray-50 p-3 rounded">
-                    <p className="text-xs font-medium text-gray-700">
+                  <div className="space-y-2 bg-surface-elevated p-3 rounded">
+                    <p className="text-xs font-medium text-text-secondary">
                       Sample values for variables:
                     </p>
                     {bodySamples.map((sample, idx) => (
@@ -1104,7 +1104,7 @@ export function CreateTemplateModal({
             {category === "AUTHENTICATION" ? (
               <div className="border rounded p-4 space-y-3">
                 <h3 className="font-medium">Buttons</h3>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-text-secondary">
                   The Copy Code button is included automatically for
                   authentication templates.
                 </p>
@@ -1147,7 +1147,7 @@ export function CreateTemplateModal({
                 </div>
 
                 {buttons.length === 0 && (
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-muted-foreground">
                     No buttons added. Click above to add buttons.
                   </p>
                 )}
@@ -1161,7 +1161,7 @@ export function CreateTemplateModal({
                       <button
                         type="button"
                         onClick={() => removeButton(index)}
-                        className="text-red-500 hover:text-red-700"
+                        className="text-destructive hover:text-error-foreground"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -1214,7 +1214,7 @@ export function CreateTemplateModal({
           </form>
 
           {/* Preview Section */}
-          <div className="w-80 border-l bg-gray-50 p-4 overflow-y-auto hidden lg:block">
+          <div className="w-80 border-l bg-surface-elevated p-4 overflow-y-auto hidden lg:block">
             <WhatsAppPreview
               components={buildPreviewComponents()}
               templateName={templateName || "new_template"}

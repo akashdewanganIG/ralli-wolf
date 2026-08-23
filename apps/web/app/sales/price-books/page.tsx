@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@repo/ui/components/ui/select";
 import { SearchFilterToolbar } from "@repo/ui/components/ui/toolbar";
-import { Search, ArrowLeft } from "lucide-react";
+import { Search } from "@repo/ui/icons";
 import { TablePageSkeleton } from "@/components/skeletons";
 
 type SortField =
@@ -154,19 +154,13 @@ export default function PriceBookEntriesPage() {
       <PageHeader
         title="Price books"
         description="Manage the price lists used for opportunities, quotes, and orders."
-        actions={
-          <Button type="button" variant="outline" onClick={() => router.back()}>
-            <ArrowLeft className="size-4" />
-            Back
-          </Button>
-        }
       />
 
       {/* Filter and Sort Controls */}
       <SearchFilterToolbar
         search={
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="pointer-events-none absolute left-3 inset-y-0 my-auto h-fit size-4 text-muted-foreground" />
             <Input
               aria-label="Search price books"
               placeholder="Search by name…"

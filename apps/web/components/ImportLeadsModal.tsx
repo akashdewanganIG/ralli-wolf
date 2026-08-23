@@ -8,14 +8,14 @@ import {
   CheckCircle2,
   Download,
   FileSpreadsheet,
-  Loader2,
   Pencil,
   Upload,
-} from "lucide-react";
+} from "@repo/ui/icons";
 import { Button } from "@repo/ui/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -24,6 +24,8 @@ import { Input } from "@repo/ui/components/ui/input";
 import { leadService } from "@/lib/api/services";
 import { leadKeys } from "@/hooks/useLeads";
 import { toast } from "@/lib/toast";
+import { Skeleton, SkeletonText } from "@repo/ui/components/ui/skeleton";
+import { Tag } from "@repo/ui/components/ui/tag";
 
 type Props = { open: boolean; onOpenChange: (open: boolean) => void };
 type PreviewRow = {
@@ -219,6 +221,12 @@ export const ImportLeadsModal: React.FC<Props> = ({ open, onOpenChange }) => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Drag-over is tracked with a counter, not a boolean: dragenter/dragleave
+  // fire for every child element, so a boolean flickers as the pointer crosses
+  // the icon or the text inside the drop zone.
+  const dragDepth = useRef(0);
+  const [dragging, setDragging] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const queryClient = useQueryClient();
   const issues = useMemo(() => getRowIssues(rows), [rows]);
   const validCount = useMemo(
@@ -231,11 +239,15 @@ export const ImportLeadsModal: React.FC<Props> = ({ open, onOpenChange }) => {
     setRows([]);
     setStep("select");
     setResult(null);
+    setSelectedFile(null);
+    setDragging(false);
+    dragDepth.current = 0;
     if (inputRef.current) inputRef.current.value = "";
   };
   const selectFile = async (selected?: File) => {
     if (!selected) return;
     setLoading(true);
+    setSelectedFile(selected);
     try {
       setRows(await parseLeadFile(selected));
       setFileName(selected.name);
@@ -306,92 +318,175 @@ export const ImportLeadsModal: React.FC<Props> = ({ open, onOpenChange }) => {
         if (!next) reset();
       }}
     >
-      <DialogContent className="max-h-[92vh] max-w-6xl overflow-hidden p-0">
-        <DialogHeader className="border-b bg-gradient-to-r from-primary/10 via-background to-amber-50 px-6 py-5">
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-primary p-2.5 text-primary-foreground">
-              <FileSpreadsheet className="size-5" />
-            </div>
-            <div>
-              <DialogTitle className="text-xl">Import leads</DialogTitle>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Upload, review, correct, then import with confidence.
-              </p>
-            </div>
-          </div>
-          <div className="mt-4 flex items-center gap-2 text-xs font-medium">
+      <DialogContent className="max-h-[92svh] sm:max-w-5xl">
+        <DialogHeader>
+          <DialogTitle>Import leads</DialogTitle>
+          <DialogDescription>
+            Upload a file, correct anything flagged, then import.
+          </DialogDescription>
+          {/* Step indicator: plain dots and labels rather than filled pills, so
+              it reads as progress instead of three buttons. */}
+          <ol className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
             {["Select file", "Review data", "Import complete"].map(
-              (label, index) => (
-                <React.Fragment key={label}>
-                  <span
-                    className={
-                      step === (["select", "review", "result"] as Step[])[index]
-                        ? "rounded-full bg-primary px-3 py-1 text-primary-foreground"
-                        : "rounded-full bg-muted px-3 py-1 text-muted-foreground"
-                    }
-                  >
-                    {index + 1}. {label}
-                  </span>
-                  {index < 2 && <span className="h-px w-8 bg-border" />}
-                </React.Fragment>
-              )
+              (label, index) => {
+                const order: Step[] = ["select", "review", "result"];
+                const currentIndex = order.indexOf(step);
+                const state =
+                  index < currentIndex
+                    ? "done"
+                    : index === currentIndex
+                      ? "current"
+                      : "todo";
+                return (
+                  <React.Fragment key={label}>
+                    <li
+                      aria-current={state === "current" ? "step" : undefined}
+                      className={`flex items-center gap-1.5 ${
+                        state === "current"
+                          ? "font-semibold text-foreground"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={`size-1.5 shrink-0 rounded-full ${
+                          state === "todo" ? "bg-border-strong" : "bg-primary"
+                        }`}
+                      />
+                      {label}
+                    </li>
+                    {index < 2 && (
+                      <span aria-hidden="true" className="h-px w-5 bg-border" />
+                    )}
+                  </React.Fragment>
+                );
+              }
             )}
-          </div>
+          </ol>
         </DialogHeader>
 
-        <div className="max-h-[66vh] overflow-auto p-6">
+        <div className="max-h-[62svh] overflow-y-auto">
           {step === "select" && (
-            <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
-              <button
-                type="button"
-                onClick={() => inputRef.current?.click()}
-                className="group flex min-h-72 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border bg-muted/20 p-8 text-center transition hover:border-primary/60 hover:bg-primary/5"
+            <div className="grid gap-3 lg:grid-cols-[1.5fr_1fr]">
+              {/* Drop zone. A labelled region rather than a button, so the file
+                  input keeps its own accessible name and dropping works without
+                  the click affordance disappearing. */}
+              <div
+                onDragEnter={event => {
+                  event.preventDefault();
+                  dragDepth.current += 1;
+                  setDragging(true);
+                }}
+                onDragOver={event => event.preventDefault()}
+                onDragLeave={event => {
+                  event.preventDefault();
+                  dragDepth.current -= 1;
+                  if (dragDepth.current <= 0) setDragging(false);
+                }}
+                onDrop={event => {
+                  event.preventDefault();
+                  dragDepth.current = 0;
+                  setDragging(false);
+                  void selectFile(event.dataTransfer.files?.[0]);
+                }}
+                className={`flex flex-col items-center justify-center rounded-lg border border-dashed p-5 text-center transition-[background-color,border-color] duration-150 ${
+                  dragging
+                    ? "border-primary bg-primary-surface"
+                    : "border-border bg-surface-subtle"
+                }`}
               >
                 {loading ? (
-                  <Loader2 className="size-10 animate-spin text-primary" />
+                  <div className="w-full max-w-xs space-y-2" aria-busy="true">
+                    <SkeletonText className="mx-auto h-3 w-32" />
+                    <Skeleton className="h-1.5 w-full rounded-full" />
+                    <p className="text-xs text-muted-foreground">
+                      Reading {selectedFile?.name ?? "file"}…
+                    </p>
+                  </div>
                 ) : (
-                  <Upload className="size-10 text-primary transition-transform group-hover:-translate-y-1" />
+                  <>
+                    <span className="flex size-9 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
+                      <Upload aria-hidden="true" className="size-4" />
+                    </span>
+                    <p className="mt-2.5 text-[0.8125rem] font-semibold leading-5 text-foreground">
+                      Drop a file here
+                    </p>
+                    <p className="mt-0.5 max-w-xs text-xs leading-4 text-muted-foreground">
+                      Excel or CSV. Columns such as Mobile, Work Email,
+                      Organisation, and Stage are matched automatically.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mt-3"
+                      onClick={() => inputRef.current?.click()}
+                    >
+                      Browse files
+                    </Button>
+                    {selectedFile ? (
+                      <p className="mt-2.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <FileSpreadsheet
+                          aria-hidden="true"
+                          className="size-3.5"
+                        />
+                        <span className="font-medium text-foreground">
+                          {selectedFile.name}
+                        </span>
+                        <span>
+                          ·{" "}
+                          {(
+                            selectedFile.name.split(".").pop() ?? ""
+                          ).toUpperCase()}{" "}
+                          · {(selectedFile.size / 1024).toFixed(0)} KB
+                        </span>
+                      </p>
+                    ) : null}
+                  </>
                 )}
-                <h3 className="mt-5 text-lg font-semibold">
-                  Choose an Excel or CSV file
+              </div>
+
+              <div className="rounded-lg border border-border bg-surface p-3">
+                <h3 className="text-[0.8125rem] font-semibold leading-5 text-foreground">
+                  Before you import
                 </h3>
-                <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-                  Smart column matching supports common names such as Mobile,
-                  Work Email, Organisation, Postal Code, and Stage.
-                </p>
-                <span className="mt-5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">
-                  Browse files
-                </span>
-              </button>
-              <div className="rounded-2xl border bg-card p-5">
-                <h3 className="font-semibold">A clean import starts here</h3>
-                <ul className="mt-4 space-y-3 text-sm text-muted-foreground">
-                  <li className="flex gap-2">
-                    <CheckCircle2 className="mt-0.5 size-4 text-emerald-600" />
-                    First name plus either email or a 10-digit phone
+                <ul className="mt-2 space-y-1.5 text-xs leading-4 text-muted-foreground">
+                  <li className="flex gap-1.5">
+                    <CheckCircle2
+                      aria-hidden="true"
+                      className="mt-px size-3.5 shrink-0 text-success-foreground"
+                    />
+                    First name, plus an email or a 10-digit phone
                   </li>
-                  <li className="flex gap-2">
-                    <CheckCircle2 className="mt-0.5 size-4 text-emerald-600" />
-                    Accepted status values are validated before import
+                  <li className="flex gap-1.5">
+                    <CheckCircle2
+                      aria-hidden="true"
+                      className="mt-px size-3.5 shrink-0 text-success-foreground"
+                    />
+                    Status values are validated before anything is written
                   </li>
-                  <li className="flex gap-2">
-                    <CheckCircle2 className="mt-0.5 size-4 text-emerald-600" />
-                    Duplicate email and phone records are skipped safely
+                  <li className="flex gap-1.5">
+                    <CheckCircle2
+                      aria-hidden="true"
+                      className="mt-px size-3.5 shrink-0 text-success-foreground"
+                    />
+                    Duplicate emails and phones are skipped
                   </li>
                 </ul>
-                <div className="mt-6 grid gap-2">
+                <div className="mt-3 grid gap-1.5">
                   <Button
+                    type="button"
                     variant="outline"
                     onClick={() => downloadTemplate("xlsx")}
                   >
-                    <Download className="mr-2 size-4" />
+                    <Download className="size-4" />
                     Excel template
                   </Button>
                   <Button
+                    type="button"
                     variant="ghost"
                     onClick={() => downloadTemplate("csv")}
                   >
-                    <Download className="mr-2 size-4" />
+                    <Download className="size-4" />
                     CSV template
                   </Button>
                 </div>
@@ -411,19 +506,17 @@ export const ImportLeadsModal: React.FC<Props> = ({ open, onOpenChange }) => {
                   </p>
                 </div>
                 <div className="flex gap-2">
-                  <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-                    {validCount} ready
-                  </span>
+                  <Tag tone="active">{validCount} ready</Tag>
                   {rows.length - validCount > 0 && (
-                    <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
+                    <Tag tone="danger">
                       {rows.length - validCount} need attention
-                    </span>
+                    </Tag>
                   )}
                 </div>
               </div>
-              <div className="overflow-x-auto rounded-xl border">
-                <table className="w-full min-w-[1120px] text-sm">
-                  <thead className="sticky top-0 z-10 bg-slate-950 text-left text-xs uppercase tracking-wide text-white">
+              <div className="overflow-x-auto rounded-lg border border-border">
+                <table className="w-full min-w-[70rem] text-sm">
+                  <thead className="sticky top-0 z-10 bg-foreground text-left text-xs uppercase tracking-wide text-background">
                     <tr>
                       <th className="p-3">#</th>
                       {Object.values(canonicalHeaders).map(header => (
@@ -451,19 +544,18 @@ export const ImportLeadsModal: React.FC<Props> = ({ open, onOpenChange }) => {
                               onChange={event =>
                                 updateRow(index, key, event.target.value)
                               }
-                              size="sm"
                               className="min-w-28 border-transparent bg-transparent hover:border-border focus:bg-background"
                             />
                           </td>
                         ))}
                         <td className="p-3">
                           {issues[index] ? (
-                            <span className="flex max-w-36 items-center gap-1 text-xs font-medium text-red-600">
+                            <span className="flex max-w-36 items-center gap-1 text-xs font-medium text-destructive">
                               <AlertCircle className="size-4 shrink-0" />
                               {issues[index]}
                             </span>
                           ) : (
-                            <CheckCircle2 className="size-4 text-emerald-600" />
+                            <CheckCircle2 className="size-4 text-success-foreground" />
                           )}
                         </td>
                       </tr>
@@ -475,31 +567,31 @@ export const ImportLeadsModal: React.FC<Props> = ({ open, onOpenChange }) => {
           )}
 
           {step === "result" && result && (
-            <div className="mx-auto max-w-xl py-10 text-center">
-              <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-emerald-100">
-                <CheckCircle2 className="size-9 text-emerald-600" />
+            <div className="mx-auto max-w-md py-4 text-center">
+              <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-success-surface">
+                <CheckCircle2 className="size-9 text-success-foreground" />
               </div>
               <h3 className="mt-5 text-2xl font-bold">Import complete</h3>
               <p className="mt-2 text-muted-foreground">
                 Your lead workspace and dashboard have been refreshed.
               </p>
               <div className="mt-7 grid grid-cols-3 gap-3">
-                <div className="rounded-xl border p-4">
-                  <div className="text-2xl font-bold text-emerald-600">
+                <div className="rounded-lg border border-border p-3">
+                  <div className="text-2xl font-bold text-success-foreground">
                     {result.insertedCount}
                   </div>
                   <div className="text-xs text-muted-foreground">Imported</div>
                 </div>
-                <div className="rounded-xl border p-4">
-                  <div className="text-2xl font-bold text-amber-600">
+                <div className="rounded-lg border border-border p-3">
+                  <div className="text-2xl font-bold text-warning-foreground">
                     {result.skippedDuplicates}
                   </div>
                   <div className="text-xs text-muted-foreground">
                     Duplicates
                   </div>
                 </div>
-                <div className="rounded-xl border p-4">
-                  <div className="text-2xl font-bold text-red-600">
+                <div className="rounded-lg border border-border p-3">
+                  <div className="text-2xl font-bold text-destructive">
                     {result.skippedCount}
                   </div>
                   <div className="text-xs text-muted-foreground">Invalid</div>
@@ -509,7 +601,7 @@ export const ImportLeadsModal: React.FC<Props> = ({ open, onOpenChange }) => {
           )}
         </div>
 
-        <DialogFooter className="border-t bg-muted/20 px-6 py-4">
+        <DialogFooter>
           {step === "select" && (
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
@@ -522,15 +614,15 @@ export const ImportLeadsModal: React.FC<Props> = ({ open, onOpenChange }) => {
                 Choose another file
               </Button>
               <Button
+                type="button"
+                variant="cardAction"
+                size="card"
+                className="sm:w-auto sm:px-4"
                 onClick={importRows}
                 disabled={loading || issues.some(Boolean)}
               >
-                {loading ? (
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                ) : (
-                  <Upload className="mr-2 size-4" />
-                )}
-                Import {validCount} leads
+                <Upload className="size-4" />
+                {loading ? "Importing…" : `Import ${validCount} leads`}
               </Button>
             </>
           )}

@@ -8,6 +8,7 @@ import { getLeadFullName } from "@/lib/name";
 import { Badge, Button, Input, Label } from "@repo/ui";
 import { Alert } from "@repo/ui/components/ui/alert";
 import { useEffect, useState } from "react";
+import { Tag } from "@repo/ui/components/ui/tag";
 
 interface LeadWithRemarks extends Lead {
   remarks?: Array<{
@@ -201,10 +202,10 @@ export default function SalesPage() {
                 ← Back to Leads
               </Button>
 
-              <div className="bg-white rounded-lg shadow-lg p-4 space-y-4">
+              <div className="bg-surface rounded-lg shadow-lg p-4 space-y-4">
                 {/* Lead Info */}
                 <div>
-                  <h1 className="text-2xl font-bold mb-4">
+                  <h1 className="text-base sm:text-lg font-semibold mb-4">
                     {getLeadFullName(
                       selectedLead.firstName,
                       selectedLead.lastName
@@ -212,11 +213,13 @@ export default function SalesPage() {
                   </h1>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <Label className="text-sm text-gray-600">Email</Label>
+                      <Label className="text-sm text-text-secondary">
+                        Email
+                      </Label>
                       {selectedLead.email ? (
                         <a
                           href={`mailto:${selectedLead.email}`}
-                          className="font-medium text-blue-600 hover:underline"
+                          className="font-medium text-info-foreground hover:text-info"
                           target="_blank"
                           rel="noopener noreferrer"
                         >
@@ -227,11 +230,13 @@ export default function SalesPage() {
                       )}
                     </div>
                     <div>
-                      <Label className="text-sm text-gray-600">Phone</Label>
+                      <Label className="text-sm text-text-secondary">
+                        Phone
+                      </Label>
                       {selectedLead.phone ? (
                         <a
                           href={`tel:${selectedLead.phone}`}
-                          className="font-medium text-blue-600 hover:underline"
+                          className="font-medium text-info-foreground hover:text-info"
                           target="_blank"
                           rel="noopener noreferrer"
                         >
@@ -242,24 +247,28 @@ export default function SalesPage() {
                       )}
                     </div>
                     <div>
-                      <Label className="text-sm text-gray-600">Company</Label>
+                      <Label className="text-sm text-text-secondary">
+                        Company
+                      </Label>
                       <p className="font-medium">
                         {selectedLead.companyName || "-"}
                       </p>
                     </div>
                     <div>
-                      <Label className="text-sm text-gray-600">Status</Label>
-                      <span
-                        className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
+                      <Label className="text-sm text-text-secondary">
+                        Status
+                      </Label>
+                      <Tag
+                        tone={
                           selectedLead.status === "QUALIFIED"
-                            ? "bg-green-100 text-green-800"
+                            ? "active"
                             : selectedLead.status === "UNQUALIFIED"
-                              ? "bg-red-100 text-red-800"
-                              : "bg-gray-100 text-gray-800"
-                        }`}
+                              ? "danger"
+                              : "neutral"
+                        }
                       >
                         {selectedLead.status || "OPEN"}
-                      </span>
+                      </Tag>
                     </div>
                   </div>
                 </div>
@@ -271,7 +280,7 @@ export default function SalesPage() {
                     disabled={
                       actionLoading || selectedLead.status === "QUALIFIED"
                     }
-                    className="bg-green-600 hover:bg-green-700"
+                    className="bg-success hover:bg-success"
                   >
                     {selectedLead.status === "QUALIFIED"
                       ? "✓ Qualified"
@@ -309,14 +318,14 @@ export default function SalesPage() {
                               key={enquiry.id}
                               className={`p-4 rounded-lg border ${
                                 enquiry.status === "UNRESOLVED"
-                                  ? "bg-indigo-50 border-yellow-200"
-                                  : "bg-gray-50 border-gray-200"
+                                  ? "bg-primary-surface border-warning-border"
+                                  : "bg-surface-elevated border-border"
                               }`}
                             >
                               <div className="flex justify-between items-start mb-2">
                                 <div className="flex-1">
                                   <div className="flex items-center gap-2 mb-1">
-                                    <span className="text-xs text-gray-500">
+                                    <span className="text-xs text-muted-foreground">
                                       {new Date(
                                         enquiry.enquiryCreatedAt
                                       ).toLocaleString()}
@@ -334,7 +343,7 @@ export default function SalesPage() {
                                     </Badge>
                                   </div>
                                   {enquiry.landingPageCampaign && (
-                                    <p className="text-sm font-medium text-gray-700">
+                                    <p className="text-sm font-medium text-text-secondary">
                                       Campaign:{" "}
                                       {enquiry.landingPageCampaign.name}
                                     </p>
@@ -342,12 +351,11 @@ export default function SalesPage() {
                                 </div>
                                 {enquiry.status === "UNRESOLVED" && (
                                   <Button
-                                    size="sm"
                                     onClick={() =>
                                       handleResolveEnquiry(enquiry.id)
                                     }
                                     disabled={actionLoading}
-                                    className="bg-green-600 hover:bg-green-700"
+                                    className="bg-success hover:bg-success"
                                   >
                                     Resolve
                                   </Button>
@@ -358,18 +366,18 @@ export default function SalesPage() {
                               {enquiry.customFields &&
                                 Object.keys(enquiry.customFields).length >
                                   0 && (
-                                  <div className="mt-2 pt-2 border-t border-gray-200">
-                                    <p className="text-xs font-semibold text-gray-600 mb-1">
+                                  <div className="mt-2 pt-2 border-t border-border">
+                                    <p className="text-xs font-semibold text-text-secondary mb-1">
                                       Form Details:
                                     </p>
                                     <div className="grid grid-cols-2 gap-2">
                                       {Object.entries(enquiry.customFields).map(
                                         ([key, value]) => (
                                           <div key={key} className="text-sm">
-                                            <span className="text-gray-600 capitalize">
+                                            <span className="text-text-secondary capitalize">
                                               {key.replace(/_/g, " ")}:
                                             </span>{" "}
-                                            <span className="font-medium text-gray-900">
+                                            <span className="font-medium text-foreground">
                                               {typeof value === "object"
                                                 ? JSON.stringify(value)
                                                 : String(value)}
@@ -418,10 +426,10 @@ export default function SalesPage() {
                       {selectedLead.remarks.map(remark => (
                         <div
                           key={remark.id}
-                          className="bg-gray-50 p-3 rounded-lg"
+                          className="bg-surface-elevated p-3 rounded-lg"
                         >
                           <p className="text-sm">{remark.remark}</p>
-                          <p className="text-xs text-gray-500 mt-1">
+                          <p className="text-xs text-muted-foreground mt-1">
                             {[remark.user.firstName, remark.user.lastName]
                               .filter(Boolean)
                               .join(" ") || "Unknown"}{" "}
@@ -437,11 +445,15 @@ export default function SalesPage() {
           ) : (
             /* List View */
             <div>
-              <h1 className="text-2xl font-bold mb-4">Assigned Leads</h1>
+              <h1 className="text-base sm:text-lg font-semibold mb-4">
+                Assigned Leads
+              </h1>
 
               {leads.length === 0 ? (
-                <div className="bg-white rounded-lg shadow p-8 text-center">
-                  <p className="text-gray-600">No leads assigned to you yet</p>
+                <div className="bg-surface rounded-lg shadow p-8 text-center">
+                  <p className="text-text-secondary">
+                    No leads assigned to you yet
+                  </p>
                 </div>
               ) : (
                 <div className="grid gap-4">
@@ -454,7 +466,7 @@ export default function SalesPage() {
                         key={lead.id}
                         role="button"
                         tabIndex={0}
-                        className="cursor-pointer rounded-lg bg-white p-4 shadow outline-none transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:ring-indigo-500/40"
+                        className="cursor-pointer rounded-lg bg-surface p-4 shadow outline-none transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring/40"
                         onClick={() => handleViewLead(lead)}
                         onKeyDown={event => {
                           if (event.key === "Enter" || event.key === " ") {
@@ -470,27 +482,24 @@ export default function SalesPage() {
                                 {getLeadFullName(lead.firstName, lead.lastName)}
                               </h3>
                               {unresolvedCount > 0 && (
-                                <Badge
-                                  variant="default"
-                                  className="bg-indigo-500"
-                                >
+                                <Tag>
                                   {unresolvedCount}{" "}
                                   {unresolvedCount === 1
                                     ? "Enquiry"
                                     : "Enquiries"}
-                                </Badge>
+                                </Tag>
                               )}
                             </div>
-                            <p className="text-sm text-gray-600">
+                            <p className="text-sm text-text-secondary">
                               {lead.email}
                             </p>
                             {lead.companyName && (
-                              <p className="text-sm text-gray-500">
+                              <p className="text-sm text-muted-foreground">
                                 {lead.companyName}
                               </p>
                             )}
                             {lead.enquiries && lead.enquiries.length > 0 && (
-                              <p className="text-xs text-gray-400 mt-1">
+                              <p className="text-xs text-muted-foreground mt-1">
                                 Latest enquiry:{" "}
                                 {new Date(
                                   lead.enquiries.sort(
@@ -502,17 +511,17 @@ export default function SalesPage() {
                               </p>
                             )}
                           </div>
-                          <span
-                            className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          <Tag
+                            tone={
                               lead.status === "QUALIFIED"
-                                ? "bg-green-100 text-green-800"
+                                ? "active"
                                 : lead.status === "UNQUALIFIED"
-                                  ? "bg-red-100 text-red-800"
-                                  : "bg-gray-100 text-gray-800"
-                            }`}
+                                  ? "danger"
+                                  : "neutral"
+                            }
                           >
                             {lead.status || "OPEN"}
-                          </span>
+                          </Tag>
                         </div>
                       </div>
                     );

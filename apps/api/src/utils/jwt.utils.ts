@@ -133,3 +133,35 @@ export function verifySubdealerToken(token: string): SubdealerJWTPayload {
     }
   }
 }
+
+// Multi-factor tokens: issued once a password check succeeds, and exchanged
+// for a real session token by the OTP step. Holding one proves the password
+// was already verified, so the OTP endpoints never take a raw email.
+export interface MfaTokenPayload {
+  userId: number;
+  purpose: "mfa";
+  otpId: number;
+  iat?: number;
+  exp?: number;
+}
+
+export function generateMfaToken(
+  userId: number,
+  otpId: number,
+  expiresIn: string = "10m"
+): string {
+  const payload: Omit<MfaTokenPayload, "iat" | "exp"> = {
+    userId,
+    purpose: "mfa",
+    otpId,
+  };
+  return jwt.sign(payload, JWT_SECRET, { expiresIn } as SignOptions);
+}
+
+export function verifyMfaToken(token: string): MfaTokenPayload {
+  const decoded = jwt.verify(token, JWT_SECRET) as MfaTokenPayload;
+  if (decoded.purpose !== "mfa") {
+    throw new Error("Invalid MFA token scope");
+  }
+  return decoded;
+}

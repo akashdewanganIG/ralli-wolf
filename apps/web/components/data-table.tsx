@@ -21,13 +21,21 @@ import {
   ChevronLeft,
   ChevronRight,
   MoreHorizontal,
-} from "lucide-react";
+} from "@repo/ui/icons";
 import { useState, useEffect, useMemo } from "react";
 import {
   getColumnPreferences,
   setColumnPreferences,
 } from "../lib/user-preferences";
-import tableScrollbarStyles from "./table-scrollbar.module.css";
+
+/**
+ * Rows a dashboard table shows before paginating.
+ *
+ * Eight fits the compact row height inside a normal viewport without the page
+ * needing its own inner scroll region, which is the whole point — depth goes
+ * to page two rather than to a nested scrollbar.
+ */
+export const DEFAULT_PAGE_SIZE = 8;
 import { cn } from "@repo/ui/lib/utils";
 
 export interface TableColumn<T> {
@@ -62,6 +70,15 @@ export interface DataTableProps<T> {
   showFilter?: boolean;
   customFilter?: React.ReactNode;
   filterBadges?: React.ReactNode;
+  /**
+   * Search control for this table.
+   *
+   * Belongs in the table's own toolbar rather than on a separate row above it:
+   * a standalone search row needed its own separator to relate to the table,
+   * and that separator plus the row's padding was the empty band above the
+   * column headers.
+   */
+  search?: React.ReactNode;
   // Checkbox props
   showCheckboxes?: boolean;
   selectedItems?: string[];
@@ -76,6 +93,16 @@ export interface DataTableProps<T> {
   headerTrailingContent?: React.ReactNode;
   /** Rendered inline immediately after the title text */
   titleSuffix?: React.ReactNode;
+  /**
+   * Put the search and controls on their own row beneath the title instead of
+   * sharing one line with it.
+   *
+   * Opt-in rather than the default: most tables carry a search field and one
+   * control group, which sit on a single line comfortably. It earns its place
+   * once a page adds several filters, at which point the single row wraps and
+   * the title stops reading as the heading of the card.
+   */
+  stackedToolbar?: boolean;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- API-backed row shapes are intentionally generic.
@@ -91,12 +118,13 @@ export function DataTable<T extends Record<string, any>>({
   getRowHref,
   currentPage = 1,
   totalPages = 1,
-  itemsPerPage = 10,
+  itemsPerPage = DEFAULT_PAGE_SIZE,
   onPageChange,
   onItemsPerPageChange,
   showFilter = false,
   customFilter,
   filterBadges,
+  search,
   showCheckboxes = false,
   selectedItems = [],
   onSelectionChange,
@@ -106,6 +134,7 @@ export function DataTable<T extends Record<string, any>>({
   headerLeadingContent,
   headerTrailingContent,
   titleSuffix,
+  stackedToolbar = false,
 }: DataTableProps<T>) {
   const router = useRouter();
   const hasActionsColumn = actionItems.length > 0 || Boolean(customActions);
@@ -198,10 +227,6 @@ export function DataTable<T extends Record<string, any>>({
   const [itemsPerPageDropdownOpen, setItemsPerPageDropdownOpen] =
     useState(false);
 
-  // Calculate pagination values
-  const startItem = count === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
-  const endItem = Math.min(currentPage * itemsPerPage, count);
-
   // Handle items per page change
   const handleItemsPerPageChange = (value: number) => {
     onItemsPerPageChange?.(value);
@@ -269,187 +294,166 @@ export function DataTable<T extends Record<string, any>>({
     }
   };
 
-  return (
-    <div className="space-y-3">
-      {/* Toolbar */}
-      <div className="flex flex-col gap-2 pt-2 md:flex-row md:items-center md:justify-between">
-        {/* Left: title + items-per-page */}
-        <div className="flex min-w-0 flex-wrap items-center gap-3">
-          <h3 className="text-base font-semibold text-foreground">
-            {title}
-            {titleSuffix}
-          </h3>
-          {onPageChange && onItemsPerPageChange && (
-            <div className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
-              <span>Show</span>
-              <DropdownMenu
-                open={itemsPerPageDropdownOpen}
-                onOpenChange={setItemsPerPageDropdownOpen}
-              >
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="gap-1.5 px-2.5 whitespace-nowrap"
-                  >
-                    {itemsPerPage}
-                    <ChevronDown
-                      className={cn(
-                        "size-3.5 text-muted-foreground transition-transform duration-150",
-                        itemsPerPageDropdownOpen && "rotate-180"
-                      )}
-                    />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-32">
-                  {[10, 20, 30, 40, 50].map(n => (
-                    <DropdownMenuItem
-                      key={n}
-                      onClick={() => handleItemsPerPageChange(n)}
-                      className="cursor-pointer"
-                    >
-                      {n}
-                    </DropdownMenuItem>
-                  ))}
-                  <DropdownMenuItem
-                    onClick={() => setShowCustomInput(true)}
-                    className="cursor-pointer"
-                  >
-                    Custom
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              {showCustomInput && (
-                <div className="flex items-center gap-1.5">
-                  <Input
-                    type="number"
-                    placeholder="1–100"
-                    value={customValue}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      setCustomValue(e.target.value)
-                    }
-                    className="w-20"
-                    min="1"
-                    max="100"
-                  />
-                  <Button type="button" onClick={handleCustomSubmit}>
-                    Set
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setShowCustomInput(false);
-                      setCustomValue("");
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              )}
-              <span>entries</span>
-            </div>
-          )}
-          {isSearchMode && searchQuery && (
-            <span className="truncate text-sm text-muted-foreground">
-              — results for &quot;{searchQuery}&quot;
-            </span>
-          )}
-        </div>
-
-        {/* Right: columns toggle + filter + extras */}
-        <div className="flex w-full min-w-0 flex-wrap items-center gap-2 md:flex-1 md:justify-end">
-          {headerLeadingContent}
-          {showFilter && customFilter}
-          {/* Column Selection Dropdown */}
-          <DropdownMenu
-            open={columnsDropdownOpen}
-            onOpenChange={setColumnsDropdownOpen}
+  /** Everything on the toolbar that is not the title or the search field. */
+  const toolbarControls = (
+    <>
+      {headerLeadingContent}
+      {showFilter && customFilter}
+      {/* Column Selection Dropdown */}
+      <DropdownMenu
+        open={columnsDropdownOpen}
+        onOpenChange={setColumnsDropdownOpen}
+      >
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            className={cn("px-3", columnsDropdownOpen && "bg-secondary")}
           >
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                className={cn("px-3", columnsDropdownOpen && "bg-secondary")}
+            <Columns className="size-4" />
+            Columns
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-52">
+          <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Toggle columns
+          </div>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={handleSelectAllColumns}
+            className="cursor-pointer"
+          >
+            Select all
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={handleDeselectAllColumns}
+            className="cursor-pointer"
+          >
+            Deselect all
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          {columns.map(column => {
+            const columnKey = String(column.key);
+            const isVisible = visibleColumns.has(columnKey);
+            return (
+              <DropdownMenuCheckboxItem
+                key={columnKey}
+                checked={isVisible}
+                onCheckedChange={checked =>
+                  handleToggleColumn(columnKey, checked === true)
+                }
+                disabled={isVisible && visibleColumns.size === 1}
+                className="text-sm"
               >
-                <Columns className="size-4" />
-                Columns
-                <ChevronDown
-                  className={cn(
-                    "size-3.5 text-muted-foreground transition-transform duration-150",
-                    columnsDropdownOpen && "rotate-180"
-                  )}
-                />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Toggle columns
-              </div>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={handleSelectAllColumns}
-                className="cursor-pointer"
-              >
-                Select all
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={handleDeselectAllColumns}
-                className="cursor-pointer"
-              >
-                Deselect all
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {columns.map(column => {
-                const columnKey = String(column.key);
-                const isVisible = visibleColumns.has(columnKey);
-                return (
-                  <DropdownMenuCheckboxItem
-                    key={columnKey}
-                    checked={isVisible}
-                    onCheckedChange={checked =>
-                      handleToggleColumn(columnKey, checked === true)
-                    }
-                    disabled={isVisible && visibleColumns.size === 1}
-                    className="text-sm"
-                  >
-                    {column.label}
-                  </DropdownMenuCheckboxItem>
-                );
-              })}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                {column.label}
+              </DropdownMenuCheckboxItem>
+            );
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
 
-          {showFilter && !customFilter && (
-            <Button
-              type="button"
-              variant="outline"
-              className="whitespace-nowrap px-3"
-            >
-              <Filter className="size-4" />
-              Filter
-            </Button>
-          )}
-          {headerTrailingContent}
+      {showFilter && !customFilter && (
+        <Button
+          type="button"
+          variant="outline"
+          className="whitespace-nowrap px-3"
+        >
+          <Filter className="size-4" />
+          Filter
+        </Button>
+      )}
+      {headerTrailingContent}
+    </>
+  );
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-border bg-card">
+      {/* Toolbar. Inside the card and separated by a full-bleed rule, rather
+          than floating above it where its edges lined up with nothing. */}
+      {stackedToolbar ? (
+        <div className="border-b border-border">
+          {/* Each row carries its own padding so the rule between them is
+              full-bleed, like every other rule in this card. Putting the
+              border on a gap inside one padded box would have inset it by
+              12px at each end and left it floating. */}
+          <div className="flex min-w-0 flex-wrap items-baseline gap-2 border-b border-border px-3 py-2.5">
+            <h3 className="shrink-0 text-sm font-semibold text-foreground">
+              {title}
+              {titleSuffix}
+            </h3>
+            {isSearchMode && searchQuery && (
+              <span className="truncate text-sm text-muted-foreground">
+                — results for &quot;{searchQuery}&quot;
+              </span>
+            )}
+          </div>
+          {/* Search takes the slack on its own row; the controls keep their
+              natural widths at the end of it. */}
+          <div className="flex min-w-0 flex-wrap items-center gap-2 px-3 py-2.5">
+            {search ? <div className="min-w-0 flex-1">{search}</div> : null}
+            {toolbarControls}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="flex flex-col gap-2 border-b border-border p-3 md:flex-row md:items-center md:justify-between">
+          {/* Left: title + items-per-page */}
+          <div
+            className={cn(
+              "flex min-w-0 flex-wrap items-center gap-3",
+              search && "flex-1"
+            )}
+          >
+            <h3 className="shrink-0 text-sm font-semibold text-foreground">
+              {title}
+              {titleSuffix}
+            </h3>
+            {/* The search takes the slack in the row; everything else keeps its
+                natural width. */}
+            {search ? <div className="min-w-0 flex-1">{search}</div> : null}
+            {isSearchMode && searchQuery && (
+              <span className="truncate text-sm text-muted-foreground">
+                — results for &quot;{searchQuery}&quot;
+              </span>
+            )}
+          </div>
+          {/* Right: columns toggle + filter + extras.
 
-      {/* Filter Badges */}
-      {filterBadges && (
-        <div className="flex flex-wrap items-center gap-2">{filterBadges}</div>
+              Exactly one group takes the slack. Pages that pass their whole
+              toolbar through `customFilter` need it here; pages that use the
+              `search` slot need it on the left. Letting both grow wrapped the
+              row onto three lines. */}
+          <div
+            className={cn(
+              "flex w-full min-w-0 flex-wrap items-center gap-2 md:justify-end",
+              search ? "md:w-auto md:shrink-0" : "md:flex-1"
+            )}
+          >
+            {toolbarControls}
+          </div>
+        </div>
       )}
 
-      {/* Table card */}
-      <div className="overflow-hidden rounded-xl border border-border bg-card">
+      {/* Filter Badges */}
+      {/* `filterBadges` is a React element even when it renders nothing, so the
+          truthiness check alone always drew this row — an empty band and a
+          separator above the column headers whenever no filter was active.
+          `empty:hidden` keys off what actually reached the DOM. */}
+      {filterBadges && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 empty:hidden empty:border-0 empty:p-0">
+          {filterBadges}
+        </div>
+      )}
+
+      <div>
         <div
-          className={cn(
-            "max-h-[70svh] overflow-auto",
-            tableScrollbarStyles.tableScrollContainer
-          )}
+          // Horizontal only. A capped height turned the table into its own
+          // scroll region inside a page that already scrolls, so reaching row 9
+          // meant finding the right pane first. Pagination handles depth now.
+          className="overflow-x-auto"
         >
-          <table className="w-full min-w-[720px] border-collapse">
+          <table className="w-full min-w-[45rem] border-collapse">
             <thead>
-              <tr className="sticky top-0 z-10 border-b border-border bg-surface-subtle">
+              <tr className="border-b border-border bg-surface-subtle">
                 {showCheckboxes && (
                   <th className="h-10 w-10 bg-surface-subtle px-4 text-left align-middle">
                     <Checkbox
@@ -574,7 +578,7 @@ export function DataTable<T extends Record<string, any>>({
                                 <Link
                                   href={rowHref}
                                   prefetch={true}
-                                  className="font-medium text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/30"
+                                  className="font-medium text-primary outline-none hover:text-info focus-visible:ring-2 focus-visible:ring-ring/30"
                                   onClick={(e: React.MouseEvent) => {
                                     e.stopPropagation();
                                     onNameClick?.(item);
@@ -594,7 +598,7 @@ export function DataTable<T extends Record<string, any>>({
                               return (
                                 <button
                                   type="button"
-                                  className="cursor-pointer font-medium text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/30"
+                                  className="cursor-pointer font-medium text-primary outline-none hover:text-info focus-visible:ring-2 focus-visible:ring-ring/30"
                                   onClick={(
                                     e: React.MouseEvent<HTMLButtonElement>
                                   ) => {
@@ -658,12 +662,78 @@ export function DataTable<T extends Record<string, any>>({
 
       {/* Pagination footer */}
       {onPageChange && (
-        <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-muted-foreground">
-            Showing {startItem} to {endItem} of {count} entries
-          </p>
-
-          <div className="flex max-w-full items-center gap-1 overflow-x-auto pb-1">
+        // Page buttons only. "Showing 1 to 25 of 340 entries" restated what the
+        // numbered pages already show, and it was the sole reason this row
+        // needed a two-column layout.
+        // Row count sits with the other footer controls rather than beside the
+        // title: it is a pagination concern, and the label it used to carry
+        // ("Show … entries") restated what the number already says.
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border p-3">
+          {onItemsPerPageChange && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <DropdownMenu
+                open={itemsPerPageDropdownOpen}
+                onOpenChange={setItemsPerPageDropdownOpen}
+              >
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    aria-label={`Rows per page: ${itemsPerPage}`}
+                    className="gap-1.5 px-2.5 whitespace-nowrap"
+                  >
+                    {itemsPerPage}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-28">
+                  {[8, 16, 24, 32, 48].map(n => (
+                    <DropdownMenuItem
+                      key={n}
+                      onClick={() => handleItemsPerPageChange(n)}
+                      className="cursor-pointer"
+                    >
+                      {n}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuItem
+                    onClick={() => setShowCustomInput(true)}
+                    className="cursor-pointer"
+                  >
+                    Custom
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              {showCustomInput && (
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    type="number"
+                    placeholder="1–100"
+                    value={customValue}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      setCustomValue(e.target.value)
+                    }
+                    className="w-20"
+                    min="1"
+                    max="100"
+                  />
+                  <Button type="button" onClick={handleCustomSubmit}>
+                    Set
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setShowCustomInput(false);
+                      setCustomValue("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="flex max-w-full items-center gap-1 overflow-x-auto">
             <Button
               type="button"
               variant="outline"
@@ -741,13 +811,6 @@ export function DataTable<T extends Record<string, any>>({
             </Button>
           </div>
         </div>
-      )}
-
-      {/* No-pagination count */}
-      {!onPageChange && (
-        <p className="text-sm text-muted-foreground">
-          Showing {count} {count === 1 ? "record" : "records"}
-        </p>
       )}
     </div>
   );

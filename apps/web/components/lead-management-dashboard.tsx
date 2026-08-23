@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@repo/ui/components/ui/select";
-import { Download, Plus, Upload, X } from "lucide-react";
+import { Download, Plus, Upload, X } from "@repo/ui/icons";
 import { usePathname, useRouter } from "next/navigation";
 import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
@@ -57,6 +57,10 @@ import {
   SummaryCardSkeleton,
   TableSkeleton,
 } from "./skeletons";
+import { buttonVariants } from "@repo/ui/components/ui/button";
+import { cn } from "@repo/ui/lib/utils";
+import { DashboardToolbar } from "@repo/ui/components/ui/dashboard-toolbar";
+import { Tag } from "@repo/ui/components/ui/tag";
 
 const REGION_LABELS: Record<string, string> = {
   SOUTH: "South",
@@ -1015,9 +1019,8 @@ export const LeadManagementDashboard: React.FC = () => {
         <div className="space-y-4">
           {/* Lead Master Content */}
           <div className="space-y-3">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-              <div className="min-w-0 flex-1">
-                {/* Search Bar - Outside of table */}
+            <DashboardToolbar
+              search={
                 <LeadSearchInput
                   value={leadSearchQuery}
                   onChange={setLeadSearchQuery}
@@ -1033,34 +1036,36 @@ export const LeadManagementDashboard: React.FC = () => {
                   showResultCount={true}
                   className="w-full"
                 />
-              </div>
-              <div className="grid w-full grid-cols-3 overflow-hidden rounded-lg border border-input bg-surface lg:flex lg:w-auto">
-                <button
+              }
+              actions={[
+                <Button
+                  key="export"
                   type="button"
+                  variant="outline"
                   onClick={() => setShowExportModal(true)}
-                  className={`inline-flex ${CONTROL_HEIGHT.md} min-w-0 items-center justify-center gap-2 border-r border-input px-3 text-sm font-medium text-foreground outline-none transition-colors duration-150 hover:bg-secondary focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/30 whitespace-nowrap`}
                 >
-                  <Upload className="h-3 w-3" />
+                  <Upload className="size-4" />
                   Export
-                </button>
-                <button
+                </Button>,
+                <Button
+                  key="import"
                   type="button"
+                  variant="outline"
                   onClick={() => setShowImportModal(true)}
-                  className={`inline-flex ${CONTROL_HEIGHT.md} min-w-0 items-center justify-center gap-2 border-r border-input px-3 text-sm font-medium text-foreground outline-none transition-colors duration-150 hover:bg-secondary focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/30 whitespace-nowrap`}
                 >
-                  <Download className="h-3 w-3" />
+                  <Download className="size-4" />
                   Import
-                </button>
-                <button
+                </Button>,
+                <Button
+                  key="add"
                   type="button"
                   onClick={() => setShowAddLeadModal(true)}
-                  className="inline-flex h-10 min-w-0 items-center justify-center gap-2 px-3 text-sm font-medium text-foreground outline-none transition-colors duration-150 hover:bg-secondary focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/30 whitespace-nowrap"
                 >
-                  <Plus className="h-3 w-3" />
+                  <Plus className="size-4" />
                   Add
-                </button>
-              </div>
-            </div>
+                </Button>,
+              ]}
+            />
             {selectedLeads.length > 0 && (
               <SelectedLeadsActions
                 count={selectedLeads.length}
@@ -1136,9 +1141,8 @@ export const LeadManagementDashboard: React.FC = () => {
         <div className="space-y-4">
           {/* Assigned Leads Content */}
           <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex w-full flex-col gap-2 md:flex-1">
-                {/* Search Bar */}
+            <DashboardToolbar
+              search={
                 <LeadSearchInput
                   value={assignedLeadsSearchQuery}
                   onChange={setAssignedLeadsSearchQuery}
@@ -1154,77 +1158,72 @@ export const LeadManagementDashboard: React.FC = () => {
                   showResultCount={true}
                   className="w-full"
                 />
-                {isAdminUser && assignedFilterChips.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {assignedFilterChips.map(chip => (
-                      <span
-                        key={chip.key}
-                        className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground"
+              }
+              actions={
+                isAdminUser
+                  ? [
+                      <Select
+                        key="sales-user"
+                        value={selectedSalesUserId}
+                        onValueChange={handleSalesUserFilterChange}
+                        disabled={salesUsersLoading}
                       >
-                        {chip.label}
-                        {chip.onClear && (
-                          <button
-                            type="button"
-                            onClick={chip.onClear}
-                            className="text-muted-foreground transition hover:text-foreground"
-                            aria-label={`Clear ${chip.label}`}
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        )}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-            {isAdminUser && (
-              <div className="flex flex-wrap gap-3">
-                <div className="w-full md:w-64">
-                  <Select
-                    value={selectedSalesUserId}
-                    onValueChange={handleSalesUserFilterChange}
-                    disabled={salesUsersLoading}
+                        {/* Sized to its content rather than a fixed 16rem —
+                            the old w-64 pair left a gap beside the search on
+                            wide screens and forced a wrap on narrow ones. */}
+                        <SelectTrigger className="w-full sm:w-44">
+                          <SelectValue placeholder="Sales user" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All sales users</SelectItem>
+                          {salesUsers.map(salesUser => (
+                            <SelectItem
+                              key={salesUser.id}
+                              value={String(salesUser.id)}
+                            >
+                              {[salesUser.firstName, salesUser.lastName]
+                                .filter(Boolean)
+                                .join(" ") ||
+                                salesUser.email ||
+                                `User ${salesUser.id}`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>,
+                      <Select
+                        key="region"
+                        value={selectedSalesRegion}
+                        onValueChange={handleSalesRegionFilterChange}
+                        disabled={salesUsersLoading}
+                      >
+                        <SelectTrigger className="w-full sm:w-44">
+                          <SelectValue placeholder="Region" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All regions</SelectItem>
+                          {salesRegions.map(region => (
+                            <SelectItem key={region} value={region}>
+                              {formatRegionLabel(region)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>,
+                    ]
+                  : undefined
+              }
+            />
+            {isAdminUser && assignedFilterChips.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {assignedFilterChips.map(chip => (
+                  <Tag
+                    key={chip.key}
+                    tone="neutral"
+                    onRemove={chip.onClear}
+                    removeLabel={`Clear ${chip.label}`}
                   >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Filter by sales user" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Sales Users</SelectItem>
-                      {salesUsers.map(salesUser => (
-                        <SelectItem
-                          key={salesUser.id}
-                          value={String(salesUser.id)}
-                        >
-                          {[salesUser.firstName, salesUser.lastName]
-                            .filter(Boolean)
-                            .join(" ") ||
-                            salesUser.email ||
-                            `User ${salesUser.id}`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="w-full md:w-64">
-                  <Select
-                    value={selectedSalesRegion}
-                    onValueChange={handleSalesRegionFilterChange}
-                    disabled={salesUsersLoading}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Filter by region" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Regions</SelectItem>
-                      {salesRegions.map(region => (
-                        <SelectItem key={region} value={region}>
-                          {formatRegionLabel(region)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                    {chip.label}
+                  </Tag>
+                ))}
               </div>
             )}
             {(assignmentStatsLoading || selectedAssigneeSummary) && (
@@ -1386,9 +1385,8 @@ export const LeadManagementDashboard: React.FC = () => {
         <div className="space-y-4">
           {/* Unassigned Leads Content */}
           <div className="space-y-3">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="min-w-0 flex-1">
-                {/* Search Bar */}
+            <DashboardToolbar
+              search={
                 <LeadSearchInput
                   value={unassignedLeadsSearchQuery}
                   onChange={setUnassignedLeadsSearchQuery}
@@ -1406,19 +1404,18 @@ export const LeadManagementDashboard: React.FC = () => {
                   showResultCount={true}
                   className="w-full"
                 />
-              </div>
-              <div className="flex w-full items-center gap-2 sm:w-auto">
+              }
+              actions={
                 <Button
-                  className="w-full sm:w-auto"
+                  type="button"
                   variant="outline"
-                  size="sm"
                   onClick={() => setShowExportModal(true)}
                 >
-                  <Download className="h-4 w-4 mr-2" />
+                  <Download className="size-4" />
                   Export
                 </Button>
-              </div>
-            </div>
+              }
+            />
             {selectedLeads.length > 0 && (
               <SelectedLeadsActions
                 count={selectedLeads.length}
@@ -1519,10 +1516,9 @@ export const LeadManagementDashboard: React.FC = () => {
                 <Button
                   className="w-full sm:w-auto"
                   variant="outline"
-                  size="sm"
                   onClick={() => setShowExportModal(true)}
                 >
-                  <Download className="h-4 w-4 mr-2" />
+                  <Download className="h-4 w-4" />
                   Export
                 </Button>
               </div>
@@ -1532,17 +1528,12 @@ export const LeadManagementDashboard: React.FC = () => {
                 <span className="text-sm text-muted-foreground">
                   {selectedAccounts.length} selected
                 </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleBulkAccountsExport}
-                >
-                  <Download className="h-4 w-4 mr-2" />
+                <Button variant="outline" onClick={handleBulkAccountsExport}>
+                  <Download className="h-4 w-4" />
                   Export Selected
                 </Button>
                 <Button
                   variant="destructive"
-                  size="sm"
                   onClick={handleBulkAccountsDelete}
                 >
                   Delete Selected
@@ -1627,10 +1618,9 @@ export const LeadManagementDashboard: React.FC = () => {
                 <Button
                   className="w-full sm:w-auto"
                   variant="outline"
-                  size="sm"
                   onClick={() => setShowExportModal(true)}
                 >
-                  <Download className="h-4 w-4 mr-2" />
+                  <Download className="h-4 w-4" />
                   Export
                 </Button>
               </div>
@@ -1640,17 +1630,12 @@ export const LeadManagementDashboard: React.FC = () => {
                 <span className="text-sm text-muted-foreground">
                   {selectedContacts.length} selected
                 </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleBulkContactsExport}
-                >
-                  <Download className="h-4 w-4 mr-2" />
+                <Button variant="outline" onClick={handleBulkContactsExport}>
+                  <Download className="h-4 w-4" />
                   Export Selected
                 </Button>
                 <Button
                   variant="destructive"
-                  size="sm"
                   onClick={handleBulkContactsDelete}
                 >
                   Delete Selected
@@ -1713,7 +1698,7 @@ export const LeadManagementDashboard: React.FC = () => {
     return (
       <div className="space-y-4">
         <div className="text-center py-8">
-          <h2 className="text-2xl font-medium tracking-tight">
+          <h2 className="text-base sm:text-lg font-medium tracking-tight">
             Page Not Found
           </h2>
           <p className="text-muted-foreground">

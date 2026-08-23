@@ -32,11 +32,10 @@ import {
   AlertCircle,
   Building2,
   CheckCircle2,
-  Loader2,
   Mail,
   Phone,
   Shield,
-} from "lucide-react";
+} from "@repo/ui/icons";
 import { useMemo, useState } from "react";
 
 type Step = 1 | 2 | 3 | 4 | 5;
@@ -392,7 +391,7 @@ export function SubdealerRegistrationForm() {
                 <FieldError>{phoneValidation.error}</FieldError>
               )}
               {step === 1 && phoneValidation.isValid && phone.length === 10 && (
-                <FieldDescription className="text-green-600">
+                <FieldDescription className="text-success-foreground">
                   ✓ Valid phone number
                 </FieldDescription>
               )}
@@ -429,10 +428,7 @@ export function SubdealerRegistrationForm() {
                       className="whitespace-nowrap w-full sm:w-auto"
                     >
                       {loading && step === 2 ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Fetching...
-                        </>
+                        <>Fetching...</>
                       ) : (
                         "Fetch GST Details"
                       )}
@@ -486,7 +482,7 @@ export function SubdealerRegistrationForm() {
                       value={gstDetails.address || ""}
                       readOnly
                       size="lg"
-                      className="min-h-[60px] min-w-0 resize-none"
+                      className="min-h-[3.75rem] min-w-0 resize-none"
                       rows={4}
                     />
                   </Field>
@@ -566,7 +562,7 @@ export function SubdealerRegistrationForm() {
                       <FieldError>{emailValidation.error}</FieldError>
                     )}
                     {email && emailValidation.isValid && (
-                      <FieldDescription className="text-green-600">
+                      <FieldDescription className="text-success-foreground">
                         ✓ Valid email address
                       </FieldDescription>
                     )}
@@ -586,14 +582,7 @@ export function SubdealerRegistrationForm() {
                     }
                     className="w-full"
                   >
-                    {loading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Generating OTP...
-                      </>
-                    ) : (
-                      "Generate OTP"
-                    )}
+                    {loading ? <>Generating OTP...</> : "Generate OTP"}
                   </Button>
                 )}
               </div>
@@ -637,10 +626,7 @@ export function SubdealerRegistrationForm() {
                     className="mt-4 w-full"
                   >
                     {loading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Verifying...
-                      </>
+                      <>Verifying...</>
                     ) : isExistingUser ? (
                       "Verify OTP & Login"
                     ) : (
@@ -665,7 +651,7 @@ import {
   productService,
 } from "@/lib/api/services";
 import { Product } from "@/lib/api/types";
-import { CheckCircle, FileUp, ShoppingCart, Trash2 } from "lucide-react";
+import { CheckCircle, FileUp, ShoppingCart, Trash2 } from "@repo/ui/icons";
 import { SearchInput } from "@repo/ui/components/ui/search-input";
 
 function PostVerificationFlow({
@@ -684,8 +670,8 @@ function PostVerificationFlow({
       <div className="container mx-auto max-w-md px-4 py-8">
         <Card className="w-full">
           <CardHeader className="text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-              <CheckCircle2 className="h-8 w-8 text-green-600" />
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-success-surface">
+              <CheckCircle2 className="h-8 w-8 text-success-foreground" />
             </div>
             <CardTitle>Verification Successful!</CardTitle>
             <CardDescription>
@@ -794,11 +780,7 @@ function InvoiceUploadView({
               disabled={!file || uploading}
               className="flex-1"
             >
-              {uploading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <FileUp className="mr-2 h-4 w-4" />
-              )}
+              {uploading ? null : <FileUp className="mr-2 h-4 w-4" />}
               Upload
             </Button>
           </div>
@@ -934,18 +916,14 @@ function OrderBookingView({
   }, 0);
 
   if (loading) {
-    return (
-      <div className="flex justify-center p-8">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
+    return <div className="flex justify-center p-8"></div>;
   }
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-8 relative">
       {/* Confirmation Modal */}
       {showConfirmation && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4">
           <Card className="w-full max-w-md">
             <CardHeader>
               <CardTitle>Confirm Order</CardTitle>
@@ -978,11 +956,7 @@ function OrderBookingView({
                   onClick={confirmOrder}
                   disabled={submitting}
                 >
-                  {submitting ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    "Confirm Order"
-                  )}
+                  {submitting ? null : "Confirm Order"}
                 </Button>
               </div>
             </CardContent>
@@ -992,13 +966,13 @@ function OrderBookingView({
 
       {/* Success Modal */}
       {orderSuccess && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4">
           <Card className="w-full max-w-md text-center">
             <CardHeader>
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-                <CheckCircle className="h-8 w-8 text-green-600" />
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-success-surface">
+                <CheckCircle className="h-8 w-8 text-success-foreground" />
               </div>
-              <CardTitle className="text-2xl text-green-600">
+              <CardTitle className="text-2xl text-success-foreground">
                 Order Placed Successfully!
               </CardTitle>
             </CardHeader>
@@ -1026,11 +1000,11 @@ function OrderBookingView({
         <Button variant="ghost" onClick={onBack}>
           &larr; Back
         </Button>
-        <h2 className="text-2xl font-bold">Book Order</h2>
+        <h2 className="text-base sm:text-lg font-semibold">Book Order</h2>
         <div className="w-20" /> {/* Spacer */}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Product List */}
         <div className="lg:col-span-2 space-y-4">
           {/* Search Bar */}
@@ -1147,7 +1121,7 @@ function OrderBookingView({
                               className="object-cover h-full w-full"
                             />
                           ) : (
-                            <div className="flex items-center justify-center h-full text-[10px] text-muted-foreground">
+                            <div className="flex items-center justify-center h-full text-[0.625rem] text-muted-foreground">
                               No Img
                             </div>
                           )}
@@ -1214,11 +1188,7 @@ function OrderBookingView({
                   disabled={totalItems === 0 || submitting}
                   onClick={handleSubmitOrder}
                 >
-                  {submitting ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    "Place Order"
-                  )}
+                  {submitting ? null : "Place Order"}
                 </Button>
               </div>
             </CardContent>

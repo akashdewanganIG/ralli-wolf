@@ -11,6 +11,7 @@ import {
   SelectField,
   SimpleTable,
   StatusBadge,
+  DEFAULT_PAGE_SIZE,
 } from "@/components/supply-chain/shared";
 import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
 import {
@@ -24,6 +25,7 @@ import {
   formatQuantity,
 } from "@/lib/utils/decimal";
 import { toast } from "@/lib/toast";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 export default function PutawayQueuePage() {
   const [page, setPage] = useState(1);
@@ -33,7 +35,7 @@ export default function PutawayQueuePage() {
 
   const { tasks, pagination, isLoading, error } = usePutawayTasks({
     page,
-    limit: 25,
+    limit: DEFAULT_PAGE_SIZE,
     warehouseId,
     status: status || undefined,
   });
@@ -42,7 +44,7 @@ export default function PutawayQueuePage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title="Putaway queue"
           subtitle="Assign received stock to suitable storage bins."
@@ -98,7 +100,7 @@ export default function PutawayQueuePage() {
                 cell: row => (
                   <Link
                     href={`/inventory/stock/${row.product.id}`}
-                    className="text-primary hover:underline"
+                    className="text-primary hover:text-info"
                   >
                     <span className="font-mono text-xs">
                       {row.product.code}
@@ -218,11 +220,10 @@ export default function PutawayQueuePage() {
           <Pager
             page={page}
             totalPages={pagination?.totalPages}
-            totalItems={pagination?.totalItems}
             onChange={setPage}
           />
         </Panel>
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

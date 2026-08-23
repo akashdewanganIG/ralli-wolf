@@ -54,11 +54,13 @@ import {
   TabsTrigger,
   Textarea,
 } from "@repo/ui";
-import { Pencil, Trash2, X } from "lucide-react";
+import { Pencil, Trash2, X } from "@repo/ui/icons";
 import { useParams, useRouter } from "next/navigation";
 import { parseAsString, useQueryState } from "nuqs";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import * as React from "react";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { Tag, type TagTone } from "@repo/ui/components/ui/tag";
 
 function formatDateTime(iso: string | null | undefined) {
   if (!iso) return "N/A";
@@ -78,15 +80,22 @@ function buildFullName(firstName: string, lastName: string) {
   return [firstName, lastName].filter(Boolean).join(" ") || "N/A";
 }
 
-const STAGE_BADGE_CLASSES: Record<string, string> = {
-  PROSPECT: "bg-slate-100 text-slate-800 border-slate-200",
-  QUALIFICATION: "bg-sky-100 text-sky-800 border-sky-200",
-  DISCOVERY: "bg-cyan-100 text-cyan-800 border-cyan-200",
-  VALUE_PROPOSITION: "bg-teal-100 text-teal-800 border-teal-200",
-  PROPOSAL: "bg-violet-100 text-violet-800 border-violet-200",
-  NEGOTIATION: "bg-orange-100 text-orange-800 border-orange-200",
-  CLOSED_WON: "bg-emerald-100 text-emerald-800 border-emerald-200",
-  CLOSED_LOST: "bg-red-100 text-red-800 border-red-200",
+/**
+ * Opportunity stage → tone.
+ *
+ * A stage is a position in a pipeline, not a verdict, so the early ones stay
+ * neutral; only negotiation (at risk) and the two closed outcomes carry a
+ * colour.
+ */
+const STAGE_TONE: Record<string, TagTone> = {
+  PROSPECT: "neutral",
+  QUALIFICATION: "neutral",
+  DISCOVERY: "neutral",
+  VALUE_PROPOSITION: "neutral",
+  PROPOSAL: "neutral",
+  NEGOTIATION: "pending",
+  CLOSED_WON: "active",
+  CLOSED_LOST: "danger",
 };
 
 // Stages without CLOSED_LOST for the stepper
@@ -264,7 +273,7 @@ function ProductLineItemsTable({
       <Button size="sm" onClick={() => setAddOpen(true)}>
         Add Line Item
       </Button>
-      <div className="inline-flex items-center rounded-full border border-gray-300 bg-white">
+      <div className="inline-flex items-center rounded-full border border-input bg-surface">
         <Button
           type="button"
           variant="outline"
@@ -287,7 +296,7 @@ function ProductLineItemsTable({
 
   if (isError) {
     return (
-      <div className="text-sm text-red-500 py-4">
+      <div className="text-sm text-destructive py-4">
         Failed to load line items.
       </div>
     );
@@ -306,7 +315,7 @@ function ProductLineItemsTable({
           priceBook ? (
             <Badge
               variant="outline"
-              className="text-xs font-medium text-muted-foreground border-gray-400"
+              className="text-xs font-medium text-muted-foreground border-input"
             >
               {priceBook.name}
             </Badge>
@@ -397,7 +406,7 @@ function ProductLineItemsTable({
               <Textarea
                 value={editDescription}
                 onChange={e => setEditDescription(e.target.value)}
-                className="min-h-[80px]"
+                className="min-h-[5rem]"
               />
             </div>
           </div>
@@ -650,7 +659,7 @@ function OpportunityDetailContent() {
 
   if (isError || !opportunity) {
     return (
-      <div className="space-y-5 p-4">
+      <PageShell>
         <div className="text-lg font-semibold">Opportunity not found</div>
         <Button
           variant="outline"
@@ -658,13 +667,9 @@ function OpportunityDetailContent() {
         >
           Back to Opportunities
         </Button>
-      </div>
+      </PageShell>
     );
   }
-
-  const stageBadgeClass =
-    STAGE_BADGE_CLASSES[opportunity.stage] ||
-    "bg-gray-100 text-gray-800 border-gray-200";
 
   // Map GET /api/opportunities/:id/quotes response to Quote type for QuotesTable
   const relatedQuotes: Quote[] = (quotesResponse?.data ?? []).map(q => ({
@@ -717,7 +722,7 @@ function OpportunityDetailContent() {
   );
 
   return (
-    <div className="p-4 space-y-6">
+    <div className="p-4 space-y-4">
       <DetailPageHeader
         title={opportunity.name}
         onBack={() => router.push("/sales/opportunities")}
@@ -743,23 +748,23 @@ function OpportunityDetailContent() {
       </div>
 
       <Tabs value={tab} onValueChange={v => setTab(v)}>
-        <div className="flex items-center justify-between border-b border-gray-300">
+        <div className="flex items-center justify-between border-b border-input">
           <TabsList className="justify-start space-x-16 border-b-0">
             <TabsTrigger
               value="details"
-              className="text-lg font-medium data-[state=active]:border-b-[3px] data-[state=active]:border-gray-700"
+              className="text-lg font-medium data-[state=active]:border-b-[3px] data-[state=active]:border-border"
             >
               Details
             </TabsTrigger>
             <TabsTrigger
               value="products"
-              className="text-lg font-medium data-[state=active]:border-b-[3px] data-[state=active]:border-gray-700"
+              className="text-lg font-medium data-[state=active]:border-b-[3px] data-[state=active]:border-border"
             >
               Products
             </TabsTrigger>
             <TabsTrigger
               value="quotes"
-              className="text-lg font-medium data-[state=active]:border-b-[3px] data-[state=active]:border-gray-700"
+              className="text-lg font-medium data-[state=active]:border-b-[3px] data-[state=active]:border-border"
             >
               Quotes
             </TabsTrigger>
@@ -780,10 +785,10 @@ function OpportunityDetailContent() {
           <TabsContent value="details">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               {/* Main info card */}
-              <div className="lg:col-span-2 space-y-6">
+              <div className="lg:col-span-2 space-y-4">
                 <DetailCard
                   title="Opportunity Information"
-                  className="bg-gray-50/50 border-gray-200"
+                  className="bg-surface-elevated/50 border-border"
                   headerActions={cardHeaderActions}
                 >
                   <InfoGrid columns={2}>
@@ -800,9 +805,9 @@ function OpportunityDetailContent() {
                       <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
                         Stage
                       </p>
-                      <Badge className={stageBadgeClass}>
+                      <Tag tone={STAGE_TONE[opportunity.stage] ?? "neutral"}>
                         {opportunity.stage}
-                      </Badge>
+                      </Tag>
                     </div>
 
                     {/* Type */}
@@ -922,7 +927,7 @@ function OpportunityDetailContent() {
                     />
 
                     {/* Description — read-only (not in PATCH) */}
-                    <div className="col-span-2 space-y-1.5 pt-4 mt-4 border-t border-gray-200">
+                    <div className="col-span-2 space-y-1.5 pt-4 mt-4 border-t border-border">
                       <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
                         Description
                       </p>
@@ -940,7 +945,7 @@ function OpportunityDetailContent() {
               <div className="h-full">
                 <DetailCard
                   title="System Information"
-                  className="bg-gray-50/50 border-gray-200 h-full"
+                  className="bg-surface-elevated/50 border-border h-full"
                 >
                   <InfoGrid columns={1}>
                     <InfoField

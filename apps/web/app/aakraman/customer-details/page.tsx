@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@repo/ui/components/ui/select";
-import { Loader2, Search, User } from "lucide-react";
+import { Search, User } from "@repo/ui/icons";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -220,9 +220,9 @@ export default function CustomerDetailsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-surface-elevated">
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-indigo-400 shadow-md">
+      <header className="sticky top-0 z-40 bg-primary shadow-md">
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
@@ -245,10 +245,10 @@ export default function CustomerDetailsPage() {
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
-              <User className="w-6 h-6 text-yellow-500" />
+              <User className="w-6 h-6 text-warning" />
               <CardTitle className="text-2xl">Customer Details</CardTitle>
             </div>
-            <p className="text-sm text-gray-500 mt-2">
+            <p className="text-sm text-muted-foreground mt-2">
               Please fill in the customer details before proceeding to order
               booking
             </p>
@@ -256,7 +256,7 @@ export default function CustomerDetailsPage() {
 
           <CardContent className="space-y-4">
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">
+              <div className="bg-error-surface border border-error-border text-error-foreground px-4 py-3 rounded text-sm">
                 {error}
               </div>
             )}
@@ -273,7 +273,7 @@ export default function CustomerDetailsPage() {
                   className="mt-1"
                 />
                 {touchedFields.firmName && fieldErrors.firmName && (
-                  <p className="text-xs text-red-500 mt-1">
+                  <p className="text-xs text-destructive mt-1">
                     {fieldErrors.firmName}
                   </p>
                 )}
@@ -292,7 +292,7 @@ export default function CustomerDetailsPage() {
                   className="mt-1"
                 />
                 {touchedFields.ownerFirstName && fieldErrors.ownerFirstName && (
-                  <p className="text-xs text-red-500 mt-1">
+                  <p className="text-xs text-destructive mt-1">
                     {fieldErrors.ownerFirstName}
                   </p>
                 )}
@@ -311,7 +311,7 @@ export default function CustomerDetailsPage() {
                   className="mt-1"
                 />
                 {touchedFields.ownerLastName && fieldErrors.ownerLastName && (
-                  <p className="text-xs text-red-500 mt-1">
+                  <p className="text-xs text-destructive mt-1">
                     {fieldErrors.ownerLastName}
                   </p>
                 )}
@@ -334,7 +334,7 @@ export default function CustomerDetailsPage() {
                   className="mt-1"
                 />
                 {touchedFields.contactNumber && fieldErrors.contactNumber && (
-                  <p className="text-xs text-red-500 mt-1">
+                  <p className="text-xs text-destructive mt-1">
                     {fieldErrors.contactNumber}
                   </p>
                 )}
@@ -352,7 +352,7 @@ export default function CustomerDetailsPage() {
                   className="mt-1"
                 />
                 {touchedFields.email && fieldErrors.email && (
-                  <p className="text-xs text-red-500 mt-1">
+                  <p className="text-xs text-destructive mt-1">
                     {fieldErrors.email}
                   </p>
                 )}
@@ -369,7 +369,7 @@ export default function CustomerDetailsPage() {
                   className="mt-1"
                 />
                 {touchedFields.city && fieldErrors.city && (
-                  <p className="text-xs text-red-500 mt-1">
+                  <p className="text-xs text-destructive mt-1">
                     {fieldErrors.city}
                   </p>
                 )}
@@ -401,7 +401,7 @@ export default function CustomerDetailsPage() {
                       onClick={e => e.stopPropagation()}
                     >
                       <div className="relative">
-                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Search className="absolute left-2 inset-y-0 my-auto h-fit w-4 h-4 text-muted-foreground" />
                         <Input
                           type="text"
                           placeholder="Search states..."
@@ -441,7 +441,7 @@ export default function CustomerDetailsPage() {
                   </SelectContent>
                 </Select>
                 {touchedFields.state && fieldErrors.state && (
-                  <p className="text-xs text-red-500 mt-1">
+                  <p className="text-xs text-destructive mt-1">
                     {fieldErrors.state}
                   </p>
                 )}
@@ -464,7 +464,7 @@ export default function CustomerDetailsPage() {
                   className="mt-1"
                 />
                 {touchedFields.pincode && fieldErrors.pincode && (
-                  <p className="text-xs text-red-500 mt-1">
+                  <p className="text-xs text-destructive mt-1">
                     {fieldErrors.pincode}
                   </p>
                 )}
@@ -484,7 +484,9 @@ export default function CustomerDetailsPage() {
                   className="mt-1"
                 />
                 {touchedFields.gst && fieldErrors.gst && (
-                  <p className="text-xs text-red-500 mt-1">{fieldErrors.gst}</p>
+                  <p className="text-xs text-destructive mt-1">
+                    {fieldErrors.gst}
+                  </p>
                 )}
               </div>
             </div>
@@ -492,16 +494,9 @@ export default function CustomerDetailsPage() {
             <Button
               onClick={handleSubmit}
               disabled={isLoading}
-              className="w-full bg-indigo-400 hover:bg-indigo-500 text-black font-semibold mt-4"
+              className="w-full bg-primary hover:bg-primary text-foreground font-semibold mt-4"
             >
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Continue to Order Booking"
-              )}
+              {isLoading ? <>Saving...</> : "Continue to Order Booking"}
             </Button>
           </CardContent>
         </Card>

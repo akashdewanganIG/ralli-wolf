@@ -36,6 +36,8 @@ import {
   formatQuantity,
   humanizeEnum,
 } from "@/lib/utils/decimal";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { Tag } from "@repo/ui/components/ui/tag";
 
 export default function BomDetailPage() {
   const params = useParams<{ id: string }>();
@@ -102,7 +104,7 @@ export default function BomDetailPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title={bom ? `${bom.bomNumber} — ${bom.name}` : "Bill of materials"}
           subtitle={
@@ -200,7 +202,7 @@ export default function BomDetailPage() {
           <Alert tone="success" title="Revision created">
             <Link
               href={`/bom/${(revise.data.data as { id: number }).id}`}
-              className="font-medium underline"
+              className="font-medium text-primary transition-colors hover:text-info"
             >
               Open {(revise.data.data as { bomNumber: string }).bomNumber}
             </Link>{" "}
@@ -208,7 +210,7 @@ export default function BomDetailPage() {
           </Alert>
         )}
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid-auto-fit gap-3">
           <StatCard label="Components" value={components.length} />
           <StatCard
             label="Material cost (this level)"
@@ -281,7 +283,7 @@ export default function BomDetailPage() {
                   header: "Source",
                   cell: row =>
                     row.source === "ROLLED_UP" ? (
-                      <span className="text-xs text-emerald-700">
+                      <span className="text-xs text-success-foreground">
                         rolled up from its own BOM
                       </span>
                     ) : (
@@ -468,26 +470,16 @@ export default function BomDetailPage() {
                       <div>
                         <Link
                           href={`/inventory/stock/${row.componentProduct.id}`}
-                          className="font-mono text-xs text-primary hover:underline"
+                          className="font-mono text-xs text-primary hover:text-info"
                         >
                           {row.componentProduct.code}
                         </Link>
                         <p className="text-sm">{row.componentProduct.name}</p>
                         <div className="mt-0.5 flex gap-1">
-                          {row.isPhantom && (
-                            <span className="rounded bg-purple-100 px-1.5 py-0.5 text-[10px] text-purple-800">
-                              phantom
-                            </span>
-                          )}
-                          {row.isOptional && (
-                            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-700">
-                              optional
-                            </span>
-                          )}
+                          {row.isPhantom && <Tag tone="neutral">phantom</Tag>}
+                          {row.isOptional && <Tag tone="neutral">optional</Tag>}
                           {row.componentProduct.isManufactured && (
-                            <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-800">
-                              sub-assembly
-                            </span>
+                            <Tag tone="progress">sub-assembly</Tag>
                           )}
                         </div>
                       </div>
@@ -529,7 +521,9 @@ export default function BomDetailPage() {
                       row.componentProduct.standardCost ? (
                         formatMoney(row.componentProduct.standardCost)
                       ) : (
-                        <span className="text-xs text-amber-700">not set</span>
+                        <span className="text-xs text-warning-foreground">
+                          not set
+                        </span>
                       ),
                   },
                   {
@@ -558,7 +552,7 @@ export default function BomDetailPage() {
                                 onClick={() =>
                                   removeSubstitute.mutate(substitute.id)
                                 }
-                                className="text-red-600 hover:underline"
+                                className="text-destructive hover:text-info"
                               >
                                 remove
                               </button>
@@ -573,7 +567,7 @@ export default function BomDetailPage() {
                                 substituteFor === row.id ? null : row.id
                               )
                             }
-                            className="text-xs text-primary hover:underline"
+                            className="text-xs text-primary hover:text-info"
                           >
                             {substituteFor === row.id
                               ? "cancel"
@@ -598,7 +592,7 @@ export default function BomDetailPage() {
                               removeComponent.mutate(row.id);
                             }
                           }}
-                          className="rounded border px-2 py-1 text-xs text-red-700 hover:bg-red-50 whitespace-nowrap"
+                          className="rounded border px-2 py-1 text-xs text-error-foreground hover:bg-error-surface whitespace-nowrap"
                         >
                           Remove
                         </button>
@@ -721,20 +715,23 @@ export default function BomDetailPage() {
                     <div style={{ paddingLeft: `${(row.level - 1) * 16}px` }}>
                       <Link
                         href={`/inventory/stock/${row.productId}`}
-                        className="font-mono text-xs text-primary hover:underline"
+                        className="font-mono text-xs text-primary hover:text-info"
                       >
                         {row.productCode}
                       </Link>
                       <p className="text-sm">{row.productName}</p>
                       {row.hasChildBom && (
-                        <span className="text-xs text-blue-700">
+                        <span className="text-xs text-info-foreground">
                           has its own BOM ↓
                         </span>
                       )}
                     </div>
                   ),
                 },
-                { header: "Type", cell: row => humanizeEnum(row.itemType) },
+                {
+                  header: "Type",
+                  cell: row => (row.itemType ? <Tag>{row.itemType}</Tag> : "—"),
+                },
                 {
                   header: "Qty per parent",
                   align: "right",
@@ -788,7 +785,7 @@ export default function BomDetailPage() {
 
         {tab === "costing" && bom && (
           <Panel title="Header and costing">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid-auto-fit gap-4">
               <DetailRow label="BOM number" value={bom.bomNumber} />
               <DetailRow
                 label="Version"
@@ -851,7 +848,7 @@ export default function BomDetailPage() {
                   bom.previousVersion ? (
                     <Link
                       href={`/bom/${bom.previousVersion.id}`}
-                      className="text-primary hover:underline"
+                      className="text-primary hover:text-info"
                     >
                       {bom.previousVersion.bomNumber} (v
                       {bom.previousVersion.version}
@@ -868,7 +865,7 @@ export default function BomDetailPage() {
                   bom.nextVersion ? (
                     <Link
                       href={`/bom/${bom.nextVersion.id}`}
-                      className="text-primary hover:underline"
+                      className="text-primary hover:text-info"
                     >
                       {bom.nextVersion.bomNumber} (v{bom.nextVersion.version}
                       {bom.nextVersion.revision})
@@ -895,7 +892,11 @@ export default function BomDetailPage() {
               empty="No changes recorded yet."
               columns={[
                 { header: "When", cell: row => formatDateTime(row.createdAt) },
-                { header: "Change", cell: row => humanizeEnum(row.changeType) },
+                {
+                  header: "Change",
+                  cell: row =>
+                    row.changeType ? <Tag>{row.changeType}</Tag> : "—",
+                },
                 { header: "Description", cell: row => row.description },
                 { header: "From", cell: row => row.oldValue ?? "—" },
                 { header: "To", cell: row => row.newValue ?? "—" },
@@ -910,7 +911,7 @@ export default function BomDetailPage() {
             />
           </Panel>
         )}
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

@@ -12,7 +12,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@repo/ui";
-import { Loader2 } from "lucide-react";
 
 export default function ForgotPasswordPage() {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
@@ -82,7 +81,7 @@ export default function ForgotPasswordPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {error && (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <div className="rounded-md border border-error-border bg-error-surface px-3 py-2 text-sm text-error-foreground">
               {error}
             </div>
           )}
@@ -101,7 +100,6 @@ export default function ForgotPasswordPage() {
                 />
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {loading ? "Sending..." : "Send Code"}
               </Button>
             </form>
@@ -123,7 +121,6 @@ export default function ForgotPasswordPage() {
                 />
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {loading ? "Verifying..." : "Verify Code"}
               </Button>
             </form>
@@ -153,7 +150,6 @@ export default function ForgotPasswordPage() {
                 />
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {loading ? "Updating..." : "Update Password"}
               </Button>
             </form>
@@ -161,7 +157,7 @@ export default function ForgotPasswordPage() {
 
           {step === 4 && (
             <div className="space-y-4 text-center">
-              <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+              <div className="rounded-md border border-success-border bg-success-surface px-3 py-2 text-sm text-success-foreground">
                 Password reset successful
               </div>
               <Button asChild className="w-full">

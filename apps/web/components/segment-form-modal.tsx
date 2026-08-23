@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@repo/ui/components/ui/select";
 import { Card } from "@repo/ui/components/ui/card";
-import { X } from "lucide-react";
+import { X } from "@repo/ui/icons";
 import { KeywordSelect } from "./keyword-select";
 import {
   SegmentPayload,

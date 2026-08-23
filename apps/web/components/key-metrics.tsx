@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Card, CardContent } from "@repo/ui";
-import { TrendingUp, TrendingDown } from "lucide-react";
+import { TrendingUp, TrendingDown } from "@repo/ui/icons";
 import { useKeyMetrics } from "../hooks/useDashboard";
 import { StatGridSkeleton } from "./skeletons";
 
@@ -29,7 +29,11 @@ function MetricCard({ title, value, change, changeType }: MetricCardProps) {
           <p className="text-sm font-bold text-primary uppercase tracking-wide">
             {title}
           </p>
-          <div className={isPositive ? "text-green-600" : "text-red-600"}>
+          <div
+            className={
+              isPositive ? "text-success-foreground" : "text-destructive"
+            }
+          >
             {isPositive ? (
               <TrendingUp className="h-5 w-5" />
             ) : (
@@ -44,7 +48,7 @@ function MetricCard({ title, value, change, changeType }: MetricCardProps) {
           <div className="mt-3 space-y-1">
             <div className="flex items-center justify-between gap-2">
               <span
-                className={`text-xs font-bold ${isPositive ? "text-green-600" : "text-red-600"}`}
+                className={`text-xs font-bold ${isPositive ? "text-success-foreground" : "text-destructive"}`}
               >
                 {change} from last month
               </span>
@@ -76,10 +80,10 @@ export function KeyMetrics() {
         <Card className="h-full col-span-full">
           <CardContent className="p-4 flex items-center justify-center">
             <div className="text-center">
-              <div className="text-lg font-medium text-red-600">
+              <div className="text-lg font-medium text-destructive">
                 Error loading metrics
               </div>
-              <div className="text-sm text-gray-500">
+              <div className="text-sm text-muted-foreground">
                 Please try again later
               </div>
             </div>

@@ -23,12 +23,11 @@ import { Label } from "@repo/ui/components/ui/label";
 import {
   ArrowLeft,
   CheckCircle,
-  Loader2,
   Package,
   ShoppingCart,
   Trash2,
   User,
-} from "lucide-react";
+} from "@repo/ui/icons";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -288,19 +287,18 @@ export default function BookAOrderPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-surface-elevated">
         <div className="text-center">
-          <Loader2 className="w-10 h-10 animate-spin text-yellow-500 mx-auto" />
-          <p className="mt-4 text-gray-600">Loading products...</p>
+          <p className="mt-4 text-text-secondary">Loading products...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24">
+    <div className="min-h-screen bg-surface-elevated pb-24">
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-indigo-400 shadow-md">
+      <header className="sticky top-0 z-40 bg-primary shadow-md">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-2 sm:py-3">
           <div className="flex items-center justify-between gap-2 sm:gap-4">
             {/* Back Button and Logo */}
@@ -308,10 +306,10 @@ export default function BookAOrderPage() {
               <button
                 type="button"
                 onClick={handleBack}
-                className="rounded-lg bg-white/90 p-2 shadow-sm transition-[background-color,box-shadow] duration-200 hover:bg-white hover:shadow-md sm:p-2.5 whitespace-nowrap"
+                className="rounded-lg bg-surface/90 p-2 shadow-sm transition-[background-color,box-shadow] duration-200 hover:bg-surface hover:shadow-md sm:p-2.5 whitespace-nowrap"
                 aria-label="Back to customer details"
               >
-                <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 text-black" />
+                <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 text-foreground" />
               </button>
               <div className="h-10 sm:h-12 md:h-14 flex items-center justify-center">
                 <Image
@@ -327,9 +325,9 @@ export default function BookAOrderPage() {
             {/* User Name and Cart */}
             <div className="flex items-center gap-2 sm:gap-3">
               {user && (
-                <div className="flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-lg bg-white/90">
-                  <User className="w-4 h-4 text-black/70" />
-                  <p className="text-xs sm:text-sm font-medium text-black/90 whitespace-nowrap">
+                <div className="flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-lg bg-surface/90">
+                  <User className="w-4 h-4 text-foreground/70" />
+                  <p className="text-xs sm:text-sm font-medium text-foreground/90 whitespace-nowrap">
                     {user.firstName} {user.lastName}
                   </p>
                 </div>
@@ -338,12 +336,12 @@ export default function BookAOrderPage() {
               <button
                 type="button"
                 onClick={() => setShowCart(true)}
-                className="relative rounded-lg bg-white/90 p-2 shadow-sm transition-[background-color,box-shadow] duration-200 hover:bg-white hover:shadow-md sm:p-2.5"
+                className="relative rounded-lg bg-surface/90 p-2 shadow-sm transition-[background-color,box-shadow] duration-200 hover:bg-surface hover:shadow-md sm:p-2.5"
                 aria-label="Shopping cart"
               >
-                <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 text-black" />
+                <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 text-foreground" />
                 {cartTotal > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-semibold w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center shadow-md text-[10px] sm:text-xs">
+                  <span className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-xs font-semibold w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center shadow-md text-[0.625rem] sm:text-xs">
                     {cartTotal}
                   </span>
                 )}
@@ -357,8 +355,8 @@ export default function BookAOrderPage() {
       <main className="max-w-7xl mx-auto px-3 py-2 mt-4">
         {filteredProducts.length === 0 ? (
           <div className="text-center py-12 sm:py-16 md:py-20">
-            <Package className="w-16 h-16 sm:w-20 sm:h-20 text-gray-300 mx-auto" />
-            <p className="mt-4 text-gray-500 text-sm sm:text-base">
+            <Package className="w-16 h-16 sm:w-20 sm:h-20 text-text-disabled mx-auto" />
+            <p className="mt-4 text-muted-foreground text-sm sm:text-base">
               No products found
             </p>
           </div>
@@ -369,7 +367,7 @@ export default function BookAOrderPage() {
               return (
                 <Card
                   key={product.id}
-                  className="flex h-full flex-col overflow-hidden bg-white transition-shadow duration-300 hover:shadow-xl"
+                  className="flex h-full flex-col overflow-hidden bg-surface transition-shadow duration-300 hover:shadow-xl"
                 >
                   {/* Product Image with Gradient Background */}
                   <div className="relative h-30 ">
@@ -385,7 +383,7 @@ export default function BookAOrderPage() {
                       </div>
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
-                        <Package className="w-16 h-16 text-yellow-600/50" />
+                        <Package className="w-16 h-16 text-warning-foreground/50" />
                       </div>
                     )}
                   </div>
@@ -396,20 +394,20 @@ export default function BookAOrderPage() {
                     <div className="flex flex-wrap gap-1">
                       <Badge
                         variant="secondary"
-                        className="text-xs mb-1 sm:text-[10px] md:text-xs bg-gray-100 text-gray-700 hover:bg-gray-100"
+                        className="text-xs mb-1 sm:text-[0.625rem] md:text-xs bg-surface-secondary text-text-secondary hover:bg-surface-secondary"
                       >
                         {product.code}
                       </Badge>
                     </div>
 
                     {/* Product Name - Bold and Prominent */}
-                    <h3 className="font-bold text-sm sm:text-base mb-2 md:text-[15px]  line-clamp-2 text-gray-900 leading-tight">
+                    <h3 className="font-bold text-sm sm:text-base mb-2 md:text-[0.9375rem]  line-clamp-2 text-foreground leading-tight">
                       {product.name}
                     </h3>
 
                     {/* Product Description */}
                     {product.description && (
-                      <p className="text-xs sm:text-[11px] md:text-xs text-gray-600 mb-3 sm:mb-4 line-clamp-2 sm:line-clamp-3 flex-1">
+                      <p className="text-xs sm:text-[0.6875rem] md:text-xs text-text-secondary mb-3 sm:mb-4 line-clamp-2 sm:line-clamp-3 flex-1">
                         {product.description}
                       </p>
                     )}
@@ -419,7 +417,7 @@ export default function BookAOrderPage() {
                       <div>
                         <Label
                           htmlFor={`quantity-${product.id}`}
-                          className="text-xs sm:text-[11px] md:text-xs text-gray-700 font-medium"
+                          className="text-xs sm:text-[0.6875rem] md:text-xs text-text-secondary font-medium"
                         >
                           Quantity
                         </Label>
@@ -451,7 +449,7 @@ export default function BookAOrderPage() {
                           className="mt-1"
                         />
                         {quantityErrors[product.id] && (
-                          <p className="text-[10px] sm:text-xs text-red-500 mt-1">
+                          <p className="text-[0.625rem] sm:text-xs text-destructive mt-1">
                             {quantityErrors[product.id]}
                           </p>
                         )}
@@ -475,7 +473,7 @@ export default function BookAOrderPage() {
                           addToCart(product, parsedQuantity);
                         }}
                         size="sm"
-                        className="w-full bg-indigo-400 hover:bg-indigo-500 text-black font-semibold"
+                        className="w-full bg-primary hover:bg-primary text-foreground font-semibold"
                       >
                         <ShoppingCart className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />{" "}
                         Add to Cart
@@ -494,9 +492,9 @@ export default function BookAOrderPage() {
         <div className="fixed bottom-4 left-3 right-3 sm:left-4 sm:right-4 lg:hidden z-50">
           <Button
             onClick={() => setShowCart(true)}
-            className="w-full bg-black text-white py-3 sm:py-4 rounded-xl shadow-lg text-sm sm:text-base font-semibold"
+            className="w-full bg-foreground text-background py-3 sm:py-4 rounded-xl shadow-lg text-sm sm:text-base font-semibold"
           >
-            <ShoppingCart className="w-5 h-5 mr-2" />
+            <ShoppingCart className="w-5 h-5" />
             View Cart ({cartTotal} items)
           </Button>
         </div>
@@ -510,10 +508,9 @@ export default function BookAOrderPage() {
         <DialogContent className="w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
           {/* Loading Overlay */}
           {isSubmitting && (
-            <div className="absolute inset-0 bg-white/90 flex items-center justify-center rounded-lg">
+            <div className="absolute inset-0 bg-surface/90 flex items-center justify-center rounded-lg">
               <div className="text-center">
-                <Loader2 className="w-10 h-10 animate-spin text-yellow-500 mx-auto" />
-                <p className="mt-3 text-sm font-medium text-gray-700">
+                <p className="mt-3 text-sm font-medium text-text-secondary">
                   Placing your order...
                 </p>
               </div>
@@ -528,16 +525,16 @@ export default function BookAOrderPage() {
           </DialogHeader>
           <div className="space-y-3 mt-4">
             {cart.length === 0 ? (
-              <p className="text-center text-gray-500 py-8">
+              <p className="text-center text-muted-foreground py-8">
                 Your cart is empty
               </p>
             ) : (
               cart.map(item => (
                 <div
                   key={item.product.id}
-                  className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg"
+                  className="flex items-center gap-3 p-3 bg-surface-elevated rounded-lg"
                 >
-                  <div className="w-16 h-16 relative bg-gray-200 rounded flex-shrink-0">
+                  <div className="w-16 h-16 relative bg-active rounded flex-shrink-0">
                     {item.product.imageUrl ? (
                       <Image
                         src={item.product.imageUrl}
@@ -547,19 +544,21 @@ export default function BookAOrderPage() {
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
-                        <Package className="w-8 h-8 text-gray-400" />
+                        <Package className="w-8 h-8 text-muted-foreground" />
                       </div>
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs text-gray-500">{item.product.code}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {item.product.code}
+                    </p>
                     <p className="font-medium text-sm truncate">
                       {item.product.name}
                     </p>
                     <div className="mt-1">
                       <Label
                         htmlFor={`cart-quantity-${item.product.id}`}
-                        className="text-xs text-gray-700 font-medium"
+                        className="text-xs text-text-secondary font-medium"
                       >
                         Quantity
                       </Label>
@@ -606,7 +605,7 @@ export default function BookAOrderPage() {
                         className="mt-1"
                       />
                       {cartQuantityErrors[item.product.id] && (
-                        <p className="text-[10px] sm:text-xs text-red-500 mt-1">
+                        <p className="text-[0.625rem] sm:text-xs text-destructive mt-1">
                           {cartQuantityErrors[item.product.id]}
                         </p>
                       )}
@@ -615,7 +614,7 @@ export default function BookAOrderPage() {
                   <button
                     type="button"
                     onClick={() => removeFromCart(item.product.id)}
-                    className="p-2 text-red-500 hover:bg-red-50 rounded whitespace-nowrap"
+                    className="p-2 text-destructive hover:bg-error-surface rounded whitespace-nowrap"
                     aria-label={`Remove ${item.product.name} from cart`}
                   >
                     <Trash2 className="w-4 h-4" />
@@ -625,8 +624,8 @@ export default function BookAOrderPage() {
             )}
           </div>
           {error && (
-            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-600">{error}</p>
+            <div className="mt-4 p-3 bg-error-surface border border-error-border rounded-lg">
+              <p className="text-sm text-destructive">{error}</p>
             </div>
           )}
           {cart.length > 0 && (
@@ -634,16 +633,9 @@ export default function BookAOrderPage() {
               <Button
                 onClick={handlePlaceOrder}
                 disabled={isSubmitting}
-                className="w-full bg-indigo-400 hover:bg-indigo-500 text-black font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-primary hover:bg-primary text-foreground font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Placing Order...
-                  </>
-                ) : (
-                  "Book Order"
-                )}
+                {isSubmitting ? <>Placing Order...</> : "Book Order"}
               </Button>
             </DialogFooter>
           )}
@@ -654,21 +646,21 @@ export default function BookAOrderPage() {
       <Dialog open={showSuccessModal} onOpenChange={setShowSuccessModal}>
         <DialogContent className="w-[95vw] sm:max-w-md text-center">
           <div className="flex flex-col items-center py-4">
-            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-4">
-              <CheckCircle className="w-12 h-12 text-green-600" />
+            <div className="w-20 h-20 bg-success-surface rounded-full flex items-center justify-center mb-4">
+              <CheckCircle className="w-12 h-12 text-success-foreground" />
             </div>
             <DialogTitle className="text-2xl">Order Placed!</DialogTitle>
             <DialogDescription className="mt-2">
               Your order has been successfully placed.
             </DialogDescription>
-            <div className="mt-4 p-4 bg-gray-100 rounded-lg">
-              <p className="text-sm text-gray-500">Order Number</p>
+            <div className="mt-4 p-4 bg-surface-secondary rounded-lg">
+              <p className="text-sm text-muted-foreground">Order Number</p>
               <p className="text-xl font-bold">{orderNumber}</p>
             </div>
             <div className="flex flex-col sm:flex-row gap-3 mt-4 w-full">
               <Button
                 onClick={handleBookAnotherOrder}
-                className="flex-1 bg-indigo-400 hover:bg-indigo-500 text-black font-semibold"
+                className="flex-1 bg-primary hover:bg-primary text-foreground font-semibold"
               >
                 Book Another Order
               </Button>

@@ -11,198 +11,152 @@ import {
 } from "../hooks/useDashboard";
 import { ChartSkeleton } from "./skeletons";
 
-// Donut charts use the brand guideline 3.4 Accent Palette (Use sparingly).
-const BRAND_CHART_COLORS = [
-  "#FFB020", // Amber
-  "#00B7FF", // Sky Blue
-  "#6C5CE7", // Purple
-  "#FF4D9D", // Pink
-  "#FF7A59", // Coral
-  "#7ED957", // Lime
-];
+/**
+ * Analytics cards for the operations dashboard.
+ *
+ * These deliberately pass no colours down. The chart components read the
+ * `--chart-*` tokens, which are defined once per theme, so a series looks
+ * right in light and dark without either being restated here. An earlier
+ * version pinned brand red on the trend line and a six-hue accent palette on
+ * the donuts, which overrode the token ramp at the call site — the charts kept
+ * the old look no matter what the components did, and the near-white segment
+ * ring vanished against a dark surface.
+ */
 
-function DashboardCardHeader({ title }: { title: string }) {
+/** One card shell, so loading / error / loaded cannot drift apart. */
+function ChartCard({
+  title,
+  height,
+  isLoading,
+  error,
+  children,
+}: {
+  title: string;
+  height: string;
+  isLoading: boolean;
+  error: unknown;
+  children: React.ReactNode;
+}) {
   return (
-    <CardHeader>
-      <CardTitle className="text-base font-bold text-primary">
-        {title}
-      </CardTitle>
-      <p className="text-xs text-muted-foreground">Updates daily at 2 AM IST</p>
-    </CardHeader>
-  );
-}
-
-// Leads Generated Card Component
-export function LeadsGeneratedCard() {
-  const {
-    data: leadsData,
-    isLoading,
-    error,
-  } = useLeadsGeneratedOverTime({ period: "week" });
-
-  // Apply the Ralli Wolf red line and soft red fill without changing API data.
-  const chartData = leadsData
-    ? {
-        ...leadsData,
-        datasets: (leadsData.datasets || []).map(dataset => ({
-          ...dataset,
-          borderColor: "#ED1C24",
-          backgroundColor: "rgba(237, 28, 36, 0.10)",
-          pointBackgroundColor: "#ED1C24",
-          pointBorderColor: "#ffffff",
-          fill: true,
-          tension: 0.4,
-        })),
-      }
-    : { labels: [], datasets: [] };
-
-  if (isLoading) {
-    return (
-      <Card className="h-full transition-[border-color,box-shadow] duration-200 hover:border-primary/30 hover:shadow-md">
-        <DashboardCardHeader title="Leads Generated" />
-        <CardContent className="h-[200px] flex items-center justify-center">
+    <Card className="h-full transition-[border-color,box-shadow] duration-200 hover:border-border-strong">
+      <CardHeader>
+        <CardTitle className="text-sm font-semibold leading-5 tracking-tight text-foreground">
+          {title}
+        </CardTitle>
+        <p className="text-xs leading-4 text-muted-foreground">
+          Updates daily at 2 AM IST
+        </p>
+      </CardHeader>
+      <CardContent
+        className={
+          isLoading || error
+            ? `${height} flex items-center justify-center`
+            : height
+        }
+      >
+        {isLoading ? (
           <ChartSkeleton height={180} />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (error) {
-    return (
-      <Card className="h-full transition-[border-color,box-shadow] duration-200 hover:border-primary/30 hover:shadow-md">
-        <DashboardCardHeader title="Leads Generated" />
-        <CardContent className="h-[200px] flex items-center justify-center">
-          <div>Error loading data</div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card className="h-full transition-[border-color,box-shadow] duration-200 hover:border-primary/30 hover:shadow-md">
-      <DashboardCardHeader title="Leads Generated" />
-      <CardContent className="h-[200px]">
-        <LineChart data={chartData} className="h-full" showLegend={false} />
+        ) : error ? (
+          <p className="text-sm text-muted-foreground">Unable to load data.</p>
+        ) : (
+          children
+        )}
       </CardContent>
     </Card>
   );
 }
 
-// Conversion Rate Card Component
+type ChartInput = {
+  labels: string[];
+  datasets: Array<{ label: string; data: number[] }>;
+};
+
+const EMPTY: ChartInput = { labels: [], datasets: [] };
+
+/**
+ * Keeps only the labels and the numbers.
+ *
+ * The API's dataset type carries `borderColor`/`backgroundColor`, which are a
+ * leftover from when the palette was decided per request. Dropping them here is
+ * what makes the `--chart-*` tokens authoritative — and it is a compile-time
+ * guarantee rather than a convention, because the chart components never see a
+ * colour to prefer.
+ */
+function toChartInput(source?: {
+  labels?: string[];
+  datasets?: Array<{ label?: string; data?: number[] }>;
+}): ChartInput {
+  if (!source) return EMPTY;
+  return {
+    labels: source.labels ?? [],
+    datasets: (source.datasets ?? []).map(dataset => ({
+      label: dataset.label ?? "",
+      data: dataset.data ?? [],
+    })),
+  };
+}
+
+export function LeadsGeneratedCard() {
+  const { data, isLoading, error } = useLeadsGeneratedOverTime({
+    period: "week",
+  });
+
+  return (
+    <ChartCard
+      title="Leads Generated"
+      height="h-[12.5rem]"
+      isLoading={isLoading}
+      error={error}
+    >
+      <LineChart
+        data={toChartInput(data)}
+        className="h-full"
+        showLegend={false}
+      />
+    </ChartCard>
+  );
+}
+
 export function ConversionRateCard() {
-  const { data: conversionData, isLoading, error } = useConversionRate();
-
-  const chartData = conversionData
-    ? {
-        ...conversionData,
-        datasets:
-          conversionData.datasets?.map(dataset => ({
-            ...dataset,
-            backgroundColor: BRAND_CHART_COLORS.slice(
-              0,
-              dataset.data?.length || 0
-            ),
-            borderColor: "#F7FAFC",
-            borderWidth: 2,
-          })) || [],
-      }
-    : { labels: [], datasets: [] };
-
-  if (isLoading) {
-    return (
-      <Card className="h-full transition-[border-color,box-shadow] duration-200 hover:border-primary/30 hover:shadow-md">
-        <DashboardCardHeader title="Conversion Rate" />
-        <CardContent className="h-[240px] flex items-center justify-center">
-          <ChartSkeleton height={200} />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (error) {
-    return (
-      <Card className="h-full transition-[border-color,box-shadow] duration-200 hover:border-primary/30 hover:shadow-md">
-        <DashboardCardHeader title="Conversion Rate" />
-        <CardContent className="h-[240px] flex items-center justify-center">
-          <div>Error loading data</div>
-        </CardContent>
-      </Card>
-    );
-  }
+  const { data, isLoading, error } = useConversionRate();
 
   return (
-    <Card className="h-full transition-[border-color,box-shadow] duration-200 hover:border-primary/30 hover:shadow-md">
-      <DashboardCardHeader title="Conversion Rate" />
-      <CardContent className="h-[240px]">
-        <DonutChart
-          data={chartData}
-          className="h-full"
-          showLegend={true}
-          legendPosition="bottom"
-        />
-      </CardContent>
-    </Card>
+    <ChartCard
+      title="Conversion Rate"
+      height="h-[15rem]"
+      isLoading={isLoading}
+      error={error}
+    >
+      <DonutChart
+        data={toChartInput(data)}
+        className="h-full"
+        showLegend
+        legendPosition="bottom"
+      />
+    </ChartCard>
   );
 }
 
-// Lead Sources Card Component
 export function LeadSourcesCard() {
-  const { data: sourcesData, isLoading, error } = useLeadSources();
-
-  const chartData = sourcesData
-    ? {
-        ...sourcesData,
-        datasets:
-          sourcesData.datasets?.map(dataset => ({
-            ...dataset,
-            backgroundColor: BRAND_CHART_COLORS.slice(
-              0,
-              dataset.data?.length || 0
-            ),
-            borderColor: "#F7FAFC",
-            borderWidth: 2,
-          })) || [],
-      }
-    : { labels: [], datasets: [] };
-
-  if (isLoading) {
-    return (
-      <Card className="h-full transition-[border-color,box-shadow] duration-200 hover:border-primary/30 hover:shadow-md">
-        <DashboardCardHeader title="Lead Sources" />
-        <CardContent className="h-[240px] flex items-center justify-center">
-          <ChartSkeleton height={200} />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (error) {
-    return (
-      <Card className="h-full transition-[border-color,box-shadow] duration-200 hover:border-primary/30 hover:shadow-md">
-        <DashboardCardHeader title="Lead Sources" />
-        <CardContent className="h-[240px] flex items-center justify-center">
-          <div>Error loading data</div>
-        </CardContent>
-      </Card>
-    );
-  }
+  const { data, isLoading, error } = useLeadSources();
 
   return (
-    <Card className="h-full transition-[border-color,box-shadow] duration-200 hover:border-primary/30 hover:shadow-md">
-      <DashboardCardHeader title="Lead Sources" />
-      <CardContent className="h-[240px]">
-        <DonutChart
-          data={chartData}
-          className="h-full"
-          showLegend={true}
-          legendPosition="bottom"
-        />
-      </CardContent>
-    </Card>
+    <ChartCard
+      title="Lead Sources"
+      height="h-[15rem]"
+      isLoading={isLoading}
+      error={error}
+    >
+      <DonutChart
+        data={toChartInput(data)}
+        className="h-full"
+        showLegend
+        legendPosition="bottom"
+      />
+    </ChartCard>
   );
 }
 
-// Analytics Overview Component
 export function AnalyticsOverview() {
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

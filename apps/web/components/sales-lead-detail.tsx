@@ -15,7 +15,7 @@ import {
   CheckCircle,
   Phone,
   XCircle,
-} from "lucide-react";
+} from "@repo/ui/icons";
 import Image from "next/image";
 import { useState } from "react";
 import logo from "../app/assets/images/logos/logo_v1.png";
@@ -109,7 +109,7 @@ export function SalesLeadDetail({
       <div className="container mx-auto p-4 md:p-4 max-w-2xl">
         {/* Back Button */}
         <Button variant="ghost" onClick={onBack} className="mb-4">
-          <ArrowLeft className="h-4 w-4 mr-2" />
+          <ArrowLeft className="h-4 w-4" />
           Back to Leads
         </Button>
 
@@ -125,10 +125,10 @@ export function SalesLeadDetail({
                   <Building2 className="h-6 w-6 text-primary" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900">
+                  <h3 className="text-lg font-semibold text-foreground">
                     {getLeadFullName(lead.firstName, lead.lastName)}
                   </h3>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-text-secondary">
                     {lead.companyName || "No company"}
                   </p>
                 </div>
@@ -137,8 +137,8 @@ export function SalesLeadDetail({
               <div className="space-y-2 pt-2 border-t">
                 {lead.phone && (
                   <div className="flex items-center gap-2 text-sm">
-                    <Phone className="h-4 w-4 text-gray-400" />
-                    <span className="text-gray-900">
+                    <Phone className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-foreground">
                       {displayPhone(lead.phone, lead.countryCode)}
                     </span>
                   </div>
@@ -192,10 +192,10 @@ export function SalesLeadDetail({
               placeholder="Enter your remarks about this lead..."
               value={remark}
               onChange={e => setRemark(e.target.value)}
-              className="min-h-[120px]"
+              className="min-h-[7.5rem]"
               disabled={isLoading || !!selectedStatus}
             />
-            <p className="text-xs text-gray-500 mt-2">
+            <p className="text-xs text-muted-foreground mt-2">
               Add remarks to document your interaction with this lead
             </p>
           </CardContent>

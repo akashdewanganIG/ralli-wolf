@@ -25,6 +25,9 @@ import {
   formatQuantity,
   humanizeEnum,
 } from "@/lib/utils/decimal";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { buttonVariants } from "@repo/ui/components/ui/button";
+import { cn } from "@repo/ui/lib/utils";
 
 export default function PickListDetailPage() {
   const params = useParams<{ id: string }>();
@@ -77,7 +80,7 @@ export default function PickListDetailPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title={
             pickList ? `Pick list ${pickList.pickListNumber}` : "Pick list"
@@ -138,7 +141,7 @@ export default function PickListDetailPage() {
         <Banner error={createPackage.error} />
         <Banner error={ship.error} />
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid-auto-fit gap-3">
           <StatCard label="Lines to pick" value={tasks.length} />
           <StatCard label="Requested" value={formatQuantity(totalRequested)} />
           <StatCard
@@ -156,7 +159,7 @@ export default function PickListDetailPage() {
 
         {pickList && (
           <Panel title="Pick list details">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid-auto-fit gap-4">
               <DetailRow
                 label="Warehouse"
                 value={`${pickList.warehouse.code} — ${pickList.warehouse.name}`}
@@ -201,7 +204,7 @@ export default function PickListDetailPage() {
             keyOf={row => row.id}
             empty="This pick list has no tasks."
             rowClassName={row =>
-              row.status === "COMPLETED" ? "bg-emerald-50/30" : ""
+              row.status === "COMPLETED" ? "bg-success-surface/30" : ""
             }
             columns={[
               { header: "#", align: "right", cell: row => row.sequence },
@@ -223,7 +226,7 @@ export default function PickListDetailPage() {
                 cell: row => (
                   <Link
                     href={`/inventory/stock/${row.product.id}`}
-                    className="text-primary hover:underline"
+                    className="text-primary hover:text-info"
                   >
                     <span className="font-mono text-xs">
                       {row.product.code}
@@ -250,7 +253,7 @@ export default function PickListDetailPage() {
                       </p>
                     )}
                     {row.lot.expiryDate && (
-                      <p className="text-xs text-amber-700">
+                      <p className="text-xs text-warning-foreground">
                         exp {formatDate(row.lot.expiryDate)}
                       </p>
                     )}
@@ -492,7 +495,8 @@ export default function PickListDetailPage() {
                         }
                       )
                     }
-                    className="inline-flex h-10 items-center justify-center whitespace-nowrap rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                    data-slot="button"
+                    className={cn(buttonVariants({ variant: "default" }))}
                   >
                     {ship.isPending
                       ? "Dispatching…"
@@ -563,7 +567,7 @@ export default function PickListDetailPage() {
             />
           </Panel>
         )}
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

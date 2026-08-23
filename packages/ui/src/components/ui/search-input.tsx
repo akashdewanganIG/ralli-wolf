@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Search } from "lucide-react";
+import { Search } from "@repo/ui/icons";
 
 import { cn } from "@repo/ui/lib/utils";
 import { Input } from "./input";
@@ -18,7 +18,7 @@ function SearchInput({
 }: SearchInputProps) {
   return (
     <div className={cn("relative", wrapperClassName)}>
-      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <Search className="pointer-events-none absolute left-3 inset-y-0 my-auto h-fit size-4 text-muted-foreground" />
       <Input className={cn("pl-9", className)} {...props} />
     </div>
   );

@@ -10,7 +10,7 @@ function FieldSet({ className, ...props }: React.ComponentProps<"fieldset">) {
     <fieldset
       data-slot="field-set"
       className={cn(
-        "flex flex-col gap-6",
+        "flex flex-col gap-4",
         "has-[>[data-slot=checkbox-group]]:gap-3 has-[>[data-slot=radio-group]]:gap-3",
         className
       )}
@@ -143,7 +143,8 @@ function FieldDescription({ className, ...props }: React.ComponentProps<"p">) {
       className={cn(
         "text-muted-foreground text-sm leading-normal font-normal group-has-[[data-orientation=horizontal]]/field:text-balance",
         "last:mt-0 nth-last-2:-mt-1 [[data-variant=legend]+&]:-mt-1.5",
-        "[&>a:hover]:text-primary [&>a]:underline [&>a]:underline-offset-4",
+        // Inline links inside hint text: colour shift only, no rule.
+        "[&>a]:text-primary [&>a]:transition-colors [&>a:hover]:text-info",
         className
       )}
       {...props}

@@ -13,9 +13,11 @@ import {
   SimpleTable,
   StatCard,
   StatusBadge,
+  DEFAULT_PAGE_SIZE,
 } from "@/components/supply-chain/shared";
 import { useQualityChecks, useSuppliers } from "@/hooks/useSupplyChain";
 import { formatDateTime, formatQuantity } from "@/lib/utils/decimal";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 export default function QualityChecksPage() {
   const [page, setPage] = useState(1);
@@ -24,7 +26,7 @@ export default function QualityChecksPage() {
 
   const { checks, pagination, isLoading, error } = useQualityChecks({
     page,
-    limit: 25,
+    limit: DEFAULT_PAGE_SIZE,
     result: result || undefined,
     supplierId: supplierId ? Number(supplierId) : undefined,
   });
@@ -41,7 +43,7 @@ export default function QualityChecksPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title="Quality checks"
           subtitle="Review receipt inspections and supplier quality results."
@@ -49,7 +51,7 @@ export default function QualityChecksPage() {
 
         <ErrorBanner error={error} />
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid-auto-fit gap-3">
           <StatCard label="Inspections shown" value={checks.length} />
           <StatCard
             label="Failed"
@@ -109,9 +111,9 @@ export default function QualityChecksPage() {
             keyOf={row => row.id}
             rowClassName={row =>
               row.result === "FAIL"
-                ? "bg-red-50/40"
+                ? "bg-error-surface/40"
                 : row.result === "CONDITIONAL_PASS"
-                  ? "bg-amber-50/30"
+                  ? "bg-warning-surface/30"
                   : ""
             }
             empty="No inspections recorded yet. Mark a goods receipt as requiring QC to route it through inspection."
@@ -130,7 +132,7 @@ export default function QualityChecksPage() {
                   row.grn ? (
                     <Link
                       href={`/purchasing/goods-receipts/${row.grn.id}`}
-                      className="font-mono text-xs text-primary hover:underline"
+                      className="font-mono text-xs text-primary hover:text-info"
                     >
                       {row.grn.grnNumber}
                     </Link>
@@ -148,7 +150,7 @@ export default function QualityChecksPage() {
                   row.grnLine ? (
                     <Link
                       href={`/inventory/stock/${row.grnLine.product.id}`}
-                      className="text-primary hover:underline"
+                      className="text-primary hover:text-info"
                     >
                       <span className="font-mono text-xs">
                         {row.grnLine.product.code}
@@ -176,7 +178,7 @@ export default function QualityChecksPage() {
                 align: "right",
                 cell: row =>
                   Number(row.rejectedQuantity) > 0 ? (
-                    <span className="font-semibold text-red-700">
+                    <span className="font-semibold text-error-foreground">
                       {formatQuantity(row.rejectedQuantity)}
                     </span>
                   ) : (
@@ -215,11 +217,10 @@ export default function QualityChecksPage() {
           <Pager
             page={page}
             totalPages={pagination?.totalPages}
-            totalItems={pagination?.totalItems}
             onChange={setPage}
           />
         </Panel>
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

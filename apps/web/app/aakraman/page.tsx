@@ -14,7 +14,7 @@ import {
 import { Button } from "@repo/ui/components/ui/button";
 import { Input } from "@repo/ui/components/ui/input";
 import { Label } from "@repo/ui/components/ui/label";
-import { Loader2, ArrowRight } from "lucide-react";
+import { ArrowRight } from "@repo/ui/icons";
 import logov3 from "@/app/assets/images/logos/logo_v1.png";
 import { aakramanService } from "@/lib/api/services";
 
@@ -126,10 +126,10 @@ export default function AakramanLoginPage() {
     touchedFields[field] && fieldErrors[field] ? fieldErrors[field] : "";
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-linear-to-br from-slate-950 via-slate-900 to-slate-950">
+    <div className="relative min-h-screen overflow-hidden bg-foreground">
       <div className="absolute inset-0 opacity-60 mix-blend-screen bg-[radial-gradient(circle_at_top,rgba(248,250,252,0.12),transparent_45%)]" />
-      <div className="absolute right-10 top-10 h-40 w-40 rounded-full bg-indigo-400/20 blur-3xl" />
-      <div className="absolute left-16 bottom-10 h-32 w-32 rounded-full bg-amber-500/20 blur-3xl" />
+      <div className="absolute right-10 top-10 h-40 w-40 rounded-full bg-primary/20 blur-3xl" />
+      <div className="absolute left-16 bottom-10 h-32 w-32 rounded-full bg-warning/20 blur-3xl" />
 
       <div className="relative z-10 flex min-h-screen items-center justify-center px-4 py-12">
         <Card className="w-full max-w-lg rounded-3xl border-0 shadow-2xl">
@@ -145,7 +145,7 @@ export default function AakramanLoginPage() {
               />
             </div>
             <div>
-              <CardTitle className="text-2xl font-semibold text-slate-900">
+              <CardTitle className="text-2xl font-semibold text-foreground">
                 {step === "input" ? "Sign in" : "Enter verification code"}
               </CardTitle>
               <CardDescription className="text-base">
@@ -158,7 +158,7 @@ export default function AakramanLoginPage() {
 
           <CardContent className="space-y-4">
             {error && (
-              <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <div className="rounded-2xl border border-error-border bg-error-surface px-4 py-3 text-sm text-error-foreground">
                 {error}
               </div>
             )}
@@ -168,7 +168,7 @@ export default function AakramanLoginPage() {
                 <div className="space-y-2">
                   <Label
                     htmlFor="email"
-                    className="text-sm font-medium text-slate-600"
+                    className="text-sm font-medium text-text-secondary"
                   >
                     Email address
                   </Label>
@@ -185,10 +185,10 @@ export default function AakramanLoginPage() {
                       }
                     }}
                     onBlur={() => handleBlur("email", email)}
-                    className="rounded-2xl border-slate-200"
+                    className="rounded-2xl border-border"
                   />
                   {getFieldHelper("email") && (
-                    <p className="text-xs font-medium text-red-600">
+                    <p className="text-xs font-medium text-destructive">
                       {getFieldHelper("email")}
                     </p>
                   )}
@@ -197,13 +197,10 @@ export default function AakramanLoginPage() {
                 <Button
                   onClick={handleSendOtp}
                   disabled={isLoading || !email || !!fieldErrors.email}
-                  className="w-full rounded-2xl bg-amber-500 text-base font-semibold text-slate-900 shadow-lg shadow-amber-500/30 transition hover:bg-amber-400 disabled:opacity-60"
+                  className="w-full rounded-2xl bg-warning text-base font-semibold text-foreground shadow-lg shadow-warning/30 transition hover:bg-warning disabled:opacity-60"
                 >
                   {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Sending OTP
-                    </>
+                    <>Sending OTP</>
                   ) : (
                     <>
                       Send OTP
@@ -217,7 +214,7 @@ export default function AakramanLoginPage() {
                 <div className="space-y-2">
                   <Label
                     htmlFor="otp"
-                    className="text-sm font-medium text-slate-600"
+                    className="text-sm font-medium text-text-secondary"
                   >
                     6 digit OTP
                   </Label>
@@ -240,7 +237,7 @@ export default function AakramanLoginPage() {
                     className="text-center text-2xl tracking-[0.4em]"
                   />
                   {getFieldHelper("otp") && (
-                    <p className="text-xs font-medium text-red-600">
+                    <p className="text-xs font-medium text-destructive">
                       {getFieldHelper("otp")}
                     </p>
                   )}
@@ -249,32 +246,25 @@ export default function AakramanLoginPage() {
                 <Button
                   onClick={handleVerifyOtp}
                   disabled={isLoading || otp.length !== 6 || !!fieldErrors.otp}
-                  className="w-full rounded-2xl bg-slate-900 text-base font-semibold text-white shadow-lg shadow-slate-900/30 transition hover:bg-slate-800 disabled:opacity-60"
+                  className="w-full rounded-2xl bg-foreground text-base font-semibold text-background shadow-lg shadow-slate-900/30 transition hover:bg-foreground disabled:opacity-60"
                 >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Verifying
-                    </>
-                  ) : (
-                    "Verify & continue"
-                  )}
+                  {isLoading ? <>Verifying</> : "Verify & continue"}
                 </Button>
 
                 <button
                   type="button"
                   onClick={handleOtpStepReset}
-                  className="w-full text-center text-sm font-medium text-amber-600 hover:text-amber-500"
+                  className="w-full text-center text-sm font-medium text-warning-foreground hover:text-warning"
                 >
                   Change email
                 </button>
               </div>
             )}
 
-            <div className="pt-2 text-center text-sm text-slate-500">
+            <div className="pt-2 text-center text-sm text-muted-foreground">
               <a
                 href="/login"
-                className="font-semibold text-amber-600 hover:text-amber-500"
+                className="font-semibold text-warning-foreground hover:text-warning"
               >
                 Back to Innovun login
               </a>

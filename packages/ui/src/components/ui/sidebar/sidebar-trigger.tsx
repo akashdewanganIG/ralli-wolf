@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Button } from "../button";
-import { Menu } from "lucide-react";
+import { Menu } from "@repo/ui/icons";
 import { useSidebar } from "./sidebar-provider";
 
 export function SidebarTrigger() {

@@ -55,7 +55,7 @@ export const AccountTable: React.FC<AccountTableProps> = ({
       label: "Account Name",
       render: value => (
         <div className="flex items-center gap-2 py-2">
-          <span className="text-muted-foreground hover:underline hover:text-blue-400">
+          <span className="text-muted-foreground hover:text-info">
             {value || "Unknown Account"}
           </span>
         </div>
@@ -96,7 +96,7 @@ export const AccountTable: React.FC<AccountTableProps> = ({
             href={`https://${cleanDomain}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-blue-600 hover:underline"
+            className="text-info-foreground hover:text-info"
           >
             {displayText}
           </a>

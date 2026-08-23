@@ -1,7 +1,17 @@
 /**
- * Email Service using Plunk
- * Handles transactional email sending for user creation, password resets, etc.
+ * Email Service using Plunk.
+ *
+ * Transport only: every message body is rendered by the shared shell in
+ * `emailTemplate.ts`, so this file decides what an email says and never how
+ * it looks.
  */
+import {
+  appUrl,
+  EMAIL_COLORS,
+  EMAIL_FONT_STACKS,
+  renderEmail,
+  type EmailRow,
+} from "./emailTemplate.js";
 
 interface PlunkEmailOptions {
   to: string;
@@ -53,73 +63,6 @@ class EmailService {
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
-  }
-
-  /**
-   * Get company logo URL
-   */
-
-  /**
-   * Generate branded email template wrapper
-   * Matches Stanley Black & Decker Custom Marketing CRM Suite website theme
-   * Uses email-compatible CSS with inline styles
-   */
-  private generateBrandedEmailTemplate(
-    title: string,
-    content: string,
-    isPasswordReset: boolean = false
-  ): string {
-    const companyName = "Stanley Black & Decker";
-    // Convert HSL to RGB for better email client support
-    const headerBgColor = isPasswordReset ? "#3b82f6" : "#facc15"; // Blue or Yellow
-    const headerTextColor = "#1a1a1a"; // Dark text
-    return `
-      <!DOCTYPE html>
-      <html lang="en">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta http-equiv="X-UA-Compatible" content="IE=edge">
-        <title>${this.escapeHtml(title)}</title>
-        <!--[if mso]>
-        <style type="text/css">
-          table {border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;}
-        </style>
-        <![endif]-->
-      </head>
-      <body style="margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;background-color:#f5f5f5;">
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f5f5f5;">
-          <tr>
-            <td align="center" style="padding:20px 0;">
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;background-color:#ffffff;border:1px solid #e0e0e0;">
-                <!-- Header -->
-                <tr>
-                  <td style="background-color:${headerBgColor};padding:40px 30px;text-align:center;">
-                    <h1 style="margin:0;font-size:32px;font-weight:bold;color:${headerTextColor};font-family:Arial,Helvetica,sans-serif;">${companyName}</h1>
-                  </td>
-                </tr>
-                <!-- Content -->
-                <tr>
-                  <td style="padding:40px 30px;background-color:#ffffff;">
-                    ${content}
-                    <!-- Footer -->
-                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-                      <tr>
-                        <td style="padding-top:30px;border-top:1px solid #e0e0e0;text-align:center;">
-                          <p style="margin:8px 0;font-size:12px;color:#737373;">This is an automated message. Please do not reply to this email.</p>
-                          <p style="margin:8px 0;font-size:12px;color:#737373;">&copy; ${new Date().getFullYear()} ${companyName}. All rights reserved.</p>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </table>
-      </body>
-      </html>
-    `;
   }
 
   /**
@@ -202,418 +145,169 @@ class EmailService {
     }
   }
 
+  /** Base URL of the web app, for links back into it. */
+  private appUrl() {
+    return appUrl();
+  }
+
   /**
-   * Send user creation email with Account ID & Password
-   * Matches Stanley Black & Decker Custom Marketing CRM Suite theme
+   * Sends a newly created user their credentials.
+   *
+   * The password is deliberately in the metadata rows rather than the prose:
+   * it is a value to be copied, and the mono rows are where this shell puts
+   * values.
    */
   async sendUserCreationEmail(data: UserCreationEmailData): Promise<boolean> {
-    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-    const subject =
-      "Welcome to Stanley Black & Decker CRM - Your Account Details";
+    const rows: EmailRow[] = [
+      { label: "Account ID", value: data.email },
+      { label: "Temporary password", value: data.password },
+      { label: "Role", value: data.role },
+    ];
 
-    const content = `
-      <h1 style="margin:0 0 24px 0;font-size:32px;font-weight:bold;color:#facc15;text-align:center;font-family:Arial,Helvetica,sans-serif;">Welcome to Stanley Black & Decker!</h1>
-      
-      <p style="margin:0 0 16px 0;font-size:16px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">Hi <strong style="color:#1a1a1a;">${this.escapeHtml(data.name)}</strong>,</p>
-      
-      <p style="margin:0 0 30px 0;font-size:16px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">Your account has been successfully created by the system administrator. You can now access the Stanley Black & Decker Custom Marketing CRM Suite with the following credentials:</p>
-
-      <!-- Credentials Box -->
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#fef9c3;border:2px solid #facc15;margin:30px 0;">
-        <tr>
-          <td style="padding:4px;background-color:#facc15;"></td>
-        </tr>
-        <tr>
-          <td style="padding:30px;">
-            <!-- Account ID -->
-            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-              <tr>
-                <td style="padding:12px 0;border-bottom:1px solid #e0e0e0;">
-                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-                    <tr>
-                      <td width="140" style="font-weight:bold;color:#1a1a1a;font-size:15px;font-family:Arial,Helvetica,sans-serif;">Account ID:</td>
-                      <td style="font-family:'Courier New',monospace;background-color:#ffffff;color:#1a1a1a;padding:12px 16px;border:1px solid #facc15;font-size:14px;font-weight:600;">${this.escapeHtml(data.email)}</td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-              <tr>
-                <td style="padding:12px 0;border-bottom:1px solid #e0e0e0;">
-                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-                    <tr>
-                      <td width="140" style="font-weight:bold;color:#1a1a1a;font-size:15px;font-family:Arial,Helvetica,sans-serif;">Password:</td>
-                      <td style="font-family:'Courier New',monospace;background-color:#ffffff;color:#1a1a1a;padding:12px 16px;border:1px solid #facc15;font-size:14px;font-weight:600;">${this.escapeHtml(data.password)}</td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-              <tr>
-                <td style="padding:12px 0;">
-                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-                    <tr>
-                      <td width="140" style="font-weight:bold;color:#1a1a1a;font-size:15px;font-family:Arial,Helvetica,sans-serif;">Role:</td>
-                      <td style="font-family:'Courier New',monospace;background-color:#ffffff;color:#1a1a1a;padding:12px 16px;border:1px solid #facc15;font-size:14px;font-weight:600;">${this.escapeHtml(data.role)}</td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
-
-      <!-- Security Notice -->
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f9f9f9;border-left:4px solid #facc15;margin:30px 0;">
-        <tr>
-          <td style="padding:24px;">
-            <p style="margin:0 0 12px 0;font-size:15px;font-weight:bold;color:#1a1a1a;font-family:Arial,Helvetica,sans-serif;">Important Security Notice:</p>
-            <ul style="margin:0;padding-left:20px;color:#737373;font-size:14px;line-height:1.8;">
-              <li style="margin-bottom:8px;">Please change your password immediately after your first login</li>
-              <li style="margin-bottom:8px;">Do not share your credentials with anyone</li>
-              <li style="margin-bottom:8px;">This is a temporary password and should be changed for security purposes</li>
-            </ul>
-          </td>
-        </tr>
-      </table>
-
-      <!-- Button -->
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-        <tr>
-          <td align="center" style="padding:32px 0;">
-            <a href="${frontendUrl}/login" style="display:inline-block;background-color:#facc15;color:#1a1a1a;padding:14px 36px;text-decoration:none;font-weight:bold;font-size:16px;font-family:Arial,Helvetica,sans-serif;border:2px solid #eab308;">Go to Dashboard</a>
-          </td>
-        </tr>
-      </table>
-
-      <!-- Signature -->
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-        <tr>
-          <td style="padding-top:32px;">
-            <p style="margin:0 0 8px 0;font-size:14px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">If you have any questions or need assistance, please contact your system administrator.</p>
-            <p style="margin:0;font-size:14px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">Best regards,<br><strong style="color:#1a1a1a;">Stanley Black & Decker Team</strong></p>
-          </td>
-        </tr>
-      </table>
-    `;
-
-    const body = this.generateBrandedEmailTemplate(
-      "Welcome to Custom Marketing CRM Suite",
-      content,
-      false
-    );
+    const body = renderEmail({
+      preview: "Your Ralli Wolf Operations account is ready.",
+      eyebrow: "Account created",
+      heading: "Your account is ready",
+      paragraphs: [
+        `Hi ${data.name}, an administrator has created your Ralli Wolf Operations account. Sign in with the credentials below.`,
+        "Change your password as soon as you are in. It is temporary, and it should not be shared with anyone.",
+      ],
+      button: { label: "Go to dashboard", href: `${this.appUrl()}/login` },
+      rowsLabel: "Your credentials",
+      rows,
+      footer:
+        "If you were not expecting this account, contact your system administrator.",
+    });
 
     return await this.sendEmail({
       to: data.email,
-      subject,
+      subject: "Your Ralli Wolf Operations account details",
       body,
       name: data.name,
     });
   }
 
-  /**
-   * Send password reset OTP email
-   * Matches Stanley Black & Decker Custom Marketing CRM Suite theme
-   */
+  /** Sends the one-time code that authorises a password reset. */
   async sendPasswordResetOtpEmail(
     email: string,
     name: string,
     otp: string
   ): Promise<boolean> {
-    const subject = "Password Reset OTP - Stanley Black & Decker CRM";
-
-    const content = `
-      <h1 style="margin:0 0 24px 0;font-size:32px;font-weight:bold;color:#3b82f6;text-align:center;font-family:Arial,Helvetica,sans-serif;">Password Reset Verification Code</h1>
-      
-      <p style="margin:0 0 16px 0;font-size:16px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">Hi <strong style="color:#1a1a1a;">${this.escapeHtml(name)}</strong>,</p>
-      
-      <p style="margin:0 0 30px 0;font-size:16px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">We received a request to reset your password. Please use the verification code below to proceed:</p>
-
-      <!-- OTP Box -->
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#dbeafe;border:3px solid #3b82f6;margin:30px 0;">
-        <tr>
-          <td style="padding:4px;background-color:#3b82f6;"></td>
-        </tr>
-        <tr>
-          <td align="center" style="padding:40px 30px;">
-            <p style="margin:0 0 12px 0;font-size:15px;color:#737373;font-weight:bold;font-family:Arial,Helvetica,sans-serif;">Your verification code:</p>
-            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-              <tr>
-                <td style="font-family:'Courier New',monospace;font-size:42px;font-weight:bold;letter-spacing:12px;color:#1a1a1a;background-color:#ffffff;padding:24px 40px;border:2px solid #3b82f6;">${this.escapeHtml(otp)}</td>
-              </tr>
-            </table>
-            <p style="margin:20px 0 0 0;font-size:13px;color:#737373;font-weight:600;font-family:Arial,Helvetica,sans-serif;">This code will expire in 10 minutes</p>
-          </td>
-        </tr>
-      </table>
-
-      <!-- Security Notice -->
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f9f9f9;border-left:4px solid #3b82f6;margin:30px 0;">
-        <tr>
-          <td style="padding:24px;">
-            <p style="margin:0 0 12px 0;font-size:15px;font-weight:bold;color:#1a1a1a;font-family:Arial,Helvetica,sans-serif;">Security Notice:</p>
-            <ul style="margin:0;padding-left:20px;color:#737373;font-size:14px;line-height:1.8;">
-              <li style="margin-bottom:8px;">This code will expire in 10 minutes</li>
-              <li style="margin-bottom:8px;">If you didn't request this, please ignore this email</li>
-              <li style="margin-bottom:8px;">Never share this code with anyone</li>
-              <li style="margin-bottom:8px;">Do not reply to this email - the code is sent automatically</li>
-            </ul>
-          </td>
-        </tr>
-      </table>
-
-      <!-- Signature -->
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-        <tr>
-          <td style="padding-top:32px;">
-            <p style="margin:0 0 8px 0;font-size:14px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">If you have any questions or need assistance, please contact your system administrator.</p>
-            <p style="margin:0;font-size:14px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">Best regards,<br><strong style="color:#1a1a1a;">Stanley Black & Decker Team</strong></p>
-          </td>
-        </tr>
-      </table>
-    `;
-
-    const body = this.generateBrandedEmailTemplate(
-      "Password Reset OTP",
-      content,
-      true
-    );
+    const body = renderEmail({
+      preview: `${otp} is your password reset code.`,
+      eyebrow: "Password reset",
+      heading: "Your password reset code",
+      paragraphs: [
+        `Hi ${name}, we received a request to reset your password. Use the code below to continue.`,
+      ],
+      code: otp,
+      note: "This code expires in 10 minutes and works once. Never share it with anyone.",
+      footer:
+        "If you did not request a reset, ignore this email — your password is unchanged.",
+    });
 
     return await this.sendEmail({
       to: email,
-      subject,
+      subject: `${otp} is your Ralli Wolf password reset code`,
       body,
       name,
     });
   }
 
   /**
-   * Send lead assignment notification email
-   * Matches Stanley Black & Decker Custom Marketing CRM Suite theme
+   * Tells a sales user that leads have landed in their queue.
+   *
+   * The portal link used to be a hard-coded third-party domain; it now follows
+   * FRONTEND_URL like every other link in this file.
    */
   async sendLeadAssignmentNotificationEmail(
     email: string,
     name: string,
     leadCount: number
   ): Promise<boolean> {
-    const portalUrl = "https://stanleyblackanddeckerindia.com/login";
-    const subject = "New Leads Assigned to You - Stanley Black & Decker CRM";
+    const plural = leadCount === 1 ? "lead" : "leads";
 
-    const content = `
-      <h1 style="margin:0 0 24px 0;font-size:32px;font-weight:bold;color:#facc15;text-align:center;font-family:Arial,Helvetica,sans-serif;">New Leads Assigned to You</h1>
-      
-      <p style="margin:0 0 16px 0;font-size:16px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">Hi <strong style="color:#1a1a1a;">${this.escapeHtml(name)}</strong>,</p>
-      
-      <p style="margin:0 0 30px 0;font-size:16px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">You have been assigned ${leadCount} new lead${leadCount > 1 ? "s" : ""} in the CRM system.</p>
-
-      <!-- Lead Count Box -->
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#fef9c3;border:2px solid #facc15;margin:30px 0;">
-        <tr>
-          <td style="padding:4px;background-color:#facc15;"></td>
-        </tr>
-        <tr>
-          <td align="center" style="padding:40px 30px;">
-            <p style="margin:0 0 12px 0;font-size:15px;font-weight:bold;color:#1a1a1a;font-family:Arial,Helvetica,sans-serif;">${leadCount === 1 ? "Assigned Lead" : "Assigned Leads"}</p>
-            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-              <tr>
-                <td style="font-family:'Courier New',monospace;font-size:48px;font-weight:bold;color:#1a1a1a;background-color:#ffffff;padding:24px 40px;border:2px solid #facc15;">${leadCount}</td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
-
-      <!-- Button -->
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-        <tr>
-          <td align="center" style="padding:32px 0;">
-            <a href="${portalUrl}" style="display:inline-block;background-color:#facc15;color:#1a1a1a;padding:14px 36px;text-decoration:none;font-weight:bold;font-size:16px;font-family:Arial,Helvetica,sans-serif;border:2px solid #eab308;">Login to Portal</a>
-          </td>
-        </tr>
-      </table>
-
-      <!-- Signature -->
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-        <tr>
-          <td style="padding-top:32px;">
-            <p style="margin:0 0 8px 0;font-size:14px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">If you have any questions or need assistance, please contact your system administrator.</p>
-            <p style="margin:0;font-size:14px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">Best regards,<br><strong style="color:#1a1a1a;">Stanley Black & Decker Team</strong></p>
-          </td>
-        </tr>
-      </table>
-    `;
-
-    const body = this.generateBrandedEmailTemplate(
-      "New Leads Assigned to You",
-      content,
-      false
-    );
+    const body = renderEmail({
+      preview: `${leadCount} new ${plural} assigned to you.`,
+      eyebrow: "Lead assignment",
+      heading: `${leadCount} new ${plural} assigned to you`,
+      paragraphs: [
+        `Hi ${name}, ${leadCount} new ${plural} ${leadCount === 1 ? "has" : "have"} been assigned to you. They are waiting in your queue.`,
+      ],
+      button: {
+        label: "Open your leads",
+        href: `${this.appUrl()}/leads/assigned`,
+      },
+      rowsLabel: "Assignment",
+      rows: [{ label: "New leads", value: String(leadCount) }],
+      footer:
+        "You receive this message when leads are assigned to you. Contact your administrator with any questions.",
+    });
 
     return await this.sendEmail({
       to: email,
-      subject,
+      subject: `${leadCount} new ${plural} assigned to you`,
       body,
       name,
     });
   }
 
-  /**
-   * Send password reset email with reset token link
-   * Matches Stanley Black & Decker Custom Marketing CRM Suite theme
-   */
+  /** Sends the tokenised link that lets someone set a new password. */
   async sendPasswordResetEmail(
     email: string,
     name: string,
     resetToken: string
   ): Promise<boolean> {
-    const resetUrl = `${process.env.FRONTEND_URL || "http://localhost:3000"}/reset-password?token=${resetToken}`;
-    const subject = "Password Reset Request - Stanley Black & Decker CRM";
+    const resetUrl = `${this.appUrl()}/reset-password?token=${resetToken}`;
 
-    const content = `
-      <h1 style="margin:0 0 24px 0;font-size:32px;font-weight:bold;color:#3b82f6;text-align:center;font-family:Arial,Helvetica,sans-serif;">Password Reset Request</h1>
-      
-      <p style="margin:0 0 16px 0;font-size:16px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">Hi <strong style="color:#1a1a1a;">${this.escapeHtml(name)}</strong>,</p>
-      
-      <p style="margin:0 0 30px 0;font-size:16px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">We received a request to reset your password. Click the button below to create a new password:</p>
-
-      <!-- Button -->
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-        <tr>
-          <td align="center" style="padding:32px 0;">
-            <a href="${resetUrl}" style="display:inline-block;background-color:#3b82f6;color:#ffffff;padding:14px 36px;text-decoration:none;font-weight:bold;font-size:16px;font-family:Arial,Helvetica,sans-serif;border:2px solid #2563eb;">Reset Password</a>
-          </td>
-        </tr>
-      </table>
-
-      <!-- Security Notice -->
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f9f9f9;border-left:4px solid #3b82f6;margin:30px 0;">
-        <tr>
-          <td style="padding:24px;">
-            <p style="margin:0 0 12px 0;font-size:15px;font-weight:bold;color:#1a1a1a;font-family:Arial,Helvetica,sans-serif;">Security Notice:</p>
-            <ul style="margin:0;padding-left:20px;color:#737373;font-size:14px;line-height:1.8;">
-              <li style="margin-bottom:8px;">This link will expire in 1 hour</li>
-              <li style="margin-bottom:8px;">If you didn't request this, please ignore this email</li>
-              <li style="margin-bottom:8px;">Never share this link with anyone</li>
-            </ul>
-          </td>
-        </tr>
-      </table>
-
-      <!-- Alternative Link -->
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-        <tr>
-          <td style="padding-top:24px;">
-            <p style="margin:0 0 12px 0;font-size:14px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">If the button doesn't work, copy and paste this link into your browser:</p>
-            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f9f9f9;border:1px solid #3b82f6;">
-              <tr>
-                <td style="padding:14px 16px;font-family:'Courier New',monospace;font-size:14px;color:#737373;word-break:break-all;">${this.escapeHtml(resetUrl)}</td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
-
-      <!-- Signature -->
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-        <tr>
-          <td style="padding-top:32px;">
-            <p style="margin:0 0 8px 0;font-size:14px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">If you have any questions or need assistance, please contact your system administrator.</p>
-            <p style="margin:0;font-size:14px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">Best regards,<br><strong style="color:#1a1a1a;">Stanley Black & Decker Team</strong></p>
-          </td>
-        </tr>
-      </table>
-    `;
-
-    const body = this.generateBrandedEmailTemplate(
-      "Password Reset Request",
-      content,
-      true
-    );
+    const body = renderEmail({
+      preview: "Reset your Ralli Wolf Operations password.",
+      eyebrow: "Password reset",
+      heading: "Reset your password",
+      paragraphs: [
+        `Hi ${name}, we received a request to reset your password. Use the button below to choose a new one.`,
+      ],
+      button: { label: "Reset password", href: resetUrl },
+      note: "This link expires shortly and can be used once. If the button does not work, copy the address from your browser's status bar.",
+      footer:
+        "If you did not request a reset, ignore this email — your password is unchanged.",
+    });
 
     return await this.sendEmail({
       to: email,
-      subject,
+      subject: "Reset your Ralli Wolf Operations password",
       body,
       name,
     });
   }
 
-  /**
-   * Send Aakraman login OTP email
-   * For sales users logging into the order booking system
-   */
+  /** Login code for the Aakraman order-booking flow. */
   async sendAakramanOtpEmail(
     email: string,
     name: string,
     otp: string
   ): Promise<boolean> {
-    const subject = "Login OTP - Aakraman Order Booking";
-
-    const content = `
-      <h1 style="margin:0 0 24px 0;font-size:32px;font-weight:bold;color:#facc15;text-align:center;font-family:Arial,Helvetica,sans-serif;">Aakraman Login Verification</h1>
-
-      <p style="margin:0 0 16px 0;font-size:16px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">Hi <strong style="color:#1a1a1a;">${this.escapeHtml(name)}</strong>,</p>
-
-      <p style="margin:0 0 30px 0;font-size:16px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">Use the verification code below to login to the Aakraman Order Booking system:</p>
-
-      <!-- OTP Box -->
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#fef9c3;border:3px solid #facc15;margin:30px 0;">
-        <tr>
-          <td style="padding:4px;background-color:#facc15;"></td>
-        </tr>
-        <tr>
-          <td align="center" style="padding:40px 30px;">
-            <p style="margin:0 0 12px 0;font-size:15px;color:#737373;font-weight:bold;font-family:Arial,Helvetica,sans-serif;">Your verification code:</p>
-            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-              <tr>
-                <td style="font-family:'Courier New',monospace;font-size:42px;font-weight:bold;letter-spacing:12px;color:#1a1a1a;background-color:#ffffff;padding:24px 40px;border:2px solid #facc15;">${this.escapeHtml(otp)}</td>
-              </tr>
-            </table>
-            <p style="margin:20px 0 0 0;font-size:13px;color:#737373;font-weight:600;font-family:Arial,Helvetica,sans-serif;">This code will expire in 10 minutes</p>
-          </td>
-        </tr>
-      </table>
-
-      <!-- Security Notice -->
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f9f9f9;border-left:4px solid #facc15;margin:30px 0;">
-        <tr>
-          <td style="padding:24px;">
-            <p style="margin:0 0 12px 0;font-size:15px;font-weight:bold;color:#1a1a1a;font-family:Arial,Helvetica,sans-serif;">Security Notice:</p>
-            <ul style="margin:0;padding-left:20px;color:#737373;font-size:14px;line-height:1.8;">
-              <li style="margin-bottom:8px;">This code will expire in 10 minutes</li>
-              <li style="margin-bottom:8px;">If you didn't request this, please ignore this email</li>
-              <li style="margin-bottom:8px;">Never share this code with anyone</li>
-            </ul>
-          </td>
-        </tr>
-      </table>
-
-      <!-- Signature -->
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-        <tr>
-          <td style="padding-top:32px;">
-            <p style="margin:0;font-size:14px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">Best regards,<br><strong style="color:#1a1a1a;">Stanley Black & Decker Team</strong></p>
-          </td>
-        </tr>
-      </table>
-    `;
-
-    const body = this.generateBrandedEmailTemplate(
-      "Aakraman Login OTP",
-      content,
-      false
-    );
+    const body = renderEmail({
+      preview: `${otp} is your Aakraman login code.`,
+      eyebrow: "Aakraman order booking",
+      heading: "Your login code",
+      paragraphs: [
+        `Hi ${name}, use the code below to sign in to Aakraman order booking.`,
+      ],
+      code: otp,
+      note: "This code expires in 10 minutes. Never share it with anyone.",
+      footer: "If you did not request this code, no action is required.",
+    });
 
     return await this.sendEmail({
       to: email,
-      subject,
+      subject: `${otp} is your Aakraman login code`,
       body,
       name,
     });
   }
 
-  /**
-   * Send approval request notification to the assigned approver
-   */
+  /** Notifies an approver that something is waiting on their decision. */
   async sendApprovalRequestEmail(data: {
     approverName: string;
     approverEmail: string;
@@ -623,77 +317,45 @@ class EmailService {
     objectNumber: string;
     approvalId: number;
   }): Promise<boolean> {
-    const subject = `Action Required: ${data.objectType} Approval Request - ${data.objectNumber}`;
+    const rows: EmailRow[] = [
+      { label: "Type", value: data.objectType },
+      { label: "Reference", value: data.objectNumber },
+      { label: "Name", value: data.objectName },
+      { label: "Requested by", value: data.requesterName },
+      { label: "Approval ID", value: `#${data.approvalId}` },
+    ];
 
-    const content = `
-      <h1 style="margin:0 0 24px 0;font-size:28px;font-weight:bold;color:#facc15;text-align:center;font-family:Arial,Helvetica,sans-serif;">Approval Request</h1>
+    const body = renderEmail({
+      preview: `${data.requesterName} needs your approval on ${data.objectNumber}.`,
+      eyebrow: "Action required",
+      heading: "An approval is waiting on you",
+      paragraphs: [
+        `Hi ${data.approverName}, ${data.requesterName} has submitted a ${data.objectType.toLowerCase()} for your approval.`,
+      ],
+      button: {
+        label: "Review the request",
+        href: `${this.appUrl()}/sales/approvals`,
+      },
+      rowsLabel: "Request details",
+      rows,
+      footer:
+        "You receive this message when an approval is assigned to you. Nothing proceeds until you decide.",
+    });
 
-      <p style="margin:0 0 16px 0;font-size:16px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">Hi <strong style="color:#1a1a1a;">${this.escapeHtml(data.approverName)}</strong>,</p>
-
-      <p style="margin:0 0 24px 0;font-size:16px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">
-        <strong style="color:#1a1a1a;">${this.escapeHtml(data.requesterName)}</strong> has submitted a ${data.objectType.toLowerCase()} for your approval.
-      </p>
-
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#fef9c3;border:2px solid #facc15;margin:24px 0;">
-        <tr><td style="padding:4px;background-color:#facc15;"></td></tr>
-        <tr>
-          <td style="padding:24px;">
-            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-              <tr>
-                <td style="padding:8px 0;border-bottom:1px solid #e0e0e0;">
-                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-                    <tr>
-                      <td width="160" style="font-weight:bold;color:#1a1a1a;font-size:14px;font-family:Arial,Helvetica,sans-serif;">Type:</td>
-                      <td style="color:#1a1a1a;font-size:14px;font-family:Arial,Helvetica,sans-serif;">${this.escapeHtml(data.objectType)}</td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-              <tr>
-                <td style="padding:8px 0;border-bottom:1px solid #e0e0e0;">
-                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-                    <tr>
-                      <td width="160" style="font-weight:bold;color:#1a1a1a;font-size:14px;font-family:Arial,Helvetica,sans-serif;">Reference:</td>
-                      <td style="color:#1a1a1a;font-size:14px;font-family:Arial,Helvetica,sans-serif;">${this.escapeHtml(data.objectNumber)}</td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-              <tr>
-                <td style="padding:8px 0;">
-                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-                    <tr>
-                      <td width="160" style="font-weight:bold;color:#1a1a1a;font-size:14px;font-family:Arial,Helvetica,sans-serif;">Name:</td>
-                      <td style="color:#1a1a1a;font-size:14px;font-family:Arial,Helvetica,sans-serif;">${this.escapeHtml(data.objectName)}</td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
-
-      <p style="margin:24px 0 8px 0;font-size:15px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">Please log in to the CRM to review and take action on this request (Approval ID: <strong style="color:#1a1a1a;">#${data.approvalId}</strong>).</p>
-
-      <p style="margin:0;font-size:14px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">Best regards,<br><strong style="color:#1a1a1a;">Stanley Black &amp; Decker Team</strong></p>
-    `;
-
-    const body = this.generateBrandedEmailTemplate(
-      "Approval Request",
-      content,
-      false
-    );
     return await this.sendEmail({
       to: data.approverEmail,
-      subject,
+      subject: `Action required: ${data.objectType} approval — ${data.objectNumber}`,
       body,
       name: data.approverName,
     });
   }
 
   /**
-   * Send approval outcome notification to the original requester
+   * Reports an approval decision back to whoever raised it.
+   *
+   * The shell carries one accent, so the outcome is stated in the copy and in
+   * a Decision row rather than being encoded in a colour the reader has to
+   * interpret.
    */
   async sendApprovalActionEmail(data: {
     requesterName: string;
@@ -706,94 +368,46 @@ class EmailService {
     comment?: string;
   }): Promise<boolean> {
     const isApproved = data.action === "APPROVED";
-    const subject = `${data.objectType} ${isApproved ? "Approved" : "Rejected"} - ${data.objectNumber}`;
-    const accentColor = isApproved ? "#22c55e" : "#ef4444";
-    const accentBg = isApproved ? "#dcfce7" : "#fee2e2";
+    const outcome = isApproved ? "approved" : "rejected";
 
-    const content = `
-      <h1 style="margin:0 0 24px 0;font-size:28px;font-weight:bold;color:${accentColor};text-align:center;font-family:Arial,Helvetica,sans-serif;">
-        ${data.objectType} ${isApproved ? "Approved" : "Rejected"}
-      </h1>
+    const rows: EmailRow[] = [
+      { label: "Decision", value: isApproved ? "Approved" : "Rejected" },
+      { label: "Reference", value: data.objectNumber },
+      { label: "Name", value: data.objectName },
+      { label: "Decided by", value: data.actorName },
+    ];
+    if (data.comment) {
+      rows.push({ label: "Comment", value: data.comment });
+    }
 
-      <p style="margin:0 0 16px 0;font-size:16px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">Hi <strong style="color:#1a1a1a;">${this.escapeHtml(data.requesterName)}</strong>,</p>
+    const body = renderEmail({
+      preview: `${data.objectNumber} was ${outcome}.`,
+      eyebrow: "Approval outcome",
+      heading: `Your ${data.objectType.toLowerCase()} was ${outcome}`,
+      paragraphs: [
+        `Hi ${data.requesterName}, your ${data.objectType.toLowerCase()} ${data.objectNumber} has been ${outcome} by ${data.actorName}.`,
+      ],
+      rowsLabel: "Decision details",
+      rows,
+      footer:
+        "You receive this message when a request you raised has been decided.",
+    });
 
-      <p style="margin:0 0 24px 0;font-size:16px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">
-        Your ${data.objectType.toLowerCase()} has been <strong style="color:${accentColor};">${isApproved ? "approved" : "rejected"}</strong> by <strong style="color:#1a1a1a;">${this.escapeHtml(data.actorName)}</strong>.
-      </p>
-
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:${accentBg};border:2px solid ${accentColor};margin:24px 0;">
-        <tr><td style="padding:4px;background-color:${accentColor};"></td></tr>
-        <tr>
-          <td style="padding:24px;">
-            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-              <tr>
-                <td style="padding:6px 0;">
-                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-                    <tr>
-                      <td width="160" style="font-weight:bold;color:#1a1a1a;font-size:14px;font-family:Arial,Helvetica,sans-serif;">Reference:</td>
-                      <td style="color:#1a1a1a;font-size:14px;font-family:Arial,Helvetica,sans-serif;">${this.escapeHtml(data.objectNumber)}</td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-              <tr>
-                <td style="padding:6px 0;">
-                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-                    <tr>
-                      <td width="160" style="font-weight:bold;color:#1a1a1a;font-size:14px;font-family:Arial,Helvetica,sans-serif;">Name:</td>
-                      <td style="color:#1a1a1a;font-size:14px;font-family:Arial,Helvetica,sans-serif;">${this.escapeHtml(data.objectName)}</td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-              <tr>
-                <td style="padding:6px 0;">
-                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-                    <tr>
-                      <td width="160" style="font-weight:bold;color:#1a1a1a;font-size:14px;font-family:Arial,Helvetica,sans-serif;">Decision:</td>
-                      <td style="color:${accentColor};font-size:14px;font-weight:bold;font-family:Arial,Helvetica,sans-serif;">${isApproved ? "APPROVED" : "REJECTED"}</td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-              ${
-                data.comment
-                  ? `
-              <tr>
-                <td style="padding:6px 0;">
-                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-                    <tr>
-                      <td width="160" style="font-weight:bold;color:#1a1a1a;font-size:14px;font-family:Arial,Helvetica,sans-serif;vertical-align:top;">Comment:</td>
-                      <td style="color:#737373;font-size:14px;font-family:Arial,Helvetica,sans-serif;">${this.escapeHtml(data.comment)}</td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>`
-                  : ""
-              }
-            </table>
-          </td>
-        </tr>
-      </table>
-
-      <p style="margin:0;font-size:14px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">Best regards,<br><strong style="color:#1a1a1a;">Stanley Black &amp; Decker Team</strong></p>
-    `;
-
-    const body = this.generateBrandedEmailTemplate(
-      `${data.objectType} ${isApproved ? "Approved" : "Rejected"}`,
-      content,
-      isApproved
-    );
     return await this.sendEmail({
       to: data.requesterEmail,
-      subject,
+      subject: `${data.objectType} ${outcome} — ${data.objectNumber}`,
       body,
       name: data.requesterName,
     });
   }
 
   /**
-   * Send approved quote to client with inline summary and S3 PDF link
+   * Sends an approved quote to the client.
+   *
+   * The line items and totals are the one body in this file that is genuinely
+   * structured rather than prose, so they go through the shell's `bodyHtml`
+   * slot. Everything interpolated into them is escaped here, which is the
+   * condition that slot comes with.
    */
   async sendQuoteEmail(data: {
     to: string;
@@ -826,140 +440,90 @@ class EmailService {
       }>;
     };
   }): Promise<boolean> {
-    const subject =
-      data.subject ||
-      `Quote ${data.quote.quoteNumber} from Stanley Black & Decker`;
+    const { quote } = data;
+    const C = EMAIL_COLORS;
+    const F = EMAIL_FONT_STACKS;
+    const money = (value: number) => Number(value).toFixed(2);
 
-    const lineItemRows = data.quote.lineItems
+    const cell = `padding:8px 10px;border-bottom:1px solid ${C.border};font-family:${F.mono};font-size:12px;color:${C.text};line-height:18px`;
+    const head = `padding:0 10px 8px;border-bottom:1px solid ${C.border};font-family:${F.mono};font-size:11px;color:${C.dim};line-height:16px;text-align:left`;
+
+    const lineItems = quote.lineItems
       .map(
-        (item, i) => `
-      <tr style="background-color:${i % 2 === 0 ? "#ffffff" : "#f9fafb"};">
-        <td style="padding:8px 12px;font-size:13px;color:#1a1a1a;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #e0e0e0;">${this.escapeHtml(item.productName)}</td>
-        <td style="padding:8px 12px;font-size:13px;color:#1a1a1a;text-align:center;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #e0e0e0;">${item.quantity}</td>
-        <td style="padding:8px 12px;font-size:13px;color:#1a1a1a;text-align:right;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #e0e0e0;">${Number(item.unitPrice).toFixed(2)}</td>
-        <td style="padding:8px 12px;font-size:13px;color:#1a1a1a;text-align:right;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #e0e0e0;">${Number(item.discount).toFixed(2)}%</td>
-        <td style="padding:8px 12px;font-size:13px;color:#1a1a1a;text-align:right;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #e0e0e0;font-weight:bold;">${Number(item.totalPrice).toFixed(2)}</td>
-      </tr>
-    `
+        item =>
+          `<tr><td style="${cell}">${this.escapeHtml(item.productName)}</td><td style="${cell};text-align:center">${item.quantity}</td><td style="${cell};text-align:right">${money(item.unitPrice)}</td><td style="${cell};text-align:right">${money(item.discount)}%</td><td style="${cell};text-align:right">${money(item.totalPrice)}</td></tr>`
       )
       .join("");
 
-    const content = `
-      <h1 style="margin:0 0 24px 0;font-size:28px;font-weight:bold;color:#facc15;text-align:center;font-family:Arial,Helvetica,sans-serif;">Quote ${this.escapeHtml(data.quote.quoteNumber)}</h1>
+    const totalRow = (label: string, value: string, strong = false) =>
+      `<tr><td style="padding:4px 0;font-family:${F.mono};font-size:12px;color:${strong ? C.text : C.dim};line-height:18px">${this.escapeHtml(label)}</td><td style="padding:4px 0;text-align:right;font-family:${F.mono};font-size:${strong ? "14px" : "12px"};font-weight:${strong ? "600" : "400"};color:${C.text};line-height:18px">${this.escapeHtml(value)}</td></tr>`;
 
-      <p style="margin:0 0 16px 0;font-size:16px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">Dear <strong style="color:#1a1a1a;">${this.escapeHtml(data.contactName)}</strong>,</p>
+    const totals = [
+      totalRow("Subtotal", money(quote.subtotal)),
+      quote.discount > 0
+        ? totalRow(
+            `Discount (${money(quote.discountPercent)}%)`,
+            `-${money(quote.discount)}`
+          )
+        : "",
+      quote.taxAmount > 0
+        ? totalRow(`Tax (${money(quote.taxPercent)}%)`, money(quote.taxAmount))
+        : "",
+      quote.shippingAmount > 0
+        ? totalRow("Shipping", money(quote.shippingAmount))
+        : "",
+      totalRow("Grand total", money(quote.grandTotal), true),
+    ].join("");
 
-      ${data.message ? `<p style="margin:0 0 24px 0;font-size:15px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">${this.escapeHtml(data.message)}</p>` : `<p style="margin:0 0 24px 0;font-size:15px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">Please find your quote details below. You can also download the full PDF using the button at the bottom of this email.</p>`}
+    const bodyHtml =
+      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 24px">` +
+      `<tr><th style="${head}">Product</th><th style="${head};text-align:center">Qty</th><th style="${head};text-align:right">Unit</th><th style="${head};text-align:right">Disc</th><th style="${head};text-align:right">Total</th></tr>` +
+      `${lineItems}</table>` +
+      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 24px"><tr><td width="55%"></td><td width="45%">` +
+      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">${totals}</table>` +
+      `</td></tr></table>`;
 
-      <!-- Quote Summary -->
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 24px 0;">
-        <tr>
-          <td style="padding:6px 0;">
-            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-              <tr>
-                <td width="180" style="font-weight:bold;color:#1a1a1a;font-size:14px;font-family:Arial,Helvetica,sans-serif;">Quote Reference:</td>
-                <td style="color:#737373;font-size:14px;font-family:Arial,Helvetica,sans-serif;">${this.escapeHtml(data.quote.quoteNumber)}</td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-        ${
-          data.quote.validUntil
-            ? `
-        <tr>
-          <td style="padding:6px 0;">
-            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-              <tr>
-                <td width="180" style="font-weight:bold;color:#1a1a1a;font-size:14px;font-family:Arial,Helvetica,sans-serif;">Valid Until:</td>
-                <td style="color:#737373;font-size:14px;font-family:Arial,Helvetica,sans-serif;">${new Date(data.quote.validUntil).toLocaleDateString()}</td>
-              </tr>
-            </table>
-          </td>
-        </tr>`
-            : ""
-        }
-      </table>
+    const rows: EmailRow[] = [
+      { label: "Quote reference", value: quote.quoteNumber },
+      { label: "Quote name", value: quote.name },
+    ];
+    if (quote.validUntil) {
+      rows.push({
+        label: "Valid until",
+        value: new Date(quote.validUntil).toLocaleDateString("en-IN"),
+      });
+    }
+    if (quote.paymentTerms) {
+      rows.push({ label: "Payment terms", value: quote.paymentTerms });
+    }
+    if (quote.deliveryTerms) {
+      rows.push({ label: "Delivery terms", value: quote.deliveryTerms });
+    }
+    if (quote.notes) {
+      rows.push({ label: "Notes", value: quote.notes });
+    }
 
-      <!-- Line Items Table -->
-      <p style="margin:0 0 8px 0;font-size:14px;font-weight:bold;color:#1a1a1a;font-family:Arial,Helvetica,sans-serif;">Items</p>
-      <table role="presentation" cellpadding="0" cellspacing="0" border="1" width="100%" style="border-collapse:collapse;border-color:#e0e0e0;margin:0 0 24px 0;">
-        <tr style="background-color:#facc15;">
-          <th style="padding:10px 12px;font-size:12px;color:#1a1a1a;text-align:left;font-family:Arial,Helvetica,sans-serif;">Product</th>
-          <th style="padding:10px 12px;font-size:12px;color:#1a1a1a;text-align:center;font-family:Arial,Helvetica,sans-serif;">Qty</th>
-          <th style="padding:10px 12px;font-size:12px;color:#1a1a1a;text-align:right;font-family:Arial,Helvetica,sans-serif;">Unit Price</th>
-          <th style="padding:10px 12px;font-size:12px;color:#1a1a1a;text-align:right;font-family:Arial,Helvetica,sans-serif;">Disc %</th>
-          <th style="padding:10px 12px;font-size:12px;color:#1a1a1a;text-align:right;font-family:Arial,Helvetica,sans-serif;">Total</th>
-        </tr>
-        ${lineItemRows}
-      </table>
+    const body = renderEmail({
+      preview: `Quote ${quote.quoteNumber} — ${money(quote.grandTotal)}`,
+      eyebrow: "Quotation",
+      heading: `Quote ${quote.quoteNumber}`,
+      paragraphs: [
+        `Dear ${data.contactName},`,
+        data.message ||
+          "Please find your quote below. The full PDF is attached to the button underneath the totals.",
+      ],
+      bodyHtml,
+      button: { label: "Download quote PDF", href: quote.pdfUrl },
+      rowsLabel: "Quote details",
+      rows,
+      footer:
+        "Reply to this email if anything in the quote needs changing before you accept it.",
+    });
 
-      <!-- Totals -->
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 24px 0;">
-        <tr><td width="60%"></td><td width="40%">
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-            <tr>
-              <td style="padding:4px 0;font-size:13px;color:#737373;font-family:Arial,Helvetica,sans-serif;">Subtotal:</td>
-              <td style="padding:4px 0;font-size:13px;color:#1a1a1a;text-align:right;font-family:Arial,Helvetica,sans-serif;">${Number(data.quote.subtotal).toFixed(2)}</td>
-            </tr>
-            ${
-              data.quote.discount > 0
-                ? `
-            <tr>
-              <td style="padding:4px 0;font-size:13px;color:#737373;font-family:Arial,Helvetica,sans-serif;">Discount (${Number(data.quote.discountPercent).toFixed(2)}%):</td>
-              <td style="padding:4px 0;font-size:13px;color:#1a1a1a;text-align:right;font-family:Arial,Helvetica,sans-serif;">-${Number(data.quote.discount).toFixed(2)}</td>
-            </tr>`
-                : ""
-            }
-            ${
-              data.quote.taxAmount > 0
-                ? `
-            <tr>
-              <td style="padding:4px 0;font-size:13px;color:#737373;font-family:Arial,Helvetica,sans-serif;">Tax (${Number(data.quote.taxPercent).toFixed(2)}%):</td>
-              <td style="padding:4px 0;font-size:13px;color:#1a1a1a;text-align:right;font-family:Arial,Helvetica,sans-serif;">${Number(data.quote.taxAmount).toFixed(2)}</td>
-            </tr>`
-                : ""
-            }
-            ${
-              data.quote.shippingAmount > 0
-                ? `
-            <tr>
-              <td style="padding:4px 0;font-size:13px;color:#737373;font-family:Arial,Helvetica,sans-serif;">Shipping:</td>
-              <td style="padding:4px 0;font-size:13px;color:#1a1a1a;text-align:right;font-family:Arial,Helvetica,sans-serif;">${Number(data.quote.shippingAmount).toFixed(2)}</td>
-            </tr>`
-                : ""
-            }
-            <tr style="border-top:2px solid #facc15;">
-              <td style="padding:8px 0 4px 0;font-size:15px;font-weight:bold;color:#1a1a1a;font-family:Arial,Helvetica,sans-serif;">Grand Total:</td>
-              <td style="padding:8px 0 4px 0;font-size:15px;font-weight:bold;color:#1a1a1a;text-align:right;font-family:Arial,Helvetica,sans-serif;">${Number(data.quote.grandTotal).toFixed(2)}</td>
-            </tr>
-          </table>
-        </td></tr>
-      </table>
-
-      ${data.quote.paymentTerms ? `<p style="margin:0 0 8px 0;font-size:13px;color:#737373;font-family:Arial,Helvetica,sans-serif;"><strong style="color:#1a1a1a;">Payment Terms:</strong> ${this.escapeHtml(data.quote.paymentTerms)}</p>` : ""}
-      ${data.quote.deliveryTerms ? `<p style="margin:0 0 8px 0;font-size:13px;color:#737373;font-family:Arial,Helvetica,sans-serif;"><strong style="color:#1a1a1a;">Delivery Terms:</strong> ${this.escapeHtml(data.quote.deliveryTerms)}</p>` : ""}
-      ${data.quote.notes ? `<p style="margin:0 0 24px 0;font-size:13px;color:#737373;font-family:Arial,Helvetica,sans-serif;"><strong style="color:#1a1a1a;">Notes:</strong> ${this.escapeHtml(data.quote.notes)}</p>` : ""}
-
-      <!-- PDF Download Button -->
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-        <tr>
-          <td align="center" style="padding:24px 0;">
-            <a href="${data.quote.pdfUrl}" style="display:inline-block;background-color:#facc15;color:#1a1a1a;padding:14px 36px;text-decoration:none;font-weight:bold;font-size:16px;font-family:Arial,Helvetica,sans-serif;border:2px solid #eab308;">Download Quote PDF</a>
-          </td>
-        </tr>
-      </table>
-
-      <p style="margin:0;font-size:14px;color:#737373;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">Best regards,<br><strong style="color:#1a1a1a;">Stanley Black &amp; Decker Team</strong></p>
-    `;
-
-    const body = this.generateBrandedEmailTemplate(
-      `Quote ${data.quote.quoteNumber}`,
-      content,
-      false
-    );
     return await this.sendEmail({
       to: data.to,
-      subject,
+      subject:
+        data.subject || `Quote ${quote.quoteNumber} from Ralli Wolf Operations`,
       body,
       name: data.contactName,
       cc: data.cc,

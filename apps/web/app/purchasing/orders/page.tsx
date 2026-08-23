@@ -15,6 +15,7 @@ import {
   SelectField,
   SimpleTable,
   StatusBadge,
+  DEFAULT_PAGE_SIZE,
 } from "@/components/supply-chain/shared";
 import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
 import {
@@ -27,6 +28,8 @@ import {
   useSuppliers,
 } from "@/hooks/useSupplyChain";
 import { formatDate, formatMoney } from "@/lib/utils/decimal";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { FormDialog } from "@repo/ui/components/ui/form-dialog";
 
 interface DraftLine {
   product: PickedProduct | null;
@@ -54,7 +57,7 @@ export default function PurchaseOrdersPage() {
 
   const { orders, pagination, isLoading, error } = usePurchaseOrders({
     page,
-    limit: 25,
+    limit: DEFAULT_PAGE_SIZE,
     status: status || undefined,
     search: search || undefined,
     supplierId: filterSupplierId ? Number(filterSupplierId) : undefined,
@@ -114,17 +117,17 @@ export default function PurchaseOrdersPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title="Purchase orders"
           subtitle="Create, approve, and track supplier orders."
           actions={
             <Button
               type="button"
-              onClick={() => setShowForm(current => !current)}
+              onClick={() => setShowForm(true)}
               className="px-3 whitespace-nowrap"
             >
-              {showForm ? "Close" : "New purchase order"}
+              New purchase order
             </Button>
           }
         />
@@ -132,178 +135,174 @@ export default function PurchaseOrdersPage() {
         <ErrorBanner error={error} />
         <ErrorBanner error={createOrder.error} />
 
-        {showForm && (
-          <Panel
-            title="New purchase order"
-            description="Created as a draft; submit it for approval before it can be sent to the supplier."
-          >
-            <form onSubmit={submit} className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-4">
-                <Field label="Supplier">
-                  <SelectField
-                    required
-                    value={supplierId}
-                    onChange={event => setSupplierId(event.target.value)}
-                  >
-                    <option value="">Select a supplier…</option>
-                    {suppliers
-                      .filter(
-                        supplier =>
-                          !supplier.isBlacklisted &&
-                          supplier.status !== "INACTIVE"
-                      )
-                      .map(supplier => (
-                        <option key={supplier.id} value={supplier.id}>
-                          {supplier.code} — {supplier.name}
-                        </option>
-                      ))}
-                  </SelectField>
-                </Field>
-                <Field label="Deliver to warehouse" composite>
-                  <WarehouseFilter
-                    value={warehouseId}
-                    onChange={setWarehouseId}
-                    allowAll={false}
-                    required
-                  />
-                </Field>
-                <Field
-                  label="Expected delivery"
-                  hint="Blank derives from the supplier's lead time"
+        <FormDialog
+          open={showForm}
+          onOpenChange={setShowForm}
+          title="New purchase order"
+          description="Created as a draft; submit it for approval before it can be sent to the supplier."
+        >
+          <form onSubmit={submit} className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-4">
+              <Field label="Supplier">
+                <SelectField
+                  required
+                  value={supplierId}
+                  onChange={event => setSupplierId(event.target.value)}
                 >
-                  <Input
-                    type="date"
-                    value={expectedDeliveryDate}
-                    onChange={event =>
-                      setExpectedDeliveryDate(event.target.value)
-                    }
-                  />
-                </Field>
-                <Field label="Shipping / freight">
-                  <Input
-                    inputMode="decimal"
-                    value={shippingAmount}
-                    onChange={event => setShippingAmount(event.target.value)}
-                  />
-                </Field>
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground">
-                  Lines
-                </p>
-                {lines.map((line, index) => (
-                  <div
-                    key={index}
-                    className="grid gap-2 md:grid-cols-[3fr,1fr,1fr,1fr,auto]"
-                  >
-                    <ProductPicker
-                      value={line.product}
-                      onChange={product =>
-                        setLines(current =>
-                          current.map((entry, i) =>
-                            i === index ? { ...entry, product } : entry
-                          )
-                        )
-                      }
-                      placeholder="Search a purchasable item…"
-                    />
-                    <Input
-                      placeholder="Quantity"
-                      inputMode="decimal"
-                      value={line.quantity}
-                      onChange={event =>
-                        setLines(current =>
-                          current.map((entry, i) =>
-                            i === index
-                              ? { ...entry, quantity: event.target.value }
-                              : entry
-                          )
-                        )
-                      }
-                    />
-                    <Input
-                      placeholder="Price (auto)"
-                      inputMode="decimal"
-                      value={line.unitPrice}
-                      onChange={event =>
-                        setLines(current =>
-                          current.map((entry, i) =>
-                            i === index
-                              ? { ...entry, unitPrice: event.target.value }
-                              : entry
-                          )
-                        )
-                      }
-                    />
-                    <Input
-                      placeholder="Tax %"
-                      inputMode="decimal"
-                      value={line.taxPercent}
-                      onChange={event =>
-                        setLines(current =>
-                          current.map((entry, i) =>
-                            i === index
-                              ? { ...entry, taxPercent: event.target.value }
-                              : entry
-                          )
-                        )
-                      }
-                    />
-                    <button
-                      type="button"
-                      disabled={lines.length === 1}
-                      onClick={() =>
-                        setLines(current =>
-                          current.filter((_, i) => i !== index)
-                        )
-                      }
-                      className="rounded border px-3 text-sm hover:bg-muted disabled:opacity-40 whitespace-nowrap"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={() =>
-                    setLines(current => [
-                      ...current,
-                      {
-                        product: null,
-                        quantity: "",
-                        unitPrice: "",
-                        taxPercent: "18",
-                      },
-                    ])
-                  }
-                  className="rounded border px-3 py-1.5 text-sm hover:bg-muted whitespace-nowrap"
-                >
-                  Add line
-                </button>
-              </div>
-
-              <Field label="Notes to supplier">
-                <Input
-                  value={notes}
-                  onChange={event => setNotes(event.target.value)}
+                  <option value="">Select a supplier…</option>
+                  {suppliers
+                    .filter(
+                      supplier =>
+                        !supplier.isBlacklisted &&
+                        supplier.status !== "INACTIVE"
+                    )
+                    .map(supplier => (
+                      <option key={supplier.id} value={supplier.id}>
+                        {supplier.code} — {supplier.name}
+                      </option>
+                    ))}
+                </SelectField>
+              </Field>
+              <Field label="Deliver to warehouse" composite>
+                <WarehouseFilter
+                  value={warehouseId}
+                  onChange={setWarehouseId}
+                  allowAll={false}
+                  required
                 />
               </Field>
+              <Field
+                label="Expected delivery"
+                hint="Blank derives from the supplier's lead time"
+              >
+                <Input
+                  type="date"
+                  value={expectedDeliveryDate}
+                  onChange={event =>
+                    setExpectedDeliveryDate(event.target.value)
+                  }
+                />
+              </Field>
+              <Field label="Shipping / freight">
+                <Input
+                  inputMode="decimal"
+                  value={shippingAmount}
+                  onChange={event => setShippingAmount(event.target.value)}
+                />
+              </Field>
+            </div>
 
-              <div className="flex items-center gap-4">
-                <Button type="submit" disabled={!canSubmit}>
-                  {createOrder.isPending ? "Creating…" : "Create draft order"}
-                </Button>
-                {validLines.some(line => line.unitPrice) && (
-                  <span className="text-sm text-muted-foreground">
-                    Estimated total (entered prices only):{" "}
-                    <strong>{formatMoney(estimatedTotal)}</strong>
-                  </span>
-                )}
-              </div>
-            </form>
-          </Panel>
-        )}
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Lines</p>
+              {lines.map((line, index) => (
+                <div
+                  key={index}
+                  className="grid gap-2 md:grid-cols-[3fr,1fr,1fr,1fr,auto]"
+                >
+                  <ProductPicker
+                    value={line.product}
+                    onChange={product =>
+                      setLines(current =>
+                        current.map((entry, i) =>
+                          i === index ? { ...entry, product } : entry
+                        )
+                      )
+                    }
+                    placeholder="Search a purchasable item…"
+                  />
+                  <Input
+                    placeholder="Quantity"
+                    inputMode="decimal"
+                    value={line.quantity}
+                    onChange={event =>
+                      setLines(current =>
+                        current.map((entry, i) =>
+                          i === index
+                            ? { ...entry, quantity: event.target.value }
+                            : entry
+                        )
+                      )
+                    }
+                  />
+                  <Input
+                    placeholder="Price (auto)"
+                    inputMode="decimal"
+                    value={line.unitPrice}
+                    onChange={event =>
+                      setLines(current =>
+                        current.map((entry, i) =>
+                          i === index
+                            ? { ...entry, unitPrice: event.target.value }
+                            : entry
+                        )
+                      )
+                    }
+                  />
+                  <Input
+                    placeholder="Tax %"
+                    inputMode="decimal"
+                    value={line.taxPercent}
+                    onChange={event =>
+                      setLines(current =>
+                        current.map((entry, i) =>
+                          i === index
+                            ? { ...entry, taxPercent: event.target.value }
+                            : entry
+                        )
+                      )
+                    }
+                  />
+                  <button
+                    type="button"
+                    disabled={lines.length === 1}
+                    onClick={() =>
+                      setLines(current => current.filter((_, i) => i !== index))
+                    }
+                    className="rounded border px-3 text-sm hover:bg-muted disabled:opacity-40 whitespace-nowrap"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() =>
+                  setLines(current => [
+                    ...current,
+                    {
+                      product: null,
+                      quantity: "",
+                      unitPrice: "",
+                      taxPercent: "18",
+                    },
+                  ])
+                }
+                className="rounded border px-3 py-1.5 text-sm hover:bg-muted whitespace-nowrap"
+              >
+                Add line
+              </button>
+            </div>
+
+            <Field label="Notes to supplier">
+              <Input
+                value={notes}
+                onChange={event => setNotes(event.target.value)}
+              />
+            </Field>
+
+            <div className="dialog-form-actions">
+              <Button type="submit" disabled={!canSubmit}>
+                {createOrder.isPending ? "Creating…" : "Create draft order"}
+              </Button>
+              {validLines.some(line => line.unitPrice) && (
+                <span className="text-sm text-muted-foreground">
+                  Estimated total (entered prices only):{" "}
+                  <strong>{formatMoney(estimatedTotal)}</strong>
+                </span>
+              )}
+            </div>
+          </form>
+        </FormDialog>
 
         <Panel
           actions={
@@ -418,11 +417,10 @@ export default function PurchaseOrdersPage() {
           <Pager
             page={page}
             totalPages={pagination?.totalPages}
-            totalItems={pagination?.totalItems}
             onChange={setPage}
           />
         </Panel>
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { AuthController } from "../controllers/auth.controller.js";
 import { LoginOtpController } from "../controllers/loginOtp.controller.js";
+import { AuthMethodsController } from "../controllers/authMethods.controller.js";
 import {
   requireAuth,
   requireAdminSecret,
@@ -10,10 +11,16 @@ import { rateLimit } from "../middleware/rateLimit.js";
 const router = Router();
 const authController = new AuthController();
 const loginOtpController = new LoginOtpController();
+const authMethodsController = new AuthMethodsController();
 const emailRateLimitKey = (req: { body?: { email?: unknown } }) =>
   typeof req.body?.email === "string"
     ? req.body.email.trim().toLowerCase()
     : "";
+
+// The OTP routes never see an email address, so they are throttled per
+// sign-in attempt instead.
+const mfaRateLimitKey = (req: { body?: { mfaToken?: unknown } }) =>
+  typeof req.body?.mfaToken === "string" ? req.body.mfaToken : "";
 
 // POST /api/auth/login
 router.post(
@@ -26,22 +33,23 @@ router.post(
   authController.login
 );
 
-// Passwordless sign-in using a one-time code delivered by Resend.
+// Second factor. Both routes are keyed off the MFA token minted by /login,
+// so neither can be reached without a verified password.
 router.post(
-  "/login/otp/request",
+  "/login/otp/resend",
   rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 5,
-    keyGenerator: emailRateLimitKey,
+    keyGenerator: mfaRateLimitKey,
   }),
-  (req, res) => loginOtpController.request(req, res)
+  (req, res) => loginOtpController.resend(req, res)
 );
 router.post(
   "/login/otp/verify",
   rateLimit({
     windowMs: 10 * 60 * 1000,
     max: 10,
-    keyGenerator: emailRateLimitKey,
+    keyGenerator: mfaRateLimitKey,
   }),
   (req, res) => loginOtpController.verify(req, res)
 );
@@ -83,6 +91,39 @@ router.post(
   authController.verifyForgotPassword
 );
 router.post("/forgot-password/reset", authController.resetPassword);
+
+// ---- Authentication method management ------------------------------------
+// All behind requireAuth: these act on the signed-in account only, never on
+// an id supplied by the client.
+const userRateLimitKey = (req: { user?: { id?: number } }) =>
+  req.user?.id ? String(req.user.id) : "";
+
+router.get("/methods", requireAuth, (req, res) =>
+  authMethodsController.list(req, res)
+);
+router.post("/methods/totp/setup", requireAuth, (req, res) =>
+  authMethodsController.startTotpSetup(req, res)
+);
+router.post("/methods/totp/verify", requireAuth, (req, res) =>
+  authMethodsController.verifyTotp(req, res)
+);
+// Sending mail is the abusable step, so it carries the tighter limit.
+router.post(
+  "/methods/email/send",
+  requireAuth,
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    keyGenerator: userRateLimitKey,
+  }),
+  (req, res) => authMethodsController.sendEmailCode(req, res)
+);
+router.post("/methods/email/verify", requireAuth, (req, res) =>
+  authMethodsController.verifyEmailCode(req, res)
+);
+router.delete("/methods/:method", requireAuth, (req, res) =>
+  authMethodsController.disable(req, res)
+);
 
 // Change password (self-service)
 router.post("/change-password", requireAuth, authController.changePassword);

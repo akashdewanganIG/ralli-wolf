@@ -25,7 +25,7 @@ import {
   MapPin,
   User,
   Users,
-} from "lucide-react";
+} from "@repo/ui/icons";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { useAccount, useUpdateAccount } from "../hooks/useAccounts";
@@ -42,6 +42,7 @@ import {
   StatGridSkeleton,
   TableSkeleton,
 } from "./skeletons";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 interface Account {
   id: string;
@@ -276,7 +277,7 @@ export const AccountDetailPage = React.memo(function AccountDetailPage({
             label: "Contact Name",
             render: value => (
               <div className="flex items-center gap-2">
-                <span className="font-medium text-blue-600 hover:text-blue-800">
+                <span className="font-medium text-info-foreground hover:text-info-foreground">
                   {value}
                 </span>
               </div>
@@ -320,52 +321,52 @@ export const AccountDetailPage = React.memo(function AccountDetailPage({
           <div className="space-y-4">
             {/* Billing */}
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
                 Billing Address
               </p>
               <div className="space-y-3">
                 <div className="flex items-start gap-3">
-                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-50">
-                    <MapPin className="h-3.5 w-3.5 text-blue-500" />
+                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-info-surface">
+                    <MapPin className="h-3.5 w-3.5 text-info" />
                   </div>
                   <div className="grid grid-cols-2 gap-3 flex-1">
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                         Street
                       </p>
-                      <p className="text-sm font-medium text-gray-700">
+                      <p className="text-sm font-medium text-text-secondary">
                         {safeEditedAccount.billingAddress.street}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                         City
                       </p>
-                      <p className="text-sm font-medium text-gray-700">
+                      <p className="text-sm font-medium text-text-secondary">
                         {safeEditedAccount.billingAddress.city}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                         State
                       </p>
-                      <p className="text-sm font-medium text-gray-700">
+                      <p className="text-sm font-medium text-text-secondary">
                         {safeEditedAccount.billingAddress.state}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                         Zip Code
                       </p>
-                      <p className="text-sm font-medium text-gray-700">
+                      <p className="text-sm font-medium text-text-secondary">
                         {safeEditedAccount.billingAddress.zipCode}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                         Country
                       </p>
-                      <p className="text-sm font-medium text-gray-700">
+                      <p className="text-sm font-medium text-text-secondary">
                         {safeEditedAccount.billingAddress.country}
                       </p>
                     </div>
@@ -374,8 +375,8 @@ export const AccountDetailPage = React.memo(function AccountDetailPage({
               </div>
             </div>
 
-            <div className="border-t border-gray-100 pt-4">
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
+            <div className="border-t border-subtle pt-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
                 Shipping Address
               </p>
               <div className="flex items-center gap-2 mb-3">
@@ -390,52 +391,52 @@ export const AccountDetailPage = React.memo(function AccountDetailPage({
                     )
                   }
                 />
-                <label className="text-sm text-gray-600">
+                <label className="text-sm text-text-secondary">
                   Same as billing address
                 </label>
               </div>
               <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-teal-50">
-                  <MapPin className="h-3.5 w-3.5 text-teal-500" />
+                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                  <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
                 </div>
                 <div className="grid grid-cols-2 gap-3 flex-1">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                       Street
                     </p>
-                    <p className="text-sm font-medium text-gray-700">
+                    <p className="text-sm font-medium text-text-secondary">
                       {safeEditedAccount.shippingAddress.street}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                       City
                     </p>
-                    <p className="text-sm font-medium text-gray-700">
+                    <p className="text-sm font-medium text-text-secondary">
                       {safeEditedAccount.shippingAddress.city}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                       State
                     </p>
-                    <p className="text-sm font-medium text-gray-700">
+                    <p className="text-sm font-medium text-text-secondary">
                       {safeEditedAccount.shippingAddress.state}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                       Zip Code
                     </p>
-                    <p className="text-sm font-medium text-gray-700">
+                    <p className="text-sm font-medium text-text-secondary">
                       {safeEditedAccount.shippingAddress.zipCode}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                       Country
                     </p>
-                    <p className="text-sm font-medium text-gray-700">
+                    <p className="text-sm font-medium text-text-secondary">
                       {safeEditedAccount.shippingAddress.country}
                     </p>
                   </div>
@@ -453,40 +454,40 @@ export const AccountDetailPage = React.memo(function AccountDetailPage({
         <DetailCard title="Additional Information">
           <div className="space-y-3">
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-gray-100">
-                <FileText className="h-3.5 w-3.5 text-gray-500" />
+              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
+                <FileText className="h-3.5 w-3.5 text-muted-foreground" />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                   Description / Notes
                 </p>
-                <p className="text-sm font-medium text-gray-700 leading-relaxed">
+                <p className="text-sm font-medium text-text-secondary leading-relaxed">
                   {safeEditedAccount.description}
                 </p>
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-green-50">
-                <DollarSign className="h-3.5 w-3.5 text-green-500" />
+              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-success-surface">
+                <DollarSign className="h-3.5 w-3.5 text-success" />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                   Annual Revenue
                 </p>
-                <p className="text-sm font-medium text-gray-700">
+                <p className="text-sm font-medium text-text-secondary">
                   {safeEditedAccount.annualRevenue}
                 </p>
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-50">
-                <Users className="h-3.5 w-3.5 text-blue-500" />
+              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-info-surface">
+                <Users className="h-3.5 w-3.5 text-info" />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                   Company Size
                 </p>
-                <p className="text-sm font-medium text-gray-700">
+                <p className="text-sm font-medium text-text-secondary">
                   {safeEditedAccount.companySize}
                 </p>
               </div>
@@ -499,27 +500,27 @@ export const AccountDetailPage = React.memo(function AccountDetailPage({
         <DetailCard title="System Information">
           <div className="space-y-3">
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-indigo-50">
-                <User className="h-3.5 w-3.5 text-indigo-500" />
+              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary-surface">
+                <User className="h-3.5 w-3.5 text-primary" />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                   Account Owner
                 </p>
-                <p className="text-sm font-medium text-gray-700">
+                <p className="text-sm font-medium text-text-secondary">
                   {safeAccount.accountOwner}
                 </p>
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-50">
-                <Clock className="h-3.5 w-3.5 text-blue-500" />
+              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-info-surface">
+                <Clock className="h-3.5 w-3.5 text-info" />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                   Created At
                 </p>
-                <p className="text-sm font-medium text-gray-700">
+                <p className="text-sm font-medium text-text-secondary">
                   {apiAccount?.createdAt
                     ? new Date(apiAccount.createdAt).toLocaleString("en-GB", {
                         day: "2-digit",
@@ -542,7 +543,7 @@ export const AccountDetailPage = React.memo(function AccountDetailPage({
   // Loading and error states
   if (accountLoading) {
     return (
-      <div className="space-y-5 p-4">
+      <PageShell>
         <DetailHeaderSkeleton />
         <SectionSkeleton>
           <StatGridSkeleton count={3} />
@@ -561,7 +562,7 @@ export const AccountDetailPage = React.memo(function AccountDetailPage({
             </SectionSkeleton>
           </div>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
@@ -569,7 +570,9 @@ export const AccountDetailPage = React.memo(function AccountDetailPage({
     return (
       <div className="min-h-[60vh] p-4 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-red-600 mb-4">Failed to load account details</p>
+          <p className="text-destructive mb-4">
+            Failed to load account details
+          </p>
           <Button onClick={onBack} variant="outline">
             Go Back
           </Button>
@@ -601,10 +604,10 @@ export const AccountDetailPage = React.memo(function AccountDetailPage({
                 <div className="w-16 h-16 bg-primary/10 rounded-lg flex items-center justify-center">
                   <Building2 className="h-8 w-8 text-primary" />
                 </div>
-                {/* <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-background"></div> */}
+                {/* <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-success rounded-full border-2 border-background"></div> */}
               </div>
               <div>
-                <h2 className="text-2xl font-semibold text-foreground">
+                <h2 className="text-base sm:text-lg font-semibold text-foreground">
                   {safeEditedAccount.name}
                 </h2>
                 {/* {safeEditedAccount.industry && (
@@ -616,7 +619,7 @@ export const AccountDetailPage = React.memo(function AccountDetailPage({
             {/* Stats Section */}
             <div className="flex flex-col sm:flex-row gap-4">
               {/* Contacts Stat */}
-              <Card className="border shadow-sm min-w-[180px]">
+              <Card className="border shadow-sm min-w-[11.25rem]">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center">
@@ -638,7 +641,7 @@ export const AccountDetailPage = React.memo(function AccountDetailPage({
               </Card>
 
               {/* Created Date Stat */}
-              <Card className="border shadow-sm min-w-[180px]">
+              <Card className="border shadow-sm min-w-[11.25rem]">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center">

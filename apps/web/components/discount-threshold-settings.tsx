@@ -1,10 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
 import { Button } from "@repo/ui/components/ui/button";
 import { Input } from "@repo/ui/components/ui/input";
-import { Label } from "@repo/ui/components/ui/label";
 
 import { useGlobalSettings, useUpdateGlobalSetting } from "@/hooks/useSettings";
 import { toast } from "@/lib/toast";
@@ -38,7 +36,13 @@ export default function DiscountThresholdSettings() {
     Number(inputValue) !== Number(settings.OPPORTUNITY_DISCOUNT_THRESHOLD);
 
   const handleSave = async () => {
-    if (validationMessage) return;
+    // The constraint is reported as a toast rather than under the field, so it
+    // has to be raised here — and the button has to stay enabled while the
+    // value is invalid, or there would be nothing to press to find out why.
+    if (validationMessage) {
+      toast.error(validationMessage);
+      return;
+    }
 
     try {
       await updateSetting({
@@ -78,65 +82,48 @@ export default function DiscountThresholdSettings() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="discount-threshold">Manager approval threshold</Label>
-        <p className="text-sm leading-5 text-muted-foreground">
-          Discounts above this percentage require approval before the
-          opportunity can proceed.
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+      <div className="min-w-0 flex-1">
+        <div className="relative">
+          <Input
+            id="discount-threshold"
+            type="number"
+            min={0}
+            max={100}
+            step={0.01}
+            value={inputValue}
+            onChange={event => setInputValue(event.target.value)}
+            className="w-full pr-10"
+            // The panel heading names this control now that the field has no
+            // visible label of its own.
+            aria-label="Manager approval threshold"
+            // The message moved to a toast, but the field still has to
+            // announce itself as invalid to a screen reader.
+            aria-invalid={!!validationMessage}
+            aria-describedby="discount-threshold-help"
+          />
+          <span className="pointer-events-none absolute right-3 inset-y-0 my-auto h-fit text-sm font-medium text-muted-foreground">
+            %
+          </span>
+        </div>
+        {/* The constraint stays visible whether or not the value breaks it —
+              a toast is transient, and this is what you need to type. */}
+        <p
+          id="discount-threshold-help"
+          className="mt-1.5 text-xs text-muted-foreground"
+        >
+          Enter any value from 0 to 100.
         </p>
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-        <div className="w-full sm:w-48">
-          <div className="relative">
-            <Input
-              id="discount-threshold"
-              type="number"
-              min={0}
-              max={100}
-              step={0.01}
-              value={inputValue}
-              onChange={event => setInputValue(event.target.value)}
-              className="pr-10"
-              aria-invalid={!!validationMessage}
-              aria-describedby={
-                validationMessage
-                  ? "discount-threshold-error"
-                  : "discount-threshold-help"
-              }
-            />
-            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">
-              %
-            </span>
-          </div>
-          {validationMessage ? (
-            <p
-              id="discount-threshold-error"
-              className="mt-1.5 text-xs text-error-foreground"
-            >
-              {validationMessage}
-            </p>
-          ) : (
-            <p
-              id="discount-threshold-help"
-              className="mt-1.5 text-xs text-muted-foreground"
-            >
-              Enter any value from 0 to 100.
-            </p>
-          )}
-        </div>
-
-        <Button
-          type="button"
-          onClick={handleSave}
-          disabled={isPending || !!validationMessage || !hasChanged}
-          className="w-full sm:w-auto"
-        >
-          {isPending && <Loader2 className="size-4 animate-spin" />}
-          {isPending ? "Saving…" : "Save changes"}
-        </Button>
-      </div>
+      <Button
+        type="button"
+        onClick={handleSave}
+        disabled={isPending || !hasChanged}
+        className="w-full sm:w-auto"
+      >
+        {isPending ? "Saving…" : "Save changes"}
+      </Button>
     </div>
   );
 }

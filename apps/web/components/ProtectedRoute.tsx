@@ -3,7 +3,12 @@
 import { useAuth } from "../contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { Loader2 } from "lucide-react";
+import {
+  Skeleton,
+  SkeletonList,
+  SkeletonMetricRow,
+  SkeletonRegion,
+} from "@repo/ui/components/ui/skeleton";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -12,28 +17,35 @@ interface ProtectedRouteProps {
 
 export function RouteLoadingState({
   label = "Preparing your workspace",
-  detail = "Checking your session and permissions…",
 }: {
   label?: string;
   detail?: string;
 }) {
+  // Approximates the shell every authenticated page renders — header row,
+  // metric band, then a panel — so the page does not visibly rebuild itself
+  // when the session check resolves.
   return (
-    <div
-      className="flex min-h-[50vh] flex-col items-center justify-center gap-3 px-6 text-center"
-      role="status"
-      aria-live="polite"
+    <SkeletonRegion
+      label={label}
+      className="flex flex-col gap-4 px-4 pb-8 pt-5 sm:px-5"
     >
-      <span className="flex size-10 items-center justify-center rounded-xl border border-border bg-card shadow-sm">
-        <Loader2
-          className="size-5 animate-spin text-primary"
-          aria-hidden="true"
-        />
-      </span>
-      <div>
-        <p className="text-sm font-medium text-foreground">{label}</p>
-        <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-2">
+          <Skeleton className="h-5 w-56" />
+          <Skeleton className="h-3.5 w-80" />
+        </div>
+        <Skeleton className="h-9 w-28 rounded-lg" />
       </div>
-    </div>
+      <SkeletonMetricRow count={4} />
+      <div className="rounded-xl border border-border bg-card">
+        <div className="border-b border-border p-3">
+          <Skeleton className="h-4 w-40" />
+        </div>
+        <div className="p-3">
+          <SkeletonList rows={5} />
+        </div>
+      </div>
+    </SkeletonRegion>
   );
 }
 

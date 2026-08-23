@@ -26,6 +26,8 @@ import {
   formatQuantity,
   humanizeEnum,
 } from "@/lib/utils/decimal";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { Tag } from "@repo/ui/components/ui/tag";
 
 export default function ProductStockDetailPage() {
   const params = useParams<{ productId: string }>();
@@ -65,7 +67,7 @@ export default function ProductStockDetailPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title={
             detail
@@ -86,7 +88,7 @@ export default function ProductStockDetailPage() {
 
         <ErrorBanner error={error} />
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid-auto-fit gap-3">
           <StatCard
             label="On hand"
             value={isLoading ? "—" : formatQuantity(overall.onHand)}
@@ -216,9 +218,9 @@ export default function ProductStockDetailPage() {
                       <span
                         className={
                           expired
-                            ? "font-medium text-red-700"
+                            ? "font-medium text-error-foreground"
                             : soon
-                              ? "font-medium text-amber-700"
+                              ? "font-medium text-warning-foreground"
                               : ""
                         }
                       >
@@ -277,17 +279,21 @@ export default function ProductStockDetailPage() {
                     </span>
                   ),
                 },
-                { header: "Type", cell: row => humanizeEnum(row.movementType) },
+                {
+                  header: "Type",
+                  cell: row =>
+                    row.movementType ? <Tag>{row.movementType}</Tag> : "—",
+                },
                 {
                   header: "Direction",
                   cell: row => (
                     <span
                       className={
                         row.direction === "IN"
-                          ? "text-emerald-700"
+                          ? "text-success-foreground"
                           : row.direction === "OUT"
-                            ? "text-red-700"
-                            : "text-blue-700"
+                            ? "text-error-foreground"
+                            : "text-info-foreground"
                       }
                     >
                       {row.direction === "IN"
@@ -344,7 +350,8 @@ export default function ProductStockDetailPage() {
                 },
                 {
                   header: "Type",
-                  cell: row => humanizeEnum(row.referenceType),
+                  cell: row =>
+                    row.referenceType ? <Tag>{row.referenceType}</Tag> : "—",
                 },
                 { header: "Warehouse", cell: row => row.warehouse.code },
                 {
@@ -451,7 +458,7 @@ export default function ProductStockDetailPage() {
 
         {detail && (
           <Panel title="Item settings">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid-auto-fit gap-4">
               <DetailRow
                 label="Tracking"
                 value={humanizeEnum(detail.product.trackingType ?? "NONE")}
@@ -483,7 +490,7 @@ export default function ProductStockDetailPage() {
             </div>
           </Panel>
         )}
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

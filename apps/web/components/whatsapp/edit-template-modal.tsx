@@ -6,7 +6,7 @@ import { Textarea } from "@repo/ui/components/ui/textarea";
 import { whatsappService } from "@/lib/api/services";
 import { Button, SelectField } from "@repo/ui";
 import { toast } from "@/lib/toast";
-import { X, Plus, Trash2 } from "lucide-react";
+import { X, Plus, Trash2 } from "@repo/ui/icons";
 import { WhatsAppPreview } from "./whatsapp-preview";
 
 type ComponentType = "HEADER" | "BODY" | "FOOTER" | "BUTTONS";
@@ -178,17 +178,17 @@ export function EditTemplateModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-foreground/45 p-4 backdrop-blur-[1px]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-overlay p-4 backdrop-blur-[1px]">
       <div className="flex max-h-[calc(100svh-2rem)] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-xl shadow-slate-950/10">
         <div className="flex items-center justify-between border-b border-border bg-surface px-4 py-4 sm:px-6">
           <div>
             <h2 className="text-xl font-bold">Edit WhatsApp Template</h2>
-            <p className="text-sm text-gray-600 mt-1">{template.name}</p>
+            <p className="text-sm text-text-secondary mt-1">{template.name}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700"
+            className="text-muted-foreground hover:text-text-secondary"
             aria-label="Close edit template dialog"
           >
             <X className="h-5 w-5" />
@@ -202,7 +202,7 @@ export function EditTemplateModal({
             className="flex-1 p-4 space-y-4 overflow-y-auto"
           >
             {/* Template Info (Read-only) */}
-            <div className="bg-gray-50 rounded p-4 space-y-2">
+            <div className="bg-surface-elevated rounded p-4 space-y-2">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="font-medium">Language:</span>{" "}
@@ -217,19 +217,19 @@ export function EditTemplateModal({
                 <div>
                   <span className="font-medium">Status:</span>{" "}
                   <span
-                    className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    className={`px-2 py-1 rounded-md text-xs font-medium ${
                       template.status === "APPROVED"
-                        ? "bg-green-100 text-green-800"
+                        ? "bg-success-surface text-success-foreground"
                         : template.status === "PENDING"
-                          ? "bg-indigo-100 text-yellow-800"
-                          : "bg-red-100 text-red-800"
+                          ? "bg-primary-surface text-warning-foreground"
+                          : "bg-error-surface text-error-foreground"
                     }`}
                   >
                     {template.status}
                   </span>
                 </div>
               </div>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted-foreground">
                 Note: Only components can be edited. Template name, language,
                 and category cannot be changed.
               </p>
@@ -284,7 +284,7 @@ export function EditTemplateModal({
                       <button
                         type="button"
                         onClick={() => removeComponent(index)}
-                        className="text-red-500 hover:text-red-700"
+                        className="text-destructive hover:text-error-foreground"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -306,7 +306,7 @@ export function EditTemplateModal({
                         }
                         placeholder={`Enter ${component.type.toLowerCase()} text. Use {{1}}, {{2}} for variables.`}
                       />
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-muted-foreground mt-1">
                         Use {`{{1}}`}, {`{{2}}`}, etc. for dynamic content
                       </p>
                     </div>
@@ -336,7 +336,7 @@ export function EditTemplateModal({
                             <button
                               type="button"
                               onClick={() => removeButton(index, btnIndex)}
-                              className="text-red-500 hover:text-red-700"
+                              className="text-destructive hover:text-error-foreground"
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>
@@ -410,7 +410,7 @@ export function EditTemplateModal({
           </form>
 
           {/* Preview Section */}
-          <div className="w-80 border-l bg-gray-50 p-4 overflow-y-auto hidden lg:block">
+          <div className="w-80 border-l bg-surface-elevated p-4 overflow-y-auto hidden lg:block">
             <WhatsAppPreview
               components={components}
               templateName={template.name}

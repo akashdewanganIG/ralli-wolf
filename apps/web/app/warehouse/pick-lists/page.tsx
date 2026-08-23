@@ -15,6 +15,7 @@ import {
   SelectField,
   SimpleTable,
   StatusBadge,
+  DEFAULT_PAGE_SIZE,
 } from "@/components/supply-chain/shared";
 import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
 import {
@@ -24,6 +25,8 @@ import {
 import { usePickLists, useWmsMutations } from "@/hooks/useSupplyChain";
 import { useSalesOrdersWithPagination } from "@/hooks/useSalesOrders";
 import { formatDateTime, humanizeEnum } from "@/lib/utils/decimal";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { FormDialog } from "@repo/ui/components/ui/form-dialog";
 
 interface DraftLine {
   product: PickedProduct | null;
@@ -49,7 +52,7 @@ export default function PickListsPage() {
 
   const { pickLists, pagination, isLoading, error } = usePickLists({
     page,
-    limit: 25,
+    limit: DEFAULT_PAGE_SIZE,
     warehouseId: filterWarehouseId,
     status: status || undefined,
   });
@@ -102,17 +105,17 @@ export default function PickListsPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title="Pick lists"
           subtitle="Create and track warehouse picking work."
           actions={
             <Button
               type="button"
-              onClick={() => setShowForm(current => !current)}
+              onClick={() => setShowForm(true)}
               className="px-3 whitespace-nowrap"
             >
-              {showForm ? "Close" : "New pick list"}
+              New pick list
             </Button>
           }
         />
@@ -120,132 +123,136 @@ export default function PickListsPage() {
         <ErrorBanner error={error} />
         <ErrorBanner error={createPickList.error} />
 
-        {showForm && (
-          <Panel title="New pick list">
-            <form onSubmit={submit} className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-4">
-                <Field label="Pick for">
-                  <SelectField
-                    value={source}
-                    onChange={event =>
-                      setSource(event.target.value as "SALES_ORDER" | "MANUAL")
-                    }
-                  >
-                    <option value="SALES_ORDER">A sales order</option>
-                    <option value="MANUAL">Ad-hoc lines</option>
-                  </SelectField>
-                </Field>
-                <Field label="Pick from warehouse" composite>
-                  <WarehouseFilter
-                    value={warehouseId}
-                    onChange={setWarehouseId}
-                    allowAll={false}
-                    required
-                  />
-                </Field>
-                <Field
-                  label="Picking strategy"
-                  hint="Blank uses each item's own setting"
+        <FormDialog
+          open={showForm}
+          onOpenChange={setShowForm}
+          title="New pick list"
+        >
+          <form onSubmit={submit} className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-4">
+              <Field label="Pick for">
+                <SelectField
+                  value={source}
+                  onChange={event =>
+                    setSource(event.target.value as "SALES_ORDER" | "MANUAL")
+                  }
                 >
+                  <option value="SALES_ORDER">A sales order</option>
+                  <option value="MANUAL">Ad-hoc lines</option>
+                </SelectField>
+              </Field>
+              <Field label="Pick from warehouse" composite>
+                <WarehouseFilter
+                  value={warehouseId}
+                  onChange={setWarehouseId}
+                  allowAll={false}
+                  required
+                />
+              </Field>
+              <Field
+                label="Picking strategy"
+                hint="Blank uses each item's own setting"
+              >
+                <SelectField
+                  value={strategy}
+                  onChange={event => setStrategy(event.target.value)}
+                >
+                  <option value="">Per item default</option>
+                  <option value="FIFO">FIFO — oldest receipt first</option>
+                  <option value="LIFO">LIFO — newest receipt first</option>
+                  <option value="FEFO">FEFO — earliest expiry first</option>
+                </SelectField>
+              </Field>
+              {source === "SALES_ORDER" && (
+                <Field label="Sales order">
                   <SelectField
-                    value={strategy}
-                    onChange={event => setStrategy(event.target.value)}
+                    required
+                    value={salesOrderId}
+                    onChange={event => setSalesOrderId(event.target.value)}
                   >
-                    <option value="">Per item default</option>
-                    <option value="FIFO">FIFO — oldest receipt first</option>
-                    <option value="LIFO">LIFO — newest receipt first</option>
-                    <option value="FEFO">FEFO — earliest expiry first</option>
+                    <option value="">Select an order…</option>
+                    {(salesOrders ?? []).map(order => (
+                      <option key={order.id} value={order.id}>
+                        {order.orderNumber} — {order.account?.name}
+                      </option>
+                    ))}
                   </SelectField>
                 </Field>
-                {source === "SALES_ORDER" && (
-                  <Field label="Sales order">
-                    <SelectField
-                      required
-                      value={salesOrderId}
-                      onChange={event => setSalesOrderId(event.target.value)}
-                    >
-                      <option value="">Select an order…</option>
-                      {(salesOrders ?? []).map(order => (
-                        <option key={order.id} value={order.id}>
-                          {order.orderNumber} — {order.account?.name}
-                        </option>
-                      ))}
-                    </SelectField>
-                  </Field>
-                )}
-              </div>
-
-              {source === "MANUAL" && (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    Lines to pick
-                  </p>
-                  {lines.map((line, index) => (
-                    <div
-                      key={index}
-                      className="grid gap-2 md:grid-cols-[3fr,1fr,auto]"
-                    >
-                      <ProductPicker
-                        value={line.product}
-                        onChange={product =>
-                          setLines(current =>
-                            current.map((entry, i) =>
-                              i === index ? { ...entry, product } : entry
-                            )
-                          )
-                        }
-                      />
-                      <Input
-                        placeholder="Quantity"
-                        inputMode="decimal"
-                        value={line.quantity}
-                        onChange={event =>
-                          setLines(current =>
-                            current.map((entry, i) =>
-                              i === index
-                                ? { ...entry, quantity: event.target.value }
-                                : entry
-                            )
-                          )
-                        }
-                      />
-                      <button
-                        type="button"
-                        disabled={lines.length === 1}
-                        onClick={() =>
-                          setLines(current =>
-                            current.filter((_, i) => i !== index)
-                          )
-                        }
-                        className="rounded border px-3 text-sm hover:bg-muted disabled:opacity-40 whitespace-nowrap"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setLines(current => [
-                        ...current,
-                        { product: null, quantity: "" },
-                      ])
-                    }
-                    className="rounded border px-3 py-1.5 text-sm hover:bg-muted whitespace-nowrap"
-                  >
-                    Add line
-                  </button>
-                </div>
               )}
+            </div>
 
+            {source === "MANUAL" && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Lines to pick
+                </p>
+                {lines.map((line, index) => (
+                  <div
+                    key={index}
+                    className="grid gap-2 md:grid-cols-[3fr,1fr,auto]"
+                  >
+                    <ProductPicker
+                      value={line.product}
+                      onChange={product =>
+                        setLines(current =>
+                          current.map((entry, i) =>
+                            i === index ? { ...entry, product } : entry
+                          )
+                        )
+                      }
+                    />
+                    <Input
+                      placeholder="Quantity"
+                      inputMode="decimal"
+                      value={line.quantity}
+                      onChange={event =>
+                        setLines(current =>
+                          current.map((entry, i) =>
+                            i === index
+                              ? { ...entry, quantity: event.target.value }
+                              : entry
+                          )
+                        )
+                      }
+                    />
+                    <button
+                      type="button"
+                      disabled={lines.length === 1}
+                      onClick={() =>
+                        setLines(current =>
+                          current.filter((_, i) => i !== index)
+                        )
+                      }
+                      className="rounded border px-3 text-sm hover:bg-muted disabled:opacity-40 whitespace-nowrap"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setLines(current => [
+                      ...current,
+                      { product: null, quantity: "" },
+                    ])
+                  }
+                  className="rounded border px-3 py-1.5 text-sm hover:bg-muted whitespace-nowrap"
+                >
+                  Add line
+                </button>
+              </div>
+            )}
+
+            <div className="dialog-form-actions">
               <Button type="submit" disabled={!canSubmit}>
                 {createPickList.isPending
                   ? "Allocating stock…"
                   : "Create pick list"}
               </Button>
-            </form>
-          </Panel>
-        )}
+            </div>
+          </form>
+        </FormDialog>
 
         <Panel
           actions={
@@ -327,11 +334,10 @@ export default function PickListsPage() {
           <Pager
             page={page}
             totalPages={pagination?.totalPages}
-            totalItems={pagination?.totalItems}
             onChange={setPage}
           />
         </Panel>
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

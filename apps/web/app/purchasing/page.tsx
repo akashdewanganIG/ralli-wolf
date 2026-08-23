@@ -24,6 +24,9 @@ import {
   formatPercent,
   formatQuantity,
 } from "@/lib/utils/decimal";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { CardActionButton } from "@repo/ui/components/ui/card-action-button";
+import { Tag } from "@repo/ui/components/ui/tag";
 
 export default function PurchasingDashboardPage() {
   const [warehouseId, setWarehouseId] = useState<number | undefined>(undefined);
@@ -39,7 +42,7 @@ export default function PurchasingDashboardPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title="Purchasing & suppliers"
           subtitle="Monitor purchasing activity, receipts, and supplier performance."
@@ -59,7 +62,7 @@ export default function PurchasingDashboardPage() {
 
         <ErrorBanner error={error} />
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid-auto-fit gap-3">
           <StatCard
             label="Spend (last 30 days)"
             value={isLoading ? "—" : formatMoney(dashboard?.spendLast30Days)}
@@ -153,9 +156,7 @@ export default function PurchasingDashboardPage() {
             description="Due within 14 days or already late"
             actions={
               watchlist && watchlist.overdue > 0 ? (
-                <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
-                  {watchlist.overdue} overdue
-                </span>
+                <Tag tone="danger">{watchlist.overdue} overdue</Tag>
               ) : null
             }
           >
@@ -164,14 +165,14 @@ export default function PurchasingDashboardPage() {
               rows={watchlist?.rows ?? []}
               keyOf={row => row.id}
               empty="Nothing due in the next two weeks."
-              rowClassName={row => (row.isOverdue ? "bg-red-50/40" : "")}
+              rowClassName={row => (row.isOverdue ? "bg-error-surface/40" : "")}
               columns={[
                 {
                   header: "PO",
                   cell: row => (
                     <Link
                       href={`/purchasing/orders/${row.id}`}
-                      className="font-mono text-xs text-primary hover:underline"
+                      className="font-mono text-xs text-primary hover:text-info"
                     >
                       {row.poNumber}
                     </Link>
@@ -184,7 +185,7 @@ export default function PurchasingDashboardPage() {
                   align: "right",
                   cell: row =>
                     row.isOverdue ? (
-                      <span className="font-semibold text-red-700">
+                      <span className="font-semibold text-error-foreground">
                         {row.daysLate}d
                       </span>
                     ) : (
@@ -209,13 +210,10 @@ export default function PurchasingDashboardPage() {
         <Panel
           title="Supplier scorecards"
           description="Computed from posted purchase orders and goods receipts over the last year. Suppliers with no receipts in the window are excluded rather than scored zero."
-          actions={
-            <Link
-              href="/purchasing/suppliers"
-              className="text-xs font-medium text-primary hover:underline"
-            >
+          footerAction={
+            <CardActionButton href="/purchasing/suppliers">
               All suppliers
-            </Link>
+            </CardActionButton>
           }
         >
           <SimpleTable
@@ -229,7 +227,7 @@ export default function PurchasingDashboardPage() {
                 cell: row => (
                   <Link
                     href={`/purchasing/suppliers/${row.supplierId}`}
-                    className="text-primary hover:underline"
+                    className="text-primary hover:text-info"
                   >
                     <span className="font-mono text-xs">
                       {row.supplierCode}
@@ -255,8 +253,8 @@ export default function PurchasingDashboardPage() {
                   <span
                     className={
                       Number(row.onTimeDeliveryRate) < 80
-                        ? "font-semibold text-red-700"
-                        : "text-emerald-700"
+                        ? "font-semibold text-error-foreground"
+                        : "text-success-foreground"
                     }
                   >
                     {formatPercent(row.onTimeDeliveryRate)}
@@ -270,8 +268,8 @@ export default function PurchasingDashboardPage() {
                   <span
                     className={
                       Number(row.qualityAcceptanceRate) < 95
-                        ? "font-semibold text-amber-700"
-                        : "text-emerald-700"
+                        ? "font-semibold text-warning-foreground"
+                        : "text-success-foreground"
                     }
                   >
                     {formatPercent(row.qualityAcceptanceRate)}
@@ -300,10 +298,10 @@ export default function PurchasingDashboardPage() {
                   <span
                     className={`font-semibold ${
                       Number(row.overallScore) >= 85
-                        ? "text-emerald-700"
+                        ? "text-success-foreground"
                         : Number(row.overallScore) >= 70
-                          ? "text-amber-700"
-                          : "text-red-700"
+                          ? "text-warning-foreground"
+                          : "text-error-foreground"
                     }`}
                   >
                     {formatQuantity(row.overallScore, 1)}
@@ -323,7 +321,7 @@ export default function PurchasingDashboardPage() {
             </p>
           )}
         </Panel>
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

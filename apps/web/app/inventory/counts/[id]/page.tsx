@@ -22,6 +22,7 @@ import {
   formatQuantity,
   humanizeEnum,
 } from "@/lib/utils/decimal";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 export default function StockCountDetailPage() {
   const params = useParams<{ id: string }>();
@@ -63,7 +64,7 @@ export default function StockCountDetailPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title={count ? `Count ${count.countNumber}` : "Stock count"}
           subtitle={
@@ -136,7 +137,7 @@ export default function StockCountDetailPage() {
           </Alert>
         )}
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid-auto-fit gap-3">
           <StatCard label="Lines" value={stats.total} />
           <StatCard
             label="Counted"
@@ -163,7 +164,7 @@ export default function StockCountDetailPage() {
 
         {count && (
           <Panel title="Count details">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid-auto-fit gap-4">
               <DetailRow
                 label="Warehouse"
                 value={
@@ -207,7 +208,7 @@ export default function StockCountDetailPage() {
             keyOf={row => row.id}
             empty="This count sheet has no lines."
             rowClassName={row =>
-              Number(row.varianceQuantity) !== 0 ? "bg-amber-50/40" : ""
+              Number(row.varianceQuantity) !== 0 ? "bg-warning-surface/40" : ""
             }
             columns={[
               {
@@ -276,8 +277,8 @@ export default function StockCountDetailPage() {
                     <span
                       className={
                         variance > 0
-                          ? "font-semibold text-emerald-700"
-                          : "font-semibold text-red-700"
+                          ? "font-semibold text-success-foreground"
+                          : "font-semibold text-error-foreground"
                       }
                     >
                       {variance > 0 ? "+" : ""}
@@ -314,7 +315,7 @@ export default function StockCountDetailPage() {
                 header: "Posted",
                 cell: row =>
                   row.isPosted ? (
-                    <span className="text-xs font-medium text-emerald-700">
+                    <span className="text-xs font-medium text-success-foreground">
                       Yes
                     </span>
                   ) : (
@@ -324,7 +325,7 @@ export default function StockCountDetailPage() {
             ]}
           />
         </Panel>
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

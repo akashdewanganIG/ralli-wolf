@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { ImagePlus, Trash2, UploadCloud } from "lucide-react";
+import { ImagePlus, Trash2, UploadCloud } from "@repo/ui/icons";
 
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_FILE_SIZE = 5 * 1024 * 1024;

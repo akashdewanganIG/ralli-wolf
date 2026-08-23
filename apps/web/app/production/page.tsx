@@ -15,6 +15,7 @@ import {
   SelectField,
   SimpleTable,
   StatusBadge,
+  DEFAULT_PAGE_SIZE,
 } from "@/components/supply-chain/shared";
 import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
 import {
@@ -31,6 +32,8 @@ import {
   formatQuantity,
   humanizeEnum,
 } from "@/lib/utils/decimal";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { FormDialog } from "@repo/ui/components/ui/form-dialog";
 
 export default function ProductionOrdersPage() {
   const router = useRouter();
@@ -49,7 +52,7 @@ export default function ProductionOrdersPage() {
 
   const { orders, pagination, isLoading, error } = useProductionOrders({
     page,
-    limit: 25,
+    limit: DEFAULT_PAGE_SIZE,
     status: status || undefined,
     warehouseId: filterWarehouseId,
   });
@@ -79,17 +82,17 @@ export default function ProductionOrdersPage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-5 p-4">
+      <PageShell>
         <PageHeader
           title="Production orders"
           subtitle="Plan and track production against a fixed bill of materials."
           actions={
             <Button
               type="button"
-              onClick={() => setShowForm(current => !current)}
+              onClick={() => setShowForm(true)}
               className="px-3 whitespace-nowrap"
             >
-              {showForm ? "Close" : "New production order"}
+              New production order
             </Button>
           }
         />
@@ -97,68 +100,60 @@ export default function ProductionOrdersPage() {
         <ErrorBanner error={error} />
         <ErrorBanner error={create.error} />
 
-        {showForm && (
-          <Panel
-            title="Plan a build"
-            description="The product needs an active bill of materials in effect today."
-          >
-            <form onSubmit={submit} className="grid gap-4 md:grid-cols-4">
-              <Field
-                label="Product to build"
-                className="md:col-span-2"
-                composite
+        <FormDialog
+          open={showForm}
+          onOpenChange={setShowForm}
+          title="Plan a build"
+          description="The product needs an active bill of materials in effect today."
+        >
+          <form onSubmit={submit} className="grid gap-4 md:grid-cols-4">
+            <Field label="Product to build" className="md:col-span-2" composite>
+              <ProductPicker value={product} onChange={setProduct} autoFocus />
+            </Field>
+            <Field label="Build in warehouse" composite>
+              <WarehouseFilter
+                value={warehouseId}
+                onChange={setWarehouseId}
+                allowAll={false}
+                required
+              />
+            </Field>
+            <Field label="Planned quantity">
+              <Input
+                required
+                inputMode="decimal"
+                value={plannedQuantity}
+                onChange={event => setPlannedQuantity(event.target.value)}
+              />
+            </Field>
+            <Field label="Planned start">
+              <Input
+                type="date"
+                value={plannedStartDate}
+                onChange={event => setPlannedStartDate(event.target.value)}
+              />
+            </Field>
+            <Field label="Notes" className="md:col-span-3">
+              <Input
+                value={notes}
+                onChange={event => setNotes(event.target.value)}
+              />
+            </Field>
+            <div className="md:col-span-4 dialog-form-actions">
+              <Button
+                type="submit"
+                disabled={
+                  !product ||
+                  !warehouseId ||
+                  !plannedQuantity ||
+                  create.isPending
+                }
               >
-                <ProductPicker
-                  value={product}
-                  onChange={setProduct}
-                  autoFocus
-                />
-              </Field>
-              <Field label="Build in warehouse" composite>
-                <WarehouseFilter
-                  value={warehouseId}
-                  onChange={setWarehouseId}
-                  allowAll={false}
-                  required
-                />
-              </Field>
-              <Field label="Planned quantity">
-                <Input
-                  required
-                  inputMode="decimal"
-                  value={plannedQuantity}
-                  onChange={event => setPlannedQuantity(event.target.value)}
-                />
-              </Field>
-              <Field label="Planned start">
-                <Input
-                  type="date"
-                  value={plannedStartDate}
-                  onChange={event => setPlannedStartDate(event.target.value)}
-                />
-              </Field>
-              <Field label="Notes" className="md:col-span-3">
-                <Input
-                  value={notes}
-                  onChange={event => setNotes(event.target.value)}
-                />
-              </Field>
-              <div className="md:col-span-4">
-                <Button
-                  type="submit"
-                  disabled={
-                    !product ||
-                    !warehouseId ||
-                    !plannedQuantity ||
-                    create.isPending
-                  }
-                >
-                  {create.isPending ? "Planning…" : "Create production order"}
-                </Button>
-              </div>
-            </form>
-          </Panel>
-        )}
+                {create.isPending ? "Planning…" : "Create production order"}
+              </Button>
+            </div>
+          </form>
+        </FormDialog>
 
         <Panel
           actions={
@@ -243,7 +238,7 @@ export default function ProductionOrdersPage() {
                 align: "right",
                 cell: row =>
                   Number(row.scrappedQuantity) > 0 ? (
-                    <span className="text-red-700">
+                    <span className="text-error-foreground">
                       {formatQuantity(row.scrappedQuantity)}
                     </span>
                   ) : (
@@ -266,9 +261,9 @@ export default function ProductionOrdersPage() {
                     <span
                       className={
                         variance > 0
-                          ? "text-red-700"
+                          ? "text-error-foreground"
                           : variance < 0
-                            ? "text-emerald-700"
+                            ? "text-success-foreground"
                             : ""
                       }
                     >
@@ -290,11 +285,10 @@ export default function ProductionOrdersPage() {
           <Pager
             page={page}
             totalPages={pagination?.totalPages}
-            totalItems={pagination?.totalItems}
             onChange={setPage}
           />
         </Panel>
-      </div>
+      </PageShell>
     </ProtectedRoute>
   );
 }

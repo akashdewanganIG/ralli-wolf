@@ -19,12 +19,13 @@ import {
 } from "@repo/ui/components/ui/dialog";
 import { Input } from "@repo/ui/components/ui/input";
 import { Label } from "@repo/ui/components/ui/label";
-import { ArrowLeft, Ban, CheckCircle, Plus, Search } from "lucide-react";
+import { Ban, CheckCircle, Plus, Search } from "@repo/ui/icons";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { DataTable, TableColumn } from "../../../../components/data-table";
 import apiClient from "../../../../lib/api/client";
 import { toast } from "../../../../lib/toast";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 interface OptOut {
   id: number;
@@ -191,22 +192,12 @@ export default function OptOutsPage() {
   const totalPages = Math.ceil(totalCount / itemsPerPage);
 
   return (
-    <div className="space-y-5 p-4">
-      <div className="flex items-center gap-2 mb-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => router.back()}
-          className="gap-2"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back
-        </Button>
-      </div>
+    <PageShell>
+      <div className="flex items-center gap-2 mb-2"></div>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            <h1 className="text-base sm:text-lg font-semibold tracking-tight">
               WhatsApp Opt-Out Management
             </h1>
             <Badge variant="secondary" className="text-xs">
@@ -220,7 +211,7 @@ export default function OptOutsPage() {
         <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
           <DialogTrigger asChild>
             <Button className="w-full sm:w-auto">
-              <Plus className="h-4 w-4 mr-2" />
+              <Plus className="h-4 w-4" />
               Add Opt-Out
             </Button>
           </DialogTrigger>
@@ -307,7 +298,7 @@ export default function OptOutsPage() {
               />
             </div>
             <Button onClick={handleSearch}>
-              <Search className="h-4 w-4 mr-2" />
+              <Search className="h-4 w-4" />
               Search
             </Button>
           </div>
@@ -337,7 +328,7 @@ export default function OptOutsPage() {
               setRemoveDialogOpen(true);
             }}
           >
-            <CheckCircle className="h-4 w-4 mr-2" />
+            <CheckCircle className="h-4 w-4" />
             Remove
           </Button>
         )}
@@ -375,6 +366,6 @@ export default function OptOutsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageShell>
   );
 }

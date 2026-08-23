@@ -25,9 +25,10 @@ import {
   Search,
   Trash2,
   X,
-} from "lucide-react";
+} from "@repo/ui/icons";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { Tag } from "@repo/ui/components/ui/tag";
 
 const ALLOW_UTILITY_TEMPLATES =
   process.env.NEXT_PUBLIC_ALLOW_UTILITY_TEMPLATES === "true";
@@ -400,10 +401,10 @@ export default function WhatsAppManagementPage() {
                   key={index}
                   className={`px-2 py-0.5 rounded text-xs font-medium uppercase ${
                     lang.status === "APPROVED"
-                      ? "bg-green-100 text-green-800"
+                      ? "bg-success-surface text-success-foreground"
                       : lang.status === "PENDING"
-                        ? "bg-indigo-100 text-yellow-800"
-                        : "bg-red-100 text-red-800"
+                        ? "bg-primary-surface text-warning-foreground"
+                        : "bg-error-surface text-error-foreground"
                   }`}
                   title={`${lang.code} - ${lang.status}`}
                 >
@@ -438,45 +439,42 @@ export default function WhatsAppManagementPage() {
           );
 
           let statusText = "UNKNOWN";
-          let colorClass = "bg-gray-100 text-gray-800";
+          let tone: React.ComponentProps<typeof Tag>["tone"] = "neutral";
 
           if (hasApproved && !hasPending && !hasRejected) {
             statusText = "APPROVED";
-            colorClass = "bg-green-100 text-green-800";
+            tone = "active";
           } else if (hasApproved && (hasPending || hasRejected)) {
             statusText = "MIXED";
-            colorClass = "bg-blue-100 text-blue-800";
+            tone = "progress";
           } else if (hasPending) {
             statusText = "PENDING";
-            colorClass = "bg-indigo-100 text-yellow-800";
+            tone = "pending";
           } else if (hasRejected) {
             statusText = "REJECTED";
-            colorClass = "bg-red-100 text-red-800";
+            tone = "danger";
           }
 
           return (
-            <span
-              className={`px-2 py-1 rounded-full text-xs font-medium ${colorClass}`}
-              title={`Statuses: ${statuses.join(", ")}`}
-            >
+            <Tag tone={tone} title={`Statuses: ${statuses.join(", ")}`}>
               {statusText}
-            </span>
+            </Tag>
           );
         }
 
         // Fallback for single status
         return (
-          <span
-            className={`px-2 py-1 rounded-full text-xs font-medium ${
+          <Tag
+            tone={
               template?.status === "APPROVED"
-                ? "bg-green-100 text-green-800"
+                ? "active"
                 : template?.status === "PENDING"
-                  ? "bg-indigo-100 text-yellow-800"
-                  : "bg-red-100 text-red-800"
-            }`}
+                  ? "pending"
+                  : "danger"
+            }
           >
             {template?.status || "UNKNOWN"}
-          </span>
+          </Tag>
         );
       },
     },
@@ -487,10 +485,9 @@ export default function WhatsAppManagementPage() {
         <div className="flex gap-2">
           <Button
             variant="ghost"
-            size="sm"
             onClick={() => handleDeleteTemplate(template)}
           >
-            <Trash2 className="h-4 w-4 text-red-500" />
+            <Trash2 className="h-4 w-4 text-destructive" />
           </Button>
         </div>
       ),
@@ -516,15 +513,9 @@ export default function WhatsAppManagementPage() {
       key: "status",
       label: "Status",
       render: (value: any, number: WhatsAppNumber) => (
-        <span
-          className={`px-2 py-1 rounded-full text-xs font-medium ${
-            number?.status === "ACTIVE"
-              ? "bg-green-100 text-green-800"
-              : "bg-gray-100 text-gray-800"
-          }`}
-        >
+        <Tag tone={number?.status === "ACTIVE" ? "active" : "neutral"}>
           {number?.status || "INACTIVE"}
-        </span>
+        </Tag>
       ),
     },
     {
@@ -532,11 +523,7 @@ export default function WhatsAppManagementPage() {
       label: "Actions",
       render: (value: any, number: WhatsAppNumber) => (
         <div className="flex gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => handleEditNumber(number)}
-          >
+          <Button variant="ghost" onClick={() => handleEditNumber(number)}>
             <Edit className="h-4 w-4" />
           </Button>
         </div>
@@ -548,8 +535,10 @@ export default function WhatsAppManagementPage() {
     <div className="p-4">
       <div className="flex justify-between items-center mb-4">
         <div>
-          <h1 className="text-2xl font-bold">WhatsApp Management</h1>
-          <p className="text-gray-600">
+          <h1 className="text-base sm:text-lg font-semibold">
+            WhatsApp Management
+          </h1>
+          <p className="text-text-secondary">
             Manage your WhatsApp templates and numbers
           </p>
         </div>
@@ -588,7 +577,7 @@ export default function WhatsAppManagementPage() {
       {activeTab === "templates" && (
         <div className="space-y-4">
           {/* Account Selector */}
-          <div className="grid gap-2 max-w-[240px]">
+          <div className="grid gap-2 max-w-[15rem]">
             <Label htmlFor="account-select">Account</Label>
             <Select
               value={selectedAccount ? String(selectedAccount) : ""}
@@ -624,11 +613,10 @@ export default function WhatsAppManagementPage() {
                 >
                   <Search className="h-4 w-4" />
                   {templateSearchQuery || "Search Templates"}
-                  <ChevronDown className="h-4 w-4" />
                 </Button>
 
                 {isTemplateSearchOpen && (
-                  <div className="absolute z-50 mt-2 w-64 bg-white border rounded-lg shadow-lg">
+                  <div className="absolute z-50 mt-2 w-64 bg-surface border rounded-lg shadow-lg">
                     <div className="p-2">
                       <Input
                         type="text"
@@ -640,7 +628,7 @@ export default function WhatsAppManagementPage() {
                     </div>
                     <div className="max-h-64 overflow-y-auto overflow-x-auto">
                       {filteredTemplates.length === 0 ? (
-                        <div className="px-4 py-3 text-gray-500 text-sm">
+                        <div className="px-4 py-3 text-muted-foreground text-sm">
                           No templates found
                         </div>
                       ) : (
@@ -648,7 +636,7 @@ export default function WhatsAppManagementPage() {
                           <button
                             type="button"
                             key={template.id}
-                            className="flex w-full items-center justify-between gap-2 px-4 py-2 text-left hover:bg-gray-100"
+                            className="flex w-full items-center justify-between gap-2 px-4 py-2 text-left hover:bg-surface-secondary"
                             onClick={() => {
                               setTemplateSearchQuery(template.name);
                               setIsTemplateSearchOpen(false);
@@ -658,7 +646,7 @@ export default function WhatsAppManagementPage() {
                               {template.name}
                             </span>
                             {templateSearchQuery === template.name && (
-                              <Check className="h-4 w-4 shrink-0 text-blue-500" />
+                              <Check className="h-4 w-4 shrink-0 text-info" />
                             )}
                           </button>
                         ))
@@ -695,7 +683,7 @@ export default function WhatsAppManagementPage() {
                 disabled={templatesLoading || !selectedAccount}
               >
                 <RefreshCw
-                  className={`h-4 w-4 mr-2 ${
+                  className={`h-4 w-4 ${
                     templatesLoading ? "animate-spin" : ""
                   }`}
                 />
@@ -705,7 +693,7 @@ export default function WhatsAppManagementPage() {
                 onClick={() => setShowCreateModal(true)}
                 disabled={!selectedAccount}
               >
-                <Plus className="h-4 w-4 mr-2" />
+                <Plus className="h-4 w-4" />
                 Create Template
               </Button>
             </div>
@@ -725,7 +713,7 @@ export default function WhatsAppManagementPage() {
                     value={selectedLanguageFilter}
                     onValueChange={setSelectedLanguageFilter}
                   >
-                    <SelectTrigger className="w-full sm:w-[140px]">
+                    <SelectTrigger className="w-full sm:w-[8.75rem]">
                       <SelectValue placeholder="All Languages" />
                     </SelectTrigger>
                     <SelectContent>
@@ -742,7 +730,7 @@ export default function WhatsAppManagementPage() {
                     value={selectedStatusFilter}
                     onValueChange={setSelectedStatusFilter}
                   >
-                    <SelectTrigger className="w-full sm:w-[140px]">
+                    <SelectTrigger className="w-full sm:w-[8.75rem]">
                       <SelectValue placeholder="All Statuses" />
                     </SelectTrigger>
                     <SelectContent>
@@ -759,7 +747,7 @@ export default function WhatsAppManagementPage() {
                     value={selectedCategoryFilter}
                     onValueChange={setSelectedCategoryFilter}
                   >
-                    <SelectTrigger className="w-full sm:w-[140px]">
+                    <SelectTrigger className="w-full sm:w-[8.75rem]">
                       <SelectValue placeholder="All Categories" />
                     </SelectTrigger>
                     <SelectContent>
@@ -779,59 +767,38 @@ export default function WhatsAppManagementPage() {
                   selectedCategoryFilter !== "all") && (
                   <div className="flex gap-2 flex-wrap">
                     {selectedLanguageFilter !== "all" && (
-                      <Badge
-                        variant="secondary"
-                        className="flex items-center gap-1"
+                      <Tag
+                        tone="neutral"
+                        onRemove={() => setSelectedLanguageFilter("all")}
+                        removeLabel="Remove language filter"
                       >
                         Language: {selectedLanguageFilter.toUpperCase()}
-                        <button
-                          type="button"
-                          onClick={() => setSelectedLanguageFilter("all")}
-                          className="ml-1 hover:bg-secondary-foreground/20 rounded-full p-0.5 whitespace-nowrap"
-                          aria-label="Remove language filter"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </Badge>
+                      </Tag>
                     )}
                     {selectedStatusFilter !== "all" && (
-                      <Badge
-                        variant="secondary"
-                        className="flex items-center gap-1"
+                      <Tag
+                        tone="neutral"
+                        onRemove={() => setSelectedStatusFilter("all")}
+                        removeLabel="Remove status filter"
                       >
                         Status: {selectedStatusFilter}
-                        <button
-                          type="button"
-                          onClick={() => setSelectedStatusFilter("all")}
-                          className="ml-1 hover:bg-secondary-foreground/20 rounded-full p-0.5 whitespace-nowrap"
-                          aria-label="Remove status filter"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </Badge>
+                      </Tag>
                     )}
                     {selectedCategoryFilter !== "all" && (
-                      <Badge
-                        variant="secondary"
-                        className="flex items-center gap-1"
+                      <Tag
+                        tone="neutral"
+                        onRemove={() => setSelectedCategoryFilter("all")}
+                        removeLabel="Remove category filter"
                       >
                         Category: {selectedCategoryFilter}
-                        <button
-                          type="button"
-                          onClick={() => setSelectedCategoryFilter("all")}
-                          className="ml-1 hover:bg-secondary-foreground/20 rounded-full p-0.5 whitespace-nowrap"
-                          aria-label="Remove category filter"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </Badge>
+                      </Tag>
                     )}
                   </div>
                 )
               }
             />
           ) : (
-            <div className="text-center py-12 text-gray-500">
+            <div className="text-center py-12 text-muted-foreground">
               Please select an account to view templates
             </div>
           )}
@@ -850,9 +817,7 @@ export default function WhatsAppManagementPage() {
                 disabled={numbersLoading}
               >
                 <RefreshCw
-                  className={`h-4 w-4 mr-2 ${
-                    numbersLoading ? "animate-spin" : ""
-                  }`}
+                  className={`h-4 w-4 ${numbersLoading ? "animate-spin" : ""}`}
                 />
                 Sync Numbers
               </Button>

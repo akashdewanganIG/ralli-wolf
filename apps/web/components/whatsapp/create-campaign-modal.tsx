@@ -37,7 +37,7 @@ import {
   Search,
   UploadCloud,
   X,
-} from "lucide-react";
+} from "@repo/ui/icons";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { WhatsAppPreview } from "./whatsapp-preview";
@@ -159,7 +159,7 @@ function FieldInputWithDropdown({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className="w-[280px] max-h-[300px] overflow-y-auto"
+            className="w-[17.5rem] max-h-[18.75rem] overflow-y-auto"
             align="end"
           >
             {hasCsvColumns && (
@@ -269,7 +269,7 @@ function MediaUploadField({
           {urlValue &&
             (urlValue.startsWith("http://") ||
               urlValue.startsWith("https://")) && (
-              <p className="text-xs text-green-600 flex items-center gap-1">
+              <p className="text-xs text-success-foreground flex items-center gap-1">
                 <span>✓</span> Valid URL provided
               </p>
             )}
@@ -287,7 +287,7 @@ function MediaUploadField({
               disabled={disabled || uploading}
               onClick={() => inputRef.current?.click()}
             >
-              <UploadCloud className="h-4 w-4 mr-2" />
+              <UploadCloud className="h-4 w-4" />
               {uploading
                 ? "Uploading to S3..."
                 : urlValue
@@ -296,7 +296,7 @@ function MediaUploadField({
             </Button>
             {urlValue && (
               <span
-                className="text-sm text-green-600 truncate max-w-[220px]"
+                className="text-sm text-success-foreground truncate max-w-[13.75rem]"
                 title={urlValue}
               >
                 ✓ Uploaded to S3
@@ -1109,7 +1109,7 @@ export function CreateCampaignModal({
                         />
                       </div>
                     </div>
-                    <div className="max-h-[200px] overflow-y-auto p-1">
+                    <div className="max-h-[12.5rem] overflow-y-auto p-1">
                       {filteredTemplates.length > 0 ? (
                         filteredTemplates.map(t => (
                           <button
@@ -1236,7 +1236,7 @@ export function CreateCampaignModal({
                   <Label htmlFor="segment">Choose segment</Label>
                   <Link
                     href="/campaigns/segments"
-                    className="text-sm text-primary hover:underline"
+                    className="text-sm text-primary hover:text-info"
                   >
                     Manage segments
                   </Link>
@@ -1304,7 +1304,7 @@ export function CreateCampaignModal({
                           className="w-full"
                           disabled={csvLoading}
                         >
-                          <UploadCloud className="h-4 w-4 mr-2" />
+                          <UploadCloud className="h-4 w-4" />
                           {csvLoading
                             ? "Parsing file..."
                             : "Choose CSV/Excel File"}
@@ -1324,9 +1324,8 @@ export function CreateCampaignModal({
                           disabled={csvLoading}
                         />
                         {csvLoading && (
-                          <p className="text-xs text-blue-600 mt-2 flex items-center gap-1">
-                            <span className="animate-spin">⏳</span> Processing
-                            file, please wait...
+                          <p className="text-xs text-info-foreground mt-2 flex items-center gap-1">
+                            Processing… file, please wait...
                           </p>
                         )}
                       </div>
@@ -1334,7 +1333,7 @@ export function CreateCampaignModal({
                       <div className="space-y-3">
                         <div className="flex items-center justify-between p-2 bg-background rounded border">
                           <div className="flex items-center gap-2">
-                            <FileSpreadsheet className="h-4 w-4 text-green-600" />
+                            <FileSpreadsheet className="h-4 w-4 text-success-foreground" />
                             <div>
                               <p className="text-sm font-medium">
                                 {csvFile.name}
@@ -1696,7 +1695,7 @@ export function CreateCampaignModal({
               <p className="text-sm text-muted-foreground mb-3">
                 Preview how your message will appear to recipients
               </p>
-              <div className="border rounded-lg p-4 bg-gray-50">
+              <div className="border rounded-lg p-4 bg-surface-elevated">
                 <WhatsAppPreview
                   components={buildPreviewComponents()}
                   templateName={selectedTemplate?.name}
@@ -1896,7 +1895,7 @@ export function CreateCampaignModal({
 
         <div className="py-4">
           {error && (
-            <div className="text-red-600 text-sm mb-4 p-2 bg-red-50 rounded">
+            <div className="text-destructive text-sm mb-4 p-2 bg-error-surface rounded">
               {error}
             </div>
           )}

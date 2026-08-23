@@ -14,7 +14,8 @@ import { authService } from "../lib/api/services";
 import {
   User,
   LoginRequest,
-  LoginOtpRequestResponse,
+  LoginMfaChallenge,
+  LoginOtpResendResponse,
   LoginOtpVerifyRequest,
   SignupRequest,
   LoginResponse,
@@ -25,12 +26,14 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (credentials: LoginRequest, rememberMe?: boolean) => Promise<User>;
-  requestLoginOtp: (email: string) => Promise<LoginOtpRequestResponse>;
-  loginWithOtp: (
-    credentials: LoginOtpVerifyRequest,
-    rememberMe?: boolean
-  ) => Promise<User>;
+  /**
+   * Verifies the password and triggers the emailed code. Resolves with the
+   * challenge to hand to `loginWithOtp`; it does not sign anyone in.
+   */
+  login: (credentials: LoginRequest) => Promise<LoginMfaChallenge>;
+  resendLoginOtp: (mfaToken: string) => Promise<LoginOtpResendResponse>;
+  /** Completes sign-in by redeeming the emailed code. */
+  loginWithOtp: (credentials: LoginOtpVerifyRequest) => Promise<User>;
   developerLogin: (credentials: LoginRequest) => Promise<User>;
   signup: (userData: SignupRequest) => Promise<void>;
   logout: () => Promise<void>;
@@ -95,26 +98,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return userData;
   };
 
-  const login = async (credentials: LoginRequest, rememberMe = false) => {
+  const login = async (credentials: LoginRequest) => {
     try {
-      setIsLoading(true);
       clearError();
-
-      const response = await authService.login(credentials);
-      return persistAuthSession(response, undefined, rememberMe);
+      // Deliberately does not touch `isLoading`: no session exists yet, and
+      // flipping it would blank the sign-in form mid-flow.
+      return await authService.login(credentials);
     } catch (err) {
       const apiError = err as ApiError;
       setError(apiError.message || "Login failed");
       throw err;
-    } finally {
-      setIsLoading(false);
     }
   };
 
-  const requestLoginOtp = async (email: string) => {
+  const resendLoginOtp = async (mfaToken: string) => {
     try {
       clearError();
-      return await authService.requestLoginOtp(email);
+      return await authService.resendLoginOtp(mfaToken);
     } catch (err) {
       const apiError = err as ApiError;
       setError(apiError.message || "Unable to send a sign-in code");
@@ -122,15 +122,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  const loginWithOtp = async (
-    credentials: LoginOtpVerifyRequest,
-    rememberMe = false
-  ) => {
+  const loginWithOtp = async (credentials: LoginOtpVerifyRequest) => {
     try {
       setIsLoading(true);
       clearError();
       const response = await authService.verifyLoginOtp(credentials);
-      return persistAuthSession(response, undefined, rememberMe);
+      return persistAuthSession(response, undefined, false);
     } catch (err) {
       const apiError = err as ApiError;
       setError(apiError.message || "Unable to verify the sign-in code");
@@ -225,7 +222,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     isAuthenticated,
     isLoading,
     login,
-    requestLoginOtp,
+    resendLoginOtp,
     loginWithOtp,
     developerLogin,
     signup,
