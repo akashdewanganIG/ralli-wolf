@@ -120,7 +120,7 @@ export default function PurchaseOrdersPage() {
       <PageShell>
         <PageHeader
           title="Purchase orders"
-          subtitle="Create, approve, and track supplier orders."
+          subtitle="Orders you place with suppliers, from draft through to delivered."
           actions={
             <Button
               type="button"
@@ -305,6 +305,7 @@ export default function PurchaseOrdersPage() {
         </FormDialog>
 
         <Panel
+          flush
           actions={
             <SearchFilterToolbar
               search={

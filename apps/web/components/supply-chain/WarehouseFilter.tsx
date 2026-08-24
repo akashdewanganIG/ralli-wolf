@@ -20,7 +20,7 @@ export function WarehouseFilter({
   allowAll = true,
   allLabel = "All warehouses",
   required = false,
-  className = "",
+  className = "w-full sm:w-52",
   ariaLabel = "Warehouse",
 }: {
   value: number | undefined;

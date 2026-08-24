@@ -62,7 +62,7 @@ export default function ConsumptionReportPage() {
       <PageShell>
         <PageHeader
           title="Consumption & wastage"
-          subtitle="Review material issues, production usage, and write-offs."
+          subtitle="Materials used up by production, and anything written off as waste."
           actions={
             <div className="grid grid-cols-1 items-end gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap">
               <Input
@@ -130,7 +130,11 @@ export default function ConsumptionReportPage() {
           />
         </div>
 
-        <Panel title="By material" description="Highest total value first">
+        <Panel
+          flush
+          title="By material"
+          description="Which materials cost you the most, most expensive first."
+        >
           <SimpleTable
             isLoading={isLoading}
             rows={report?.rows ?? []}

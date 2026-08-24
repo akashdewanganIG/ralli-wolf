@@ -108,7 +108,7 @@ export default function PickListsPage() {
       <PageShell>
         <PageHeader
           title="Pick lists"
-          subtitle="Create and track warehouse picking work."
+          subtitle="Lists telling staff which items to collect from the shelves."
           actions={
             <Button
               type="button"
@@ -255,6 +255,7 @@ export default function PickListsPage() {
         </FormDialog>
 
         <Panel
+          flush
           actions={
             <FilterBar>
               <SelectField

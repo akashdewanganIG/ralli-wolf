@@ -13,8 +13,6 @@ import { Label } from "@repo/ui/components/ui/label";
 import {
   Tabs,
   TabsContent,
-  TabsList,
-  TabsTrigger,
 } from "@repo/ui/components/ui/tabs";
 import { Textarea } from "@repo/ui/components/ui/textarea";
 import { useState } from "react";
@@ -22,6 +20,9 @@ import { ProtectedRoute } from "../../components/ProtectedRoute";
 import { RoleGuard } from "../../components/guards/RoleGuard";
 import { useUpdateUserPermissions, useUsers } from "../../hooks/useUsers";
 import { useHealth, useWebhookTest } from "../../hooks/useWebhook";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { PageHeader } from "@repo/ui/components/ui/page-header";
+import { CategorySwitcher } from "@repo/ui/components/ui/category-switcher";
 
 export default function AdminPage() {
   const [webhookPayload, setWebhookPayload] = useState('{"test": "data"}');
@@ -57,17 +58,20 @@ export default function AdminPage() {
   return (
     <ProtectedRoute>
       <RoleGuard allowedRoles={["ADMIN"]}>
-        <div className="p-4">
-          <h1 className="text-base sm:text-lg font-semibold mb-4">
-            Admin Panel
-          </h1>
-
-          <Tabs defaultValue="health" className="space-y-4">
-            <TabsList>
-              <TabsTrigger value="health">System Health</TabsTrigger>
-              <TabsTrigger value="webhooks">Webhook Testing</TabsTrigger>
-              <TabsTrigger value="users">User Management</TabsTrigger>
-            </TabsList>
+        <PageShell>
+          <PageHeader
+            title="Admin panel"
+            description="Check the system is running, test connections to other apps, and manage who has access."
+          />
+          <Tabs defaultValue="health">
+            <CategorySwitcher
+              label="Admin sections"
+              items={[
+                { value: "health", label: "System health" },
+                { value: "webhooks", label: "Webhook testing" },
+                { value: "users", label: "User management" },
+              ]}
+            />
 
             <TabsContent value="health">
               <Card>
@@ -216,7 +220,7 @@ export default function AdminPage() {
               </Card>
             </TabsContent>
           </Tabs>
-        </div>
+        </PageShell>
       </RoleGuard>
     </ProtectedRoute>
   );

@@ -17,6 +17,7 @@ import {
   ChartNoAxesCombined,
   Users,
   Settings,
+  Bell,
   Megaphone,
   FileText,
   Bot,
@@ -480,13 +481,22 @@ export function AppSidebar({
                 active={isClient && pathname === "/admin/user-management"}
               />
             )}
+            {/*
+              Not gated on canManageUsers: these are the signed-in user's own
+              notification choices, so everyone with an account needs them.
+            */}
+            <SidebarItem
+              icon={Bell}
+              label="Notifications"
+              href="/admin/notifications"
+              active={isClient && pathname === "/admin/notifications"}
+            />
             <SidebarItem
               icon={Settings}
               label="Settings"
               href="/settings"
               active={isClient && pathname === "/settings"}
             />
-            {/* Settings can have notification management and other user related settings such as name */}
           </SidebarGroup>
         </SidebarContent>
         <SidebarFooter>

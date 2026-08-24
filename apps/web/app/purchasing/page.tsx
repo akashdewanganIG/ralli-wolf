@@ -45,7 +45,7 @@ export default function PurchasingDashboardPage() {
       <PageShell>
         <PageHeader
           title="Purchasing & suppliers"
-          subtitle="Monitor purchasing activity, receipts, and supplier performance."
+          subtitle="What you are buying, what has arrived, and how your suppliers are doing."
           actions={
             <>
               <WarehouseFilter
@@ -130,7 +130,7 @@ export default function PurchasingDashboardPage() {
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
-          <Panel title="Orders by status">
+          <Panel flush title="Orders by status">
             <SimpleTable
               isLoading={isLoading}
               rows={dashboard?.ordersByStatus ?? []}
@@ -152,8 +152,9 @@ export default function PurchasingDashboardPage() {
           </Panel>
 
           <Panel
+            flush
             title="Delivery watchlist"
-            description="Due within 14 days or already late"
+            description="Orders arriving in the next two weeks, plus anything already overdue."
             actions={
               watchlist && watchlist.overdue > 0 ? (
                 <Tag tone="danger">{watchlist.overdue} overdue</Tag>
@@ -208,8 +209,9 @@ export default function PurchasingDashboardPage() {
         </div>
 
         <Panel
+          flush
           title="Supplier scorecards"
-          description="Computed from posted purchase orders and goods receipts over the last year. Suppliers with no receipts in the window are excluded rather than scored zero."
+          description="How well each supplier performed over the past year. Suppliers you did not buy from are left out rather than scored zero."
           footerAction={
             <CardActionButton href="/purchasing/suppliers">
               All suppliers

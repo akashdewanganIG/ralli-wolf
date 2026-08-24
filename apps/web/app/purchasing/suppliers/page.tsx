@@ -78,7 +78,7 @@ export default function SuppliersPage() {
       <PageShell>
         <PageHeader
           title="Suppliers"
-          subtitle="Manage suppliers, catalogues, terms, and performance."
+          subtitle="The companies you buy from, their prices, and how well they deliver."
           actions={
             <Button
               type="button"
@@ -187,7 +187,7 @@ export default function SuppliersPage() {
             </Field>
             <Field
               label="Lead time (days)"
-              hint="Used to derive a PO's expected delivery date"
+              hint="Used to work out when an order from this supplier should arrive"
             >
               <Input
                 inputMode="numeric"
@@ -206,6 +206,7 @@ export default function SuppliersPage() {
         </FormDialog>
 
         <Panel
+          flush
           actions={
             <SearchFilterToolbar
               search={

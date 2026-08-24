@@ -339,11 +339,11 @@ export function AssignLeadsModal({
                               .filter(Boolean)
                               .join(" ") || "Unknown User"}
                           </h3>
-                          <Badge variant="secondary" className="text-xs">
+                          <Badge variant="secondary">
                             {person.role || "USER"}
                           </Badge>
                           {person.region && (
-                            <Badge variant="outline" className="text-xs">
+                            <Badge variant="outline">
                               {formatRegion(person.region)}
                             </Badge>
                           )}

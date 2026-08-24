@@ -11,7 +11,17 @@ export class CampaignController {
     try {
       const campaigns = await prisma.campaign.findMany({
         include: {
-          creator: {},
+          creator: {
+            // An empty include pulls every User column, which put passwordHash
+            // and totpSecret into this response. Name only what the UI shows.
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              role: true,
+            },
+          },
           campaignMembers: {
             include: {
               contact: true,
@@ -38,7 +48,17 @@ export class CampaignController {
           createdBy,
         },
         include: {
-          creator: {},
+          creator: {
+            // An empty include pulls every User column, which put passwordHash
+            // and totpSecret into this response. Name only what the UI shows.
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              role: true,
+            },
+          },
         },
       });
       res.status(201).json(campaign);
@@ -61,7 +81,17 @@ export class CampaignController {
       const campaign = await prisma.campaign.findUnique({
         where: { id: parseInt(id) },
         include: {
-          creator: {},
+          creator: {
+            // An empty include pulls every User column, which put passwordHash
+            // and totpSecret into this response. Name only what the UI shows.
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              role: true,
+            },
+          },
           campaignMembers: {
             include: {
               contact: true,
@@ -111,7 +141,17 @@ export class CampaignController {
         where: { id: parseInt(id) },
         data: updateData,
         include: {
-          creator: {},
+          creator: {
+            // An empty include pulls every User column, which put passwordHash
+            // and totpSecret into this response. Name only what the UI shows.
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              role: true,
+            },
+          },
         },
       });
 

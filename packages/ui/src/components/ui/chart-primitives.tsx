@@ -133,25 +133,10 @@ export type CategoryDatum = {
  */
 
 /**
- * Fraction of each category band left empty. Enough to clear the extrusion on
- * the column's right, and no more — the columns still have to read fat.
+ * Fraction of each category band left empty. The columns still have to read
+ * fat, so this is the smallest gap that keeps neighbours distinct.
  */
-const CATEGORY_GAP = 0.16;
-/** Gap either side of a column, expressed against the column's own width. */
-const GAP_RATIO = CATEGORY_GAP / (1 - CATEGORY_GAP);
-/** How far a column steps back, against its own width. */
-const DEPTH_RATIO = 0.14;
-/** How far the back edge rises against the depth it steps back. */
-const DEPTH_RISE = 0.55;
-const MAX_DEPTH = 16;
-/**
- * The lit faces are let through a little, so they read as planes catching light
- * rather than as flat cut-outs stuck to the side. The right face sits back from
- * the light, so it is the more translucent of the two — that difference is what
- * separates the two planes without a stroke between them.
- */
-const TOP_FACE_OPACITY = 0.88;
-const SIDE_FACE_OPACITY = 0.68;
+const CATEGORY_GAP = 0.18;
 const AXIS_WIDTH = 44;
 const XAXIS_HEIGHT = 28;
 /**
@@ -167,8 +152,8 @@ const HOVER_FILL = "color-mix(in srgb, var(--chart-track) 45%, transparent)";
 const HATCH_CSS =
   "repeating-linear-gradient(45deg, var(--chart-mark-hatch) 0 1px, transparent 1px 7px), " +
   "repeating-linear-gradient(-45deg, var(--chart-mark-hatch) 0 1px, transparent 1px 7px)";
-/** Room for the last column's extrusion, matched by the header band. */
-const RIGHT_INSET = MAX_DEPTH + 2;
+/** Small breathing room at the plot's right edge, matched by the header band. */
+const RIGHT_INSET = 4;
 const HEADER_HEIGHT = 30;
 const HATCH_ID = "rw-column-hatch";
 
@@ -198,15 +183,15 @@ type ColumnProps = {
 };
 
 /**
- * One column, drawn as a standing cuboid.
+ * One column, drawn flat.
  *
- * The front face is the dark, textured plane that carries the reading. Its top
- * and right edges step back to a lit top face and right face, both flat accent,
- * so the depth comes from the silhouette rather than from a gradient or a
- * shadow. Nothing is drawn between columns: each magnitude is its own solid.
+ * It was previously extruded into a cuboid — a lit top face and a right face
+ * stepping back from the front plane. That reads as an object sitting on the
+ * page rather than as a measurement of it, and the depth adds width that is not
+ * data: the silhouette a reader compares is no longer the value.
  *
- * The extrusion is clamped to the gap between bands, because a side face wide
- * enough to reach the next column would read as part of it.
+ * What remains is the plane that carries the reading, with the crosshatch that
+ * survives at small sizes and a lit top edge to seat it against the plot.
  */
 function Column({
   x = 0,
@@ -219,30 +204,17 @@ function Column({
   const datum = series[index];
   if (!datum || width <= 0 || height <= 0) return null;
 
-  const baseline = y + height;
-  const gap = width * GAP_RATIO;
-  const depth = Math.min(width * DEPTH_RATIO, gap * 0.85, MAX_DEPTH);
-  const rise = Math.min(depth * DEPTH_RISE, height);
-
-  const right = x + width;
-  const back = right + depth;
-  const backTop = y - rise;
-
   return (
     <g>
-      <path
-        d={`M${x},${y} L${x + depth},${backTop} L${back},${backTop} L${right},${y} Z`}
+      <rect x={x} y={y} width={width} height={height} fill={`url(#${HATCH_ID})`} />
+      {/* A 2px cap, not a face: it closes the top of the bar without implying
+          a surface receding behind it. */}
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={Math.min(2, height)}
         fill="var(--chart-accent)"
-        fillOpacity={TOP_FACE_OPACITY}
-      />
-      <path
-        d={`M${right},${y} L${back},${backTop} L${back},${baseline} L${right},${baseline} Z`}
-        fill="var(--chart-accent)"
-        fillOpacity={SIDE_FACE_OPACITY}
-      />
-      <path
-        d={`M${x},${y} L${right},${y} L${right},${baseline} L${x},${baseline} Z`}
-        fill={`url(#${HATCH_ID})`}
       />
     </g>
   );
@@ -410,7 +382,7 @@ export type MagnitudeDatum = {
  * the full width; the share each category holds is stated in `meta` instead of
  * being left for the reader to estimate from a length.
  *
- * Same hue, hatch and lit leading edge as the columns — a different form for a
+ * Same hue, hatch and lit end cap as the columns — a different form for a
  * different job, not a different chart language.
  */
 export function MagnitudeBars({

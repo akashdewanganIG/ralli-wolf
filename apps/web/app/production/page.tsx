@@ -85,7 +85,7 @@ export default function ProductionOrdersPage() {
       <PageShell>
         <PageHeader
           title="Production orders"
-          subtitle="Plan and track production against a fixed bill of materials."
+          subtitle="Jobs to build products, and how far each one has got."
           actions={
             <Button
               type="button"
@@ -156,6 +156,7 @@ export default function ProductionOrdersPage() {
         </FormDialog>
 
         <Panel
+          flush
           actions={
             <FilterBar>
               <SelectField

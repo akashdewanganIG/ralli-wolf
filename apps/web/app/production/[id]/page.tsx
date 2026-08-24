@@ -16,7 +16,6 @@ import {
   SimpleTable,
   StatCard,
   StatusBadge,
-  TabBar,
 } from "@/components/supply-chain/shared";
 import {
   useProductionMutations,
@@ -34,6 +33,7 @@ import {
   formatQuantity,
 } from "@/lib/utils/decimal";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { CategorySwitcher } from "@repo/ui/components/ui/category-switcher";
 
 export default function ProductionOrderDetailPage() {
   const params = useParams<{ id: string }>();
@@ -81,7 +81,7 @@ export default function ProductionOrderDetailPage() {
           }
           subtitle={
             order
-              ? `Builds ${order.product.code} — ${order.product.name} · BOM ${order.bom.bomNumber} v${order.bom.version}${order.bom.revision} · ${order.warehouse.code}`
+              ? `A job to build ${order.product.name}, using parts list ${order.bom.bomNumber}, at ${order.warehouse.code}.`
               : undefined
           }
           breadcrumb={[
@@ -169,7 +169,7 @@ export default function ProductionOrderDetailPage() {
         {canComplete && (
           <Panel
             title="Book finished goods"
-            description="The unit cost booked into stock is the material actually consumed plus the BOM's labour and overhead, spread over the good units produced."
+            description="Record how many good units you made. Their cost is the materials used plus labour and overhead, shared across them."
           >
             <form
               className="grid gap-4 md:grid-cols-4"
@@ -295,22 +295,27 @@ export default function ProductionOrderDetailPage() {
           </Panel>
         )}
 
-        <TabBar
+        <CategorySwitcher
           label="Production order sections"
           value={tab}
-          onChange={setTab}
+          onValueChange={setTab}
           items={[
-            ["components", `Components (${components.length})`],
-            ["availability", "Material availability"],
-            ["consumption", `Consumption (${order?.consumption?.length ?? 0})`],
-            ["variance", "Variance"],
+            { value: "components", label: "Components", count: components.length },
+            { value: "availability", label: "Material availability" },
+            {
+              value: "consumption",
+              label: "Consumption",
+              count: order?.consumption?.length ?? 0,
+            },
+            { value: "variance", label: "Variance" },
           ]}
         />
 
         {tab === "components" && (
           <Panel
+            flush
             title="Component demand"
-            description="Frozen from the BOM when this order was created, scrap allowance included."
+            description="The parts this job needs, fixed when the job was created and including expected waste."
             actions={
               order && (
                 <Button
@@ -443,8 +448,9 @@ export default function ProductionOrderDetailPage() {
 
         {tab === "availability" && (
           <Panel
+            flush
             title="Material availability"
-            description="Checked live against free stock in the build warehouse."
+            description="Whether the parts for this job are actually in stock right now."
           >
             {availabilityData && (
               <div className="mb-4 grid gap-4 sm:grid-cols-3">
@@ -533,8 +539,9 @@ export default function ProductionOrderDetailPage() {
 
         {tab === "consumption" && (
           <Panel
+            flush
             title="Consumption log"
-            description="Every issue and scrap event, at lot granularity"
+            description="Every part taken out for this job, and anything wasted along the way."
           >
             <SimpleTable
               isLoading={isLoading}
@@ -591,8 +598,9 @@ export default function ProductionOrderDetailPage() {
 
         {tab === "variance" && (
           <Panel
+            flush
             title="Consumption variance"
-            description="What was actually consumed against what the BOM said it should be."
+            description="How much material the job really used compared with what was planned."
           >
             {varianceData && (
               <div className="mb-4 grid gap-4 sm:grid-cols-3">

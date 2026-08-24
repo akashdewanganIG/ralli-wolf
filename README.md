@@ -21,6 +21,15 @@ Modern, type-safe marketing CRM built with a monorepo architecture. Includes a N
 - **Linting/Build**: ESLint 9, TypeScript 5.9, Turbo tasks
 - **Formatting**: Prettier 3
 
+## Documentation
+
+| Document | What it covers |
+|---|---|
+| [Architecture](./docs/ARCHITECTURE.md) | System design, request flow, and the data-model dependencies that decide what can be created before what — with diagrams |
+| [User flows & call-to-action reference](./docs/USER_FLOWS.md) | Every action button explained, and the order to work through the app in (start with the warehouse) |
+| [Supply chain modules](./docs/SUPPLY_CHAIN_MODULES.md) | Module reference and API endpoints |
+| [Local setup](./docs/LOCAL_SETUP.md) | Getting it running |
+
 ## Repository Structure
 
 ```

@@ -50,6 +50,7 @@ import { TablePageSkeleton } from "./skeletons";
 
 import { useRouter } from "next/navigation";
 import { ViewCategoriesModal } from "./ViewCategoriesModal";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 export function ProductManagement() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -304,10 +305,10 @@ export function ProductManagement() {
   }
 
   return (
-    <div className="app-page space-y-5">
+    <PageShell>
       <PageHeader
         title="Product configuration"
-        description="Manage products and the categories used throughout sales workflows."
+        description="Everything you sell, and the categories used to group it."
         actions={
           <>
             <Button
@@ -386,10 +387,7 @@ export function ProductManagement() {
               label: "Category",
               render: (value, product) => (
                 <div className="py-4">
-                  <Badge
-                    variant="outline"
-                    className="text-center justify-center px-2"
-                  >
+                  <Badge variant="outline">
                     {product.category?.name || "N/A"}
                   </Badge>
                 </div>
@@ -411,10 +409,7 @@ export function ProductManagement() {
               label: "Type",
               render: (value, product) => (
                 <div className="py-4">
-                  <Badge
-                    variant="secondary"
-                    className="text-center justify-center px-2"
-                  >
+                  <Badge variant="secondary">
                     {product.component ? "Component" : "Product"}
                   </Badge>
                 </div>
@@ -425,9 +420,7 @@ export function ProductManagement() {
               label: "Status",
               render: (value, product) => (
                 <div className="py-4 pl-4">
-                  <Badge className="text-center justify-center px-2">
-                    {product.active ? "Active" : "Inactive"}
-                  </Badge>
+                  <Badge>{product.active ? "Active" : "Inactive"}</Badge>
                 </div>
               ),
             },
@@ -809,6 +802,6 @@ export function ProductManagement() {
         onOpenChange={setIsViewCategoriesModalOpen}
         categories={categories}
       />
-    </div>
+    </PageShell>
   );
 }

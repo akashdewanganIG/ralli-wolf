@@ -27,7 +27,6 @@ import {
   SimpleTable,
   StatCard,
   StatusBadge,
-  TabBar,
 } from "@/components/supply-chain/shared";
 import {
   usePallets,
@@ -46,6 +45,7 @@ import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { buttonVariants } from "@repo/ui/components/ui/button";
 import { cn } from "@repo/ui/lib/utils";
 import { Tag } from "@repo/ui/components/ui/tag";
+import { CategorySwitcher } from "@repo/ui/components/ui/category-switcher";
 
 const ZONE_TYPES = [
   "RECEIVING",
@@ -183,7 +183,7 @@ export default function WarehouseDetailPage() {
         {warehouse && (
           <Panel
             title="Warehouse photos"
-            description="Keep visual references of the building, loading areas, and storage floor."
+            description="Photos of this warehouse, so anyone can see the building and where things are kept."
             actions={
               <span className="text-xs text-muted-foreground">
                 {warehouse.images?.length ?? 0} of 8 images
@@ -302,15 +302,19 @@ export default function WarehouseDetailPage() {
           />
         </div>
 
-        <TabBar
+        <CategorySwitcher
           label="Warehouse sections"
           value={tab}
-          onChange={setTab}
+          onValueChange={setTab}
           items={[
-            ["zones", `Zones (${zones.length})`],
-            ["bins", `Bins (${binPagination?.totalItems ?? 0})`],
-            ["utilisation", "Utilisation"],
-            ["pallets", `Pallets (${pallets.length})`],
+            { value: "zones", label: "Zones", count: zones.length },
+            {
+              value: "bins",
+              label: "Bins",
+              count: binPagination?.totalItems ?? 0,
+            },
+            { value: "utilisation", label: "Utilisation" },
+            { value: "pallets", label: "Pallets", count: pallets.length },
           ]}
         />
 
@@ -318,7 +322,7 @@ export default function WarehouseDetailPage() {
           <>
             <Panel
               title="Add a zone"
-              description="Zones group bins by function. A receiving zone gives goods a landing place before putaway."
+              description="Zones split a warehouse into areas by job — for example, where deliveries land before being put away."
             >
               <form
                 className="grid gap-4 md:grid-cols-4"
@@ -382,7 +386,7 @@ export default function WarehouseDetailPage() {
               </form>
             </Panel>
 
-            <Panel title="Zones">
+            <Panel flush title="Zones">
               <SimpleTable
                 isLoading={zonesLoading}
                 rows={zones}
@@ -435,7 +439,7 @@ export default function WarehouseDetailPage() {
               <>
                 <Panel
                   title="Generate a rack layout"
-                  description="Creates bins with consistent aisle/rack/level codes and a serpentine pick sequence, so pickers walk each aisle once."
+                  description="Creates all the shelf locations at once, numbered in the order a picker walks, so no aisle is walked twice."
                 >
                   <form
                     className="grid gap-4 md:grid-cols-6"
@@ -637,6 +641,7 @@ export default function WarehouseDetailPage() {
                 </Panel>
 
                 <Panel
+                  flush
                   title="Bins"
                   actions={
                     <SearchFilterToolbar
@@ -770,8 +775,9 @@ export default function WarehouseDetailPage() {
 
         {tab === "utilisation" && (
           <Panel
+            flush
             title="Storage utilisation"
-            description="How full each bin is by weight and by distinct items held"
+            description="How full each storage space is, by weight and by how many different items it holds."
           >
             <SimpleTable
               isLoading={utilisationLoading}
@@ -864,7 +870,7 @@ export default function WarehouseDetailPage() {
           <>
             <Panel
               title="Add a pallet"
-              description="Leave the code blank to have one generated from the pallet sequence."
+              description="Add a pallet to this warehouse. Leave the code blank and one is created for you."
             >
               <form
                 className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap"
@@ -908,7 +914,7 @@ export default function WarehouseDetailPage() {
               </form>
             </Panel>
 
-            <Panel title="Pallets">
+            <Panel flush title="Pallets">
               <SimpleTable
                 isLoading={palletsLoading}
                 rows={pallets}

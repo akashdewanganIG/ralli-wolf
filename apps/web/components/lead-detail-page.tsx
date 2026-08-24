@@ -14,8 +14,6 @@ import {
   Button,
   Badge,
   Tabs,
-  TabsList,
-  TabsTrigger,
   TabsContent,
   DeleteConfirmationDialog,
 } from "@repo/ui";
@@ -61,6 +59,7 @@ import {
 } from "./skeletons";
 import { displayPhone } from "../lib/phone-formatter";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { CategorySwitcher } from "@repo/ui/components/ui/category-switcher";
 
 interface LeadDetailPageProps {
   leadId: number;
@@ -486,10 +485,13 @@ export function LeadDetailPage({
                   value={accountContactTab}
                   onValueChange={setAccountContactTab}
                 >
-                  <TabsList className="gap-16">
-                    <TabsTrigger value="accounts">Accounts</TabsTrigger>
-                    <TabsTrigger value="contacts">Contacts</TabsTrigger>
-                  </TabsList>
+                  <CategorySwitcher
+                    label="Related records"
+                    items={[
+                      { value: "accounts", label: "Accounts" },
+                      { value: "contacts", label: "Contacts" },
+                    ]}
+                  />
                 </Tabs>
               </div>
             </CardHeader>

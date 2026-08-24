@@ -57,7 +57,7 @@ export default function MaterialAvailabilityPage() {
       <PageShell>
         <PageHeader
           title="Material availability"
-          subtitle="Check component availability for a planned build."
+          subtitle="Whether you have the parts to build something before you start."
         />
 
         <Panel title="What do you want to build?">
@@ -153,8 +153,9 @@ export default function MaterialAvailabilityPage() {
             </div>
 
             <Panel
+              flush
               title="Component requirements"
-              description="Required quantity includes each level's scrap allowance, compounded down the tree."
+              description="How much of each part a job needs, including the extra expected to be wasted."
             >
               <SimpleTable<AvailabilityLine>
                 rows={result.lines}

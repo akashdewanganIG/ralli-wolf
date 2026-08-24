@@ -17,7 +17,6 @@ import {
   SimpleTable,
   StatCard,
   StatusBadge,
-  TabBar,
 } from "@/components/supply-chain/shared";
 import {
   ProductPicker,
@@ -37,6 +36,7 @@ import {
   formatQuantity,
 } from "@/lib/utils/decimal";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { CategorySwitcher } from "@repo/ui/components/ui/category-switcher";
 
 export default function SupplierDetailPage() {
   const params = useParams<{ id: string }>();
@@ -216,15 +216,19 @@ export default function SupplierDetailPage() {
           />
         </div>
 
-        <TabBar
+        <CategorySwitcher
           label="Supplier sections"
           value={tab}
-          onChange={setTab}
+          onValueChange={setTab}
           items={[
-            ["overview", "Overview"],
-            ["catalogue", `Catalogue (${entries.length})`],
-            ["performance", "Performance"],
-            ["contacts", `Contacts (${supplier?.contacts?.length ?? 0})`],
+            { value: "overview", label: "Overview" },
+            { value: "catalogue", label: "Catalogue", count: entries.length },
+            { value: "performance", label: "Performance" },
+            {
+              value: "contacts",
+              label: "Contacts",
+              count: supplier?.contacts?.length ?? 0,
+            },
           ]}
         />
 
@@ -279,7 +283,7 @@ export default function SupplierDetailPage() {
               </div>
             </Panel>
 
-            <Panel title="Recent purchase orders">
+            <Panel flush title="Recent purchase orders">
               <SimpleTable
                 rows={supplier.recentOrders ?? []}
                 keyOf={row => row.id}
@@ -320,7 +324,7 @@ export default function SupplierDetailPage() {
           <>
             <Panel
               title="Add or supersede a price"
-              description="Saving a new price closes the previous open price for that item, so the history of what was agreed and when stays intact."
+              description="Record a new agreed price. The old one is kept in the history, so you can always see what was agreed and when."
             >
               <form
                 className="grid gap-4 md:grid-cols-5"
@@ -423,8 +427,9 @@ export default function SupplierDetailPage() {
             </Panel>
 
             <Panel
+              flush
               title="Catalogue"
-              description="Prices in force are used automatically when a purchase order line omits a price."
+              description="The prices agreed with this supplier. They fill in automatically when you raise an order."
             >
               <SimpleTable
                 isLoading={catalogueLoading}
@@ -531,7 +536,7 @@ export default function SupplierDetailPage() {
           <>
             <Panel
               title="Scorecard"
-              description="Every figure is derived from posted purchase orders and goods receipts over the last 12 months."
+              description="How this supplier has performed over the past 12 months, based on real orders and deliveries."
               actions={
                 <Button
                   type="button"
@@ -593,8 +598,9 @@ export default function SupplierDetailPage() {
             </Panel>
 
             <Panel
+              flush
               title="Snapshot history"
-              description="Saved period scorecards, newest first"
+              description="Past performance summaries for this supplier, newest first."
             >
               <SimpleTable
                 rows={performance?.history ?? []}
@@ -697,7 +703,7 @@ export default function SupplierDetailPage() {
               </form>
             </Panel>
 
-            <Panel title="Contacts">
+            <Panel flush title="Contacts">
               <SimpleTable
                 isLoading={isLoading}
                 rows={supplier?.contacts ?? []}

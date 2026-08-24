@@ -41,6 +41,7 @@ import {
 } from "@repo/ui/components/ui/metric-card";
 import { CardActionButton } from "@repo/ui/components/ui/card-action-button";
 import { Panel } from "@repo/ui/components/ui/panel";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 /**
  * Dashboard KPI.
@@ -275,14 +276,14 @@ export function AnalyticsDashboard() {
     hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
   return (
-    <div className="dashboard-page space-y-4">
+    <PageShell gap="tight">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <p className="text-xs font-medium text-muted-foreground">
             {greeting}
             {firstName ? `, ${firstName}` : ""}
           </p>
-          <h1 className="text-base sm:text-lg mt-0.5 text-xl font-semibold leading-tight tracking-tight text-foreground">
+          <h1 className="mt-0.5 text-base font-semibold leading-6 tracking-tight text-foreground sm:text-lg sm:leading-7">
             Operations overview
           </h1>
         </div>
@@ -411,8 +412,8 @@ export function AnalyticsDashboard() {
         title="Stock movement"
         description={
           isLoading
-            ? "Loading posted ledger entries…"
-            : `${inventory?.movementCount ?? 0} posted ledger entries in the current reporting period`
+            ? "Stock coming in and going out. Loading…"
+            : `Stock coming in and going out over this reporting period. ${inventory?.movementCount ?? 0} entries.`
         }
         action={<PanelLink href="/inventory/movements">View ledger</PanelLink>}
       >
@@ -457,7 +458,7 @@ export function AnalyticsDashboard() {
       <div className="grid items-stretch gap-3 xl:grid-cols-2">
         <Panel
           title="Warehouse flow"
-          description="Open execution work and storage capacity"
+          description="Work still to be done in the warehouse, and how much space is left."
           action={<PanelLink href="/warehouse">Open WMS</PanelLink>}
         >
           <MetricTiles>
@@ -498,7 +499,7 @@ export function AnalyticsDashboard() {
 
         <Panel
           title="Material readiness"
-          description="Items below configured thresholds"
+          description="Items that have dropped below the minimum level you set."
           action={
             <PanelLink href="/materials/shortages">All shortages</PanelLink>
           }
@@ -539,7 +540,7 @@ export function AnalyticsDashboard() {
 
         <Panel
           title="BOM control"
-          description="Latest controlled product structures"
+          description="The most recent approved parts lists for your products."
           action={<PanelLink href="/bom">All BOMs</PanelLink>}
         >
           {isLoading ? (
@@ -574,7 +575,7 @@ export function AnalyticsDashboard() {
 
         <Panel
           title="Purchase orders"
-          description="Committed value grouped by order status"
+          description="How much money is tied up in purchase orders, split by how far each has got."
           action={<PanelLink href="/purchasing/orders">All orders</PanelLink>}
         >
           {isLoading ? (
@@ -611,13 +612,13 @@ export function AnalyticsDashboard() {
           )}
         </Panel>
       </div>
-    </div>
+    </PageShell>
   );
 }
 
 export function AnalyticsDashboardSkeleton() {
   return (
-    <div className="dashboard-page space-y-4">
+    <PageShell gap="tight">
       <div className="h-14 animate-pulse rounded-xl bg-muted" />
       <div className="grid-auto-fit gap-3">
         {Array.from({ length: 4 }).map((_, index) => (
@@ -642,6 +643,6 @@ export function AnalyticsDashboardSkeleton() {
           <div key={index} className="h-72 animate-pulse rounded-xl bg-muted" />
         ))}
       </div>
-    </div>
+    </PageShell>
   );
 }

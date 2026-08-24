@@ -21,8 +21,6 @@ import {
   Tabs,
   TabsContent,
   TabsContents,
-  TabsList,
-  TabsTrigger,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -65,6 +63,8 @@ import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { DEFAULT_PAGE_SIZE } from "@/components/data-table";
 import { statusTone } from "@repo/ui/components/ui/status-badge";
 import { Tag as StatusTag } from "@repo/ui/components/ui/tag";
+import { formatMoney } from "@/lib/utils/decimal";
+import { CategorySwitcher } from "@repo/ui/components/ui/category-switcher";
 
 type QuoteDetailPageProps = {
   quoteId: string;
@@ -97,7 +97,7 @@ function toNum(v: number | string | undefined): number {
 }
 
 function formatCurrency(n: number): string {
-  return `₹${n.toLocaleString()}`;
+  return formatMoney(n);
 }
 
 function mapApiLineItemToRow(item: QuoteLineItemApi): QuoteLineItemRow {
@@ -301,7 +301,7 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                       </TooltipTrigger>
                       {isDisabled && !generateOrderMutation.isPending && (
                         <TooltipContent>
-                          You can generate order when quote is accepted
+                          You can turn this quote into an order once the customer has accepted it.
                         </TooltipContent>
                       )}
                     </Tooltip>
@@ -414,22 +414,15 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="justify-start space-x-16 border-b border-input">
-          <TabsTrigger
-            value="details"
-            className="text-lg font-medium data-[state=active]:border-b-[3px] data-[state=active]:border-border"
-          >
-            Details
-          </TabsTrigger>
-          <TabsTrigger
-            value="line-items"
-            className="text-lg font-medium data-[state=active]:border-b-[3px] data-[state=active]:border-border"
-          >
-            Line Items
-          </TabsTrigger>
-        </TabsList>
+        <CategorySwitcher
+          label="Quote sections"
+          items={[
+            { value: "details", label: "Details" },
+            { value: "line-items", label: "Line items" },
+          ]}
+        />
 
-        <TabsContents className="mt-8">
+        <TabsContents>
           <TabsContent value="details">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="lg:col-span-2 space-y-4">

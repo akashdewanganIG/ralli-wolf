@@ -10,6 +10,15 @@ import { RouteLoadingState } from "../ProtectedRoute";
  * Ensures sales users can ONLY access /sales routes
  * Redirects them if they try to access other routes
  */
+/**
+ * Paths a sales user may open even though they sit outside /sales.
+ *
+ * The notification bell is in the header on every page, the sales workspace
+ * included, so the screen that turns those notifications off has to be
+ * reachable too — otherwise the sidebar shows them a link that bounces.
+ */
+const SALES_ALLOWED_PATHS = ["/login", "/unauthorized", "/admin/notifications"];
+
 export function SalesRouteGuard({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   const router = useRouter();
@@ -18,8 +27,7 @@ export function SalesRouteGuard({ children }: { children: React.ReactNode }) {
     !isLoading &&
     user?.role === "SALES" &&
     !pathname.startsWith("/sales") &&
-    pathname !== "/login" &&
-    pathname !== "/unauthorized";
+    !SALES_ALLOWED_PATHS.includes(pathname);
 
   useEffect(() => {
     // Wait for auth to load

@@ -94,7 +94,7 @@ export default function WarehouseManagementPage() {
       <PageShell>
         <PageHeader
           title="Warehouse management"
-          subtitle="Manage warehouses, zones, bins, and storage capacity."
+          subtitle="Your buildings and the storage spaces inside them."
           actions={
             <>
               <Link
@@ -260,6 +260,8 @@ export default function WarehouseManagementPage() {
         </FormDialog>
 
         <Panel
+          title="Warehouses"
+          flush
           actions={
             <SearchFilterToolbar
               search={
@@ -278,7 +280,7 @@ export default function WarehouseManagementPage() {
           {!isLoading && warehouses.length === 0 && !search ? (
             <EmptyState
               title="No warehouses yet"
-              description="Create your first real location. Nothing is pre-populated — the structure you build here is what putaway and picking will actually use."
+              description="Create your first warehouse. Nothing is set up in advance, so the storage spaces you add here are the ones staff will use when storing and collecting stock."
               action={
                 <Button
                   type="button"

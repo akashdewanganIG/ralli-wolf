@@ -83,13 +83,12 @@ export default function OrdersPage() {
       <PageShell>
         <PageHeader
           title="Sales orders"
-          description={`${pagination?.totalItems ?? orders.length} order${(pagination?.totalItems ?? orders.length) === 1 ? "" : "s"} created from accepted quotes.`}
+          description={`Confirmed orders from customers who accepted a quote. ${pagination?.totalItems ?? orders.length} so far.`}
         />
 
         <DataTable<SalesOrderListItem>
           data={orders}
           columns={columns}
-          title="Sales Orders"
           count={pagination?.totalItems ?? orders.length}
           currentPage={currentPage}
           totalPages={pagination?.totalPages ?? 1}

@@ -11,6 +11,7 @@ import { TablePageSkeleton } from "@/components/skeletons";
 import { PageHeader } from "@repo/ui/components/ui/page-header";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { DEFAULT_PAGE_SIZE } from "@/components/data-table";
+import { formatMoney } from "@/lib/utils/decimal";
 
 export type QuoteTableRow = {
   id: string;
@@ -84,7 +85,7 @@ export default function QuotesPage() {
         label: "Net Amount",
         render: value => (
           <span className="text-muted-foreground">
-            ₹{Number(value ?? 0).toLocaleString()}
+            {formatMoney(value ?? 0)}
           </span>
         ),
       },
@@ -143,13 +144,13 @@ export default function QuotesPage() {
   if (isError) {
     return (
       <RoleGuard allowedRoles={["ADMIN", "ADMIN", "SALES"]}>
-        <div className="app-page">
+        <PageShell>
           <Alert tone="error" title="Quotes could not be loaded">
             {error && typeof error === "object" && "message" in error
               ? String((error as { message: string }).message)
               : "Failed to load quotes."}
           </Alert>
-        </div>
+        </PageShell>
       </RoleGuard>
     );
   }
@@ -162,7 +163,7 @@ export default function QuotesPage() {
       <PageShell>
         <PageHeader
           title="Quotes"
-          description={`${totalItems} quote${totalItems === 1 ? "" : "s"} across the sales workspace.`}
+          description={`Prices you have offered customers, before they become orders. ${totalItems} in total.`}
         />
 
         <DataTable<QuoteTableRow>

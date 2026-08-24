@@ -26,6 +26,7 @@ import {
 } from "@/lib/utils/decimal";
 import { toast } from "@/lib/toast";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { DashboardToolbar } from "@repo/ui/components/ui/dashboard-toolbar";
 
 export default function PutawayQueuePage() {
   const [page, setPage] = useState(1);
@@ -47,39 +48,47 @@ export default function PutawayQueuePage() {
       <PageShell>
         <PageHeader
           title="Putaway queue"
-          subtitle="Assign received stock to suitable storage bins."
-          actions={
-            <>
-              <WarehouseFilter
-                value={warehouseId}
-                onChange={value => {
-                  setWarehouseId(value);
-                  setPage(1);
-                }}
-                className="w-full sm:w-56"
-              />
-              <SelectField
-                className="w-full sm:w-44"
-                value={status}
-                onChange={event => {
-                  setStatus(event.target.value);
-                  setPage(1);
-                }}
-              >
-                <option value="">Open tasks</option>
-                <option value="PENDING">Pending</option>
-                <option value="ASSIGNED">Assigned</option>
-                <option value="IN_PROGRESS">In progress</option>
-                <option value="COMPLETED">Completed</option>
-              </SelectField>
-            </>
-          }
+          subtitle="Putting newly arrived stock away into the right storage spaces."
         />
 
         <ErrorBanner error={error} />
         <ErrorBanner error={completePutaway.error} />
 
-        <Panel>
+        <Panel
+          title="Putaway tasks"
+          flush
+          actions={
+            <DashboardToolbar
+              actions={[
+                <WarehouseFilter
+                  key="warehouse"
+                  value={warehouseId}
+                  onChange={value => {
+                    setWarehouseId(value);
+                    setPage(1);
+                  }}
+                  className="w-full sm:w-56"
+                />,
+                <SelectField
+                  key="status"
+                  aria-label="Filter by status"
+                  className="w-full sm:w-44"
+                  value={status}
+                  onChange={event => {
+                    setStatus(event.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <option value="">Open tasks</option>
+                  <option value="PENDING">Pending</option>
+                  <option value="ASSIGNED">Assigned</option>
+                  <option value="IN_PROGRESS">In progress</option>
+                  <option value="COMPLETED">Completed</option>
+                </SelectField>,
+              ]}
+            />
+          }
+        >
           <SimpleTable
             isLoading={isLoading}
             rows={tasks}

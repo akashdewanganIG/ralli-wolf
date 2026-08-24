@@ -27,7 +27,7 @@ export default function MaterialShortagesPage() {
       <PageShell>
         <PageHeader
           title="Material shortages"
-          subtitle="Prioritize material shortfalls that could block planned work."
+          subtitle="Parts you are short of that could stop planned work."
           actions={
             <WarehouseFilter
               value={warehouseId}
@@ -67,7 +67,11 @@ export default function MaterialShortagesPage() {
           />
         </div>
 
-        <Panel title="Shortage worklist" description="Deepest shortfall first">
+        <Panel
+          flush
+          title="Shortage worklist"
+          description="Parts you do not have enough of, worst shortage first."
+        >
           <SimpleTable
             isLoading={isLoading}
             rows={shortages?.rows ?? []}

@@ -163,6 +163,10 @@
   --primary-foreground: #ffffff;
   --primary-surface: #fef2f2;
   --primary-border: #fecaca;
+  /* Text on the *tinted* --primary-surface, as opposed to
+     --primary-foreground, which is text on filled --primary. The bare
+     --primary only reaches ~3.7:1 here, short of 4.5:1 for a 13px label. */
+  --primary-surface-foreground: #c5101b;
 
   /* Neutral secondary action, so "not the primary button" is not a colour. */
   --secondary: #f5f5f5;
@@ -205,17 +209,17 @@
      `--chart-step-*` is an ordinal ramp, light -> dark, for lifecycle stages.
      The lightness gaps and the pale end's contrast against the card surface
      are what keep the steps apart — do not hand-tune one value in isolation. */
-  --chart-mark: #2f6b5b;
-  --chart-mark-hatch: #3c7a69;
-  --chart-accent: #27cf96;
-  --chart-highlight: #e0f6ef;
+  --chart-mark: #9e1b21;
+  --chart-mark-hatch: #b32229;
+  --chart-accent: #ed1c24;
+  --chart-highlight: #fdeaeb;
   --chart-track: #f0f0f0;
   --chart-grid: #e5e5e5;
-  --chart-step-1: #a7e3ce;
-  --chart-step-2: #6fcbaf;
-  --chart-step-3: #45a888;
-  --chart-step-4: #2f6b5b;
-  --chart-step-5: #2a5a4e;
+  --chart-step-1: #f8bcbe;
+  --chart-step-2: #f18d91;
+  --chart-step-3: #e4545b;
+  --chart-step-4: #c5101b;
+  --chart-step-5: #8f1319;
 
   /* -- Navigation -------------------------------------------------------- */
   --sidebar-foreground: #525252;
@@ -295,6 +299,7 @@
   --primary-foreground: #ffffff;
   --primary-surface: #2a1215;
   --primary-border: #4d1f23;
+  --primary-surface-foreground: #ff7a80;
 
   --secondary: #262626;
   --secondary-foreground: #e5e5e5;
@@ -328,17 +333,17 @@
 
   /* Re-stepped from the same ramp so the pale end still reads against the
      dark card, rather than reusing the light theme's steps. */
-  --chart-mark: #3e9c7f;
-  --chart-mark-hatch: #4bab8d;
-  --chart-accent: #27cf96;
-  --chart-highlight: #142c25;
+  --chart-mark: #d8474e;
+  --chart-mark-hatch: #e35a61;
+  --chart-accent: #ff5a60;
+  --chart-highlight: #2c1416;
   --chart-track: #262626;
   --chart-grid: #2e2e2e;
-  --chart-step-1: #c6efdf;
-  --chart-step-2: #96dcc2;
-  --chart-step-3: #62c3a3;
-  --chart-step-4: #45a888;
-  --chart-step-5: #35836c;
+  --chart-step-1: #fbd0d2;
+  --chart-step-2: #f5a3a7;
+  --chart-step-3: #ed7378;
+  --chart-step-4: #e04a51;
+  --chart-step-5: #b7272e;
 
   /* -- Navigation -------------------------------------------------------- */
   --sidebar-foreground: #a3a3a3;
@@ -366,6 +371,7 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-primary-surface: var(--primary-surface);
   --color-primary-border: var(--primary-border);
+  --color-primary-surface-foreground: var(--primary-surface-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -900,24 +906,6 @@
   max-width: 100%;
 }
 
-.app-page {
-  margin-inline: auto;
-  width: 100%;
-  max-width: 100rem;
-  padding: 1rem 1rem 1.5rem;
-}
-
-/* Dashboard composition follows a deliberate 20px section rhythm while
-   retaining the shared responsive page gutter. */
-.dashboard-page {
-  margin-inline: auto;
-  width: 100%;
-  max-width: 100rem;
-  /* The trailing gutter only needs to clear the last card, not a full screen
-     of air; the sides stay tight so the grid gets the width instead. */
-  padding: 1rem 1rem 1.5rem;
-}
-
 .app-toolbar {
   display: flex;
   align-items: center;
@@ -1020,18 +1008,14 @@
 }
 
 @media (min-width: 640px) {
-  .app-content > :where(.p-4, .p-5, .p-6),
-  .app-page,
-  .dashboard-page {
+  .app-content > :where(.p-4, .p-5, .p-6) {
     padding-inline: 1.25rem;
   }
 }
 
 @media (min-width: 1280px) {
-  .app-content > :where(.p-4, .p-5, .p-6),
-  .app-page,
-  .dashboard-page {
-    padding-inline: 1.5rem;
+  .app-content > :where(.p-4, .p-5, .p-6) {
+    padding-inline: 1.25rem;
   }
 }
 

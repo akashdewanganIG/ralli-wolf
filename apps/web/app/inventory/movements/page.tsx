@@ -79,12 +79,14 @@ export default function StockLedgerPage() {
       <PageShell>
         <PageHeader
           title="Stock ledger"
-          subtitle="Trace every stock receipt, issue, transfer, and adjustment."
+          subtitle="A full history of stock arriving, leaving, and moving between places."
         />
 
         <ErrorBanner error={error} />
 
         <Panel
+          title="Movements"
+          flush
           actions={
             <DashboardToolbar
               actions={[

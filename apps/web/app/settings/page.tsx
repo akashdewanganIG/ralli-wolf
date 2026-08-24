@@ -50,7 +50,7 @@ export default function SettingsPage() {
       <PageShell>
         <PageHeader
           title="Settings"
-          description="Manage your account security and the preferences that apply across this workspace."
+          description="Your sign-in security, plus settings that apply to everyone in this workspace."
         />
 
         {/* Yours first, then everyone's — the personal settings are the ones a
@@ -62,7 +62,7 @@ export default function SettingsPage() {
         >
           <Panel
             title="Profile"
-            description="The name and address this workspace knows you by. Contact an administrator to change them."
+            description="Your name and email as other people see them. Ask an administrator to change these."
             action={
               <CardActionButton onClick={() => setShowChangePassword(true)}>
                 <KeyRound className="size-4" />
@@ -101,7 +101,7 @@ export default function SettingsPage() {
         >
           <Panel
             title="Sign-in methods"
-            description="Choose how you prove it is you. At least two must stay enabled."
+            description="How you log in. Keep at least two switched on so you are never locked out."
             bodyClassName="p-0"
           >
             <AuthenticationMethods />
@@ -116,14 +116,14 @@ export default function SettingsPage() {
         >
           <Panel
             title="Currency and locale"
-            description="The currency used for every monetary value shown across the workspace."
+            description="The currency that every price and total is shown in."
           >
             <CurrencySettings />
           </Panel>
 
           <Panel
             title="Manager approval threshold"
-            description="Discounts above this percentage require approval before the opportunity can proceed."
+            description="Any discount bigger than this needs a manager to approve it first."
           >
             <DiscountThresholdSettings />
           </Panel>

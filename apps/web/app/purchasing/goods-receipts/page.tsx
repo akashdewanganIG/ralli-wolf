@@ -48,12 +48,13 @@ export default function GoodsReceiptsPage() {
       <PageShell>
         <PageHeader
           title="Goods receipts"
-          subtitle="Track received goods, quality checks, posting, and putaway."
+          subtitle="Deliveries that have arrived, and what happened to them afterwards."
         />
 
         <ErrorBanner error={error} />
 
         <Panel
+          flush
           actions={
             <FilterBar>
               <SelectField

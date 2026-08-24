@@ -28,7 +28,30 @@ export function formatQuantity(
   });
 }
 
-export function formatMoney(value: DecimalLike, currency = "INR"): string {
+/**
+ * The currency every amount is shown in, unless a caller names one.
+ *
+ * A module-level value rather than a hook because `formatMoney` is a plain
+ * function called from ~90 places — inside column definitions, inline in JSX,
+ * and in helpers that are not components and cannot hold a subscription.
+ * `CurrencyProvider` owns it and re-renders the tree when it changes, so this
+ * is never read while stale.
+ */
+let activeCurrency = "INR";
+
+/** Called by `CurrencyProvider`; not intended for use anywhere else. */
+export function setActiveCurrency(code: string) {
+  if (code) activeCurrency = code;
+}
+
+export function getActiveCurrency(): string {
+  return activeCurrency;
+}
+
+export function formatMoney(
+  value: DecimalLike,
+  currency: string = activeCurrency
+): string {
   if (value === null || value === undefined || value === "") return "—";
   try {
     return toNumber(value).toLocaleString(undefined, {

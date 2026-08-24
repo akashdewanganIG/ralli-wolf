@@ -109,6 +109,13 @@ interface LeadTableProps {
   onCreatedFromFilterRemove?: () => void;
   onCreatedToFilterRemove?: () => void;
   onKeywordIdsFilterRemove?: () => void;
+  /**
+   * Search control, rendered inside the table card's toolbar.
+   *
+   * Lead Management used to place it on its own row above the card, which is
+   * the one listing screen where search sat outside the surface it filters.
+   */
+  search?: React.ReactNode;
   // Search props
   searchQuery?: string;
   isSearchMode?: boolean;
@@ -145,6 +152,7 @@ export const LeadTable: React.FC<LeadTableProps> = ({
   onCreatedToFilterRemove,
   onKeywordIdsFilterRemove,
   // Search props
+  search,
   searchQuery,
   isSearchMode = false,
   showAssignedAtColumn = false,
@@ -290,6 +298,7 @@ export const LeadTable: React.FC<LeadTableProps> = ({
 
   return (
     <DataTable
+      search={search}
       data={leads}
       columns={columns}
       title={title}

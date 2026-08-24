@@ -3,18 +3,27 @@
 import * as React from "react";
 import { cn } from "../../lib/utils";
 
-const TabsContext = React.createContext<{
+type TabsContextValue = {
   activeValue: string;
   handleValueChange: (value: string) => void;
-}>({
-  activeValue: "",
-  handleValueChange: () => {},
-});
+};
 
-function useTabs() {
+const TabsContext = React.createContext<TabsContextValue | null>(null);
+
+/**
+ * The tab state, or `null` outside a `<Tabs>`.
+ *
+ * Nullable so `CategorySwitcher` can tell "inside a Tabs, adopt its state" from
+ * "standalone, use my own props" instead of silently binding to a dummy value.
+ */
+export function useTabsOptional(): TabsContextValue | null {
+  return React.useContext(TabsContext);
+}
+
+function useTabs(): TabsContextValue {
   const context = React.useContext(TabsContext);
   if (!context) {
-    throw new Error("useTabs must be used within a TabsProvider");
+    throw new Error("useTabs must be used within <Tabs>");
   }
   return context;
 }
@@ -27,6 +36,10 @@ type TabsProps = {
   className?: string;
 };
 
+/**
+ * Holds which category is showing. Render the control with `CategorySwitcher`
+ * and the panels with `TabsContents`/`TabsContent`.
+ */
 function Tabs({
   defaultValue,
   value,
@@ -36,74 +49,25 @@ function Tabs({
 }: TabsProps) {
   const [activeValue, setActiveValue] = React.useState(defaultValue || "");
 
-  const handleValueChange = (val: string) => {
-    if (value === undefined) {
-      setActiveValue(val);
-    }
-    onValueChange?.(val);
-  };
+  const handleValueChange = React.useCallback(
+    (val: string) => {
+      if (value === undefined) setActiveValue(val);
+      onValueChange?.(val);
+    },
+    [value, onValueChange]
+  );
 
   const currentValue = value !== undefined ? value : activeValue;
 
+  const context = React.useMemo(
+    () => ({ activeValue: currentValue, handleValueChange }),
+    [currentValue, handleValueChange]
+  );
+
   return (
-    <TabsContext.Provider
-      value={{
-        activeValue: currentValue,
-        handleValueChange,
-      }}
-    >
+    <TabsContext.Provider value={context}>
       <div className={cn("flex flex-col gap-4", className)}>{children}</div>
     </TabsContext.Provider>
-  );
-}
-
-type TabsListProps = {
-  children: React.ReactNode;
-  className?: string;
-};
-
-function TabsList({ children, className }: TabsListProps) {
-  return (
-    <div
-      role="tablist"
-      className={cn(
-        "inline-flex min-h-10 w-fit max-w-full items-center gap-1 overflow-x-auto rounded-lg bg-secondary p-1",
-        className
-      )}
-    >
-      {children}
-    </div>
-  );
-}
-
-type TabsTriggerProps = {
-  value: string;
-  children: React.ReactNode;
-  className?: string;
-};
-
-function TabsTrigger({ value, children, className }: TabsTriggerProps) {
-  const { activeValue, handleValueChange } = useTabs();
-  const isActive = activeValue === value;
-
-  return (
-    <button
-      role="tab"
-      type="button"
-      aria-selected={isActive}
-      tabIndex={isActive ? 0 : -1}
-      onClick={() => handleValueChange(value)}
-      data-state={isActive ? "active" : "inactive"}
-      className={cn(
-        "inline-flex h-8 shrink-0 cursor-pointer items-center justify-center rounded-md px-3 text-sm font-medium outline-none transition-[background-color,color,box-shadow] duration-150 focus-visible:ring-2 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50",
-        isActive
-          ? "bg-surface text-foreground shadow-xs"
-          : "text-muted-foreground hover:bg-surface/60 hover:text-foreground",
-        className
-      )}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -124,9 +88,7 @@ type TabsContentProps = {
 
 function TabsContent({ value, children, className }: TabsContentProps) {
   const { activeValue } = useTabs();
-  const isActive = activeValue === value;
-
-  if (!isActive) return null;
+  if (activeValue !== value) return null;
 
   return (
     <div role="tabpanel" className={cn("overflow-hidden", className)}>
@@ -135,4 +97,4 @@ function TabsContent({ value, children, className }: TabsContentProps) {
   );
 }
 
-export { Tabs, TabsList, TabsTrigger, TabsContents, TabsContent, useTabs };
+export { Tabs, TabsContents, TabsContent, useTabs };

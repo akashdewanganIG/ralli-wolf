@@ -32,6 +32,7 @@ import {
 import React from "react";
 import { Campaign } from "./campaign-table";
 import { WhatsAppPreview } from "./whatsapp/whatsapp-preview";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 interface CampaignDetailPageProps {
   campaign: Campaign;
@@ -497,7 +498,7 @@ export function CampaignDetailPage({
       failed: deliveries.filter(x => x.status === "failed").length,
     };
     return (
-      <div className="app-page space-y-5">
+      <PageShell>
         <PageHeader
           title={campaign.name}
           description={
@@ -598,7 +599,7 @@ export function CampaignDetailPage({
             </>
           )}
         </div>
-      </div>
+      </PageShell>
     );
   }
 
@@ -651,7 +652,7 @@ export function CampaignDetailPage({
 
   // Render Email campaign
   return (
-    <div className="app-page space-y-5">
+    <PageShell>
       <PageHeader
         title={campaign.name}
         description={
@@ -831,6 +832,6 @@ export function CampaignDetailPage({
         />
         <div></div>
       </HorizontalSection>
-    </div>
+    </PageShell>
   );
 }

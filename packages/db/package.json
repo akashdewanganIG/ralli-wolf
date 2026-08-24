@@ -29,6 +29,7 @@
     "prisma:seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
     "prisma:seed:demo": "dotenv -e ../../.env -- tsx prisma/seed-demo.ts",
     "prisma:seed:all-demo": "dotenv -e ../../.env -- tsx prisma/seed-all-sections.ts",
+    "prisma:seed:presentation": "dotenv -e ../../.env -- tsx prisma/seed-presentation.ts",
     "prisma:verify:all-demo": "dotenv -e ../../.env -- tsx prisma/verify-all-sections-demo.ts",
     "prisma:seed:supply-chain": "dotenv -e ../../.env -- tsx prisma/seed-supply-chain.ts",
     "db:switch:local": "powershell -ExecutionPolicy Bypass -File switch-db.ps1 local",

@@ -14,8 +14,6 @@ import {
   Tabs,
   TabsContent,
   TabsContents,
-  TabsList,
-  TabsTrigger,
 } from "@repo/ui";
 import {
   Clock,
@@ -48,6 +46,7 @@ import {
   StatGridSkeleton,
 } from "./skeletons";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { CategorySwitcher } from "@repo/ui/components/ui/category-switcher";
 
 interface Contact {
   id: string;
@@ -303,12 +302,15 @@ export function ContactDetailPage({
 
       {/* Tabs */}
       <Tabs defaultValue="related">
-        <TabsList>
-          <TabsTrigger value="related">Related</TabsTrigger>
-          <TabsTrigger value="details">Details</TabsTrigger>
-        </TabsList>
+        <CategorySwitcher
+          label="Contact sections"
+          items={[
+            { value: "related", label: "Related" },
+            { value: "details", label: "Details" },
+          ]}
+        />
 
-        <TabsContents className="mt-4">
+        <TabsContents>
           <TabsContent value="related">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Left Column */}

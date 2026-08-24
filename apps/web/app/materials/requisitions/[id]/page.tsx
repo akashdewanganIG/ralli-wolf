@@ -70,7 +70,7 @@ export default function MaterialRequisitionDetailPage() {
           }
           subtitle={
             requisition
-              ? `Issue from ${requisition.warehouse.code} · requested by ${`${requisition.requestedBy.firstName ?? ""} ${requisition.requestedBy.lastName ?? ""}`.trim()}`
+              ? `A request for materials from ${requisition.warehouse.code}, made by ${`${requisition.requestedBy.firstName ?? ""} ${requisition.requestedBy.lastName ?? ""}`.trim()}.`
               : undefined
           }
           breadcrumb={[
@@ -189,11 +189,12 @@ export default function MaterialRequisitionDetailPage() {
         )}
 
         <Panel
+          flush
           title="Lines"
           description={
             isClosed
-              ? "This requisition is closed."
-              : "Leave the issue quantity blank on a line to issue everything still outstanding on it. Mark a line as scrap to have it counted as wastage rather than consumption."
+              ? "This request is finished, so it can only be viewed."
+              : "Hand out the parts that were asked for. Leave the amount blank to give everything still owed, or mark a line as scrap if it was wasted rather than used."
           }
         >
           <SimpleTable

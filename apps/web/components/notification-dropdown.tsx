@@ -2,7 +2,23 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Bell, CheckCheck } from "@repo/ui/icons";
+import {
+  AlertTriangle,
+  Bell,
+  CheckCheck,
+  CheckCircle,
+  ClipboardCheck,
+  FileText,
+  Handshake,
+  Package,
+  PackageCheck,
+  Pencil,
+  ShoppingCart,
+  TrendingUp,
+  Users,
+  XCircle,
+  type IconComponent,
+} from "@repo/ui/icons";
 import {
   useNotifications,
   useMarkNotificationRead,
@@ -12,15 +28,29 @@ import {
 import { Skeleton, SkeletonRegion } from "@repo/ui/components/ui/skeleton";
 import { Tag } from "@repo/ui/components/ui/tag";
 
-const TYPE_ICONS: Record<string, string> = {
-  LEAD_ASSIGNED: "👤",
-  LEAD_UPDATED: "✏️",
-  APPROVAL_REQUESTED: "📋",
-  APPROVAL_APPROVED: "✅",
-  APPROVAL_REJECTED: "❌",
-  QUOTE_ACCEPTED: "🤝",
-  ORDER_CREATED: "🛒",
-  GENERAL: "🔔",
+/**
+ * An icon for every `NotificationType` the API can send.
+ *
+ * Covers the whole enum, not just the types that happen to fire today — an
+ * unmapped type used to fall back to a generic bell, which is what a reader
+ * saw for goods receipts and stock alerts. Line icons rather than emoji, so
+ * these match every other icon in the app and inherit colour from the theme.
+ */
+const TYPE_ICONS: Record<string, IconComponent> = {
+  LEAD_ASSIGNED: Users,
+  LEAD_UPDATED: Pencil,
+  APPROVAL_REQUESTED: ClipboardCheck,
+  APPROVAL_APPROVED: CheckCircle,
+  APPROVAL_REJECTED: XCircle,
+  QUOTE_ACCEPTED: Handshake,
+  ORDER_CREATED: ShoppingCart,
+  STOCK_ALERT: TrendingUp,
+  PURCHASE_ORDER_APPROVED: CheckCircle,
+  PURCHASE_ORDER_REJECTED: XCircle,
+  GOODS_RECEIVED: PackageCheck,
+  QC_FAILED: AlertTriangle,
+  MATERIAL_SHORTAGE: Package,
+  GENERAL: Bell,
 };
 
 function timeAgo(iso: string) {
@@ -41,6 +71,8 @@ function NotificationItem({
   notification: AppNotification;
   onRead: (id: number, link: string | null) => void;
 }) {
+  const Icon = TYPE_ICONS[notification.type] ?? Bell;
+
   return (
     <button
       type="button"
@@ -49,9 +81,10 @@ function NotificationItem({
         !notification.isRead ? "bg-accent/60" : ""
       }`}
     >
-      <span className="mt-0.5 flex-shrink-0 text-lg" aria-hidden="true">
-        {TYPE_ICONS[notification.type] ?? "🔔"}
-      </span>
+      <Icon
+        aria-hidden="true"
+        className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+      />
       <div className="flex-1 min-w-0">
         <p
           className={`text-sm leading-snug ${!notification.isRead ? "font-semibold text-foreground" : "font-medium text-text-secondary"}`}
@@ -77,7 +110,7 @@ export function NotificationDropdown() {
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
 
-  const { data, isLoading } = useNotifications();
+  const { data, isLoading, isError } = useNotifications();
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
 
@@ -138,7 +171,7 @@ export function NotificationDropdown() {
           id="notification-panel"
           role="dialog"
           aria-label="Notifications"
-          className="fixed inset-x-4 top-[4.25rem] z-50 w-auto overflow-hidden rounded-xl border border-border bg-surface shadow-lg shadow-slate-950/10 sm:absolute sm:inset-x-auto sm:right-0 sm:top-12 sm:w-80"
+          className="fixed inset-x-4 top-[4.25rem] z-50 w-auto overflow-hidden rounded-xl border border-border bg-surface shadow-lg sm:absolute sm:inset-x-auto sm:right-0 sm:top-12 sm:w-80"
         >
           {/* Header */}
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
@@ -155,7 +188,7 @@ export function NotificationDropdown() {
                 type="button"
                 onClick={() => markAllRead.mutate()}
                 disabled={markAllRead.isPending}
-                className="flex items-center gap-1 text-xs font-medium text-primary outline-none hover:text-info focus-visible:ring-2 focus-visible:ring-ring/30 disabled:opacity-50"
+                className="flex items-center gap-1 text-xs font-medium text-primary outline-none hover:text-primary/80 focus-visible:ring-2 focus-visible:ring-ring/30 disabled:opacity-50"
               >
                 <CheckCheck aria-hidden="true" className="size-3.5" />
                 Mark all read
@@ -178,6 +211,38 @@ export function NotificationDropdown() {
                   </div>
                 ))}
               </SkeletonRegion>
+            ) : isError ? (
+              /* "Caught up" would be a lie when the request failed. */
+              <div className="flex flex-col items-center gap-1.5 px-6 py-10 text-center">
+                <AlertTriangle
+                  aria-hidden="true"
+                  className="size-5 text-muted-foreground/60"
+                />
+                <p className="text-sm font-medium text-foreground">
+                  Could not load notifications
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Check your connection and reopen this menu.
+                </p>
+              </div>
+            ) : notifications.length === 0 ? (
+              /*
+                Without this the panel opened as an empty box with a header and
+                nothing under it, which reads as a failure to load rather than
+                as having nothing to show.
+              */
+              <div className="flex flex-col items-center gap-1.5 px-6 py-10 text-center">
+                <Bell
+                  aria-hidden="true"
+                  className="size-5 text-muted-foreground/60"
+                />
+                <p className="text-sm font-medium text-foreground">
+                  You are all caught up
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Approvals, quality checks, and stock alerts will appear here.
+                </p>
+              </div>
             ) : (
               notifications.map(n => (
                 <NotificationItem
@@ -187,6 +252,21 @@ export function NotificationDropdown() {
                 />
               ))
             )}
+          </div>
+
+          {/* Somewhere to go when the answer to a notification is "stop sending
+              me this". */}
+          <div className="border-t border-border px-4 py-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                router.push("/admin/notifications");
+              }}
+              className="text-xs font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30"
+            >
+              Notification settings
+            </button>
           </div>
         </div>
       )}

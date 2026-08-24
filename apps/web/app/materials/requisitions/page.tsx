@@ -101,7 +101,7 @@ export default function MaterialRequisitionsPage() {
       <PageShell>
         <PageHeader
           title="Material requisitions"
-          subtitle="Request, approve, and issue materials to operations."
+          subtitle="Requests from the floor for materials, and handing those materials out."
           actions={
             <Button
               type="button"
@@ -231,6 +231,8 @@ export default function MaterialRequisitionsPage() {
         </FormDialog>
 
         <Panel
+          title="Requisitions"
+          flush
           actions={
             <FilterBar>
               <SelectField

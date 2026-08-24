@@ -95,7 +95,7 @@ export default function PurchaseRequisitionsPage() {
       <PageShell>
         <PageHeader
           title="Purchase requisitions"
-          subtitle="Request and approve goods before ordering."
+          subtitle="Internal requests to buy something, before a real order is placed."
           actions={
             <Button
               type="button"
@@ -232,6 +232,8 @@ export default function PurchaseRequisitionsPage() {
         </FormDialog>
 
         <Panel
+          title="Requisitions"
+          flush
           actions={
             <FilterBar>
               <SelectField

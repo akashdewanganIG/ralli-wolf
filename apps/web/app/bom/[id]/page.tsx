@@ -17,7 +17,6 @@ import {
   SimpleTable,
   StatCard,
   StatusBadge,
-  TabBar,
 } from "@/components/supply-chain/shared";
 import {
   ProductPicker,
@@ -38,6 +37,7 @@ import {
 } from "@/lib/utils/decimal";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { Tag } from "@repo/ui/components/ui/tag";
+import { CategorySwitcher } from "@repo/ui/components/ui/category-switcher";
 
 export default function BomDetailPage() {
   const params = useParams<{ id: string }>();
@@ -109,7 +109,7 @@ export default function BomDetailPage() {
           title={bom ? `${bom.bomNumber} — ${bom.name}` : "Bill of materials"}
           subtitle={
             bom
-              ? `Builds ${bom.product.code} — ${bom.product.name} · version ${bom.version}${bom.revision} · ${formatQuantity(bom.outputQuantity)} unit(s) per run`
+              ? `The parts needed to build ${bom.product.name}. Version ${bom.version}${bom.revision}, making ${formatQuantity(bom.outputQuantity)} unit(s) each time.`
               : undefined
           }
           breadcrumb={[
@@ -239,7 +239,7 @@ export default function BomDetailPage() {
         </div>
 
         {costRollup.isSuccess && costRollup.data && (
-          <Panel title="Cost roll-up result">
+          <Panel flush title="Cost roll-up result">
             {costRollup.data.data.missingCosts.length > 0 && (
               <Alert tone="warning" className="mb-4">
                 <p className="font-medium">
@@ -321,15 +321,15 @@ export default function BomDetailPage() {
           </Panel>
         )}
 
-        <TabBar
+        <CategorySwitcher
           label="Bill of materials sections"
           value={tab}
-          onChange={setTab}
+          onValueChange={setTab}
           items={[
-            ["structure", `Structure (${components.length})`],
-            ["explosion", "Multi-level explosion"],
-            ["costing", "Header & costing"],
-            ["history", "Change history"],
+            { value: "structure", label: "Structure", count: components.length },
+            { value: "explosion", label: "Multi-level explosion" },
+            { value: "costing", label: "Header & costing" },
+            { value: "history", label: "Change history" },
           ]}
         />
 
@@ -338,7 +338,7 @@ export default function BomDetailPage() {
             {isEditable && (
               <Panel
                 title="Add a component"
-                description="A component that would create a circular reference is rejected before it is saved."
+                description="Add a part that goes into this product. A part cannot contain itself, so loops are blocked."
               >
                 <form
                   className="grid gap-4 md:grid-cols-5"
@@ -446,11 +446,12 @@ export default function BomDetailPage() {
             )}
 
             <Panel
+              flush
               title="Components"
               description={
                 isEditable
-                  ? "This BOM is a draft, so its structure can be edited."
-                  : "This BOM is frozen. Create a revision to change its structure — existing production orders must stay reproducible."
+                  ? "This parts list is still a draft, so you can add, change, or remove parts."
+                  : "This parts list is locked so past jobs can still be rebuilt exactly. Make a new revision to change it."
               }
             >
               <SimpleTable
@@ -686,8 +687,9 @@ export default function BomDetailPage() {
 
         {tab === "explosion" && (
           <Panel
+            flush
             title="Multi-level explosion"
-            description="Sub-assemblies with their own active BOM are expanded through. Required quantity includes each level's scrap allowance, compounded."
+            description="Every raw part needed to build this, with smaller assemblies opened up. Amounts include the waste expected at each step."
             actions={
               <div className="flex items-center gap-2">
                 <label className="text-xs text-muted-foreground">
@@ -882,8 +884,9 @@ export default function BomDetailPage() {
 
         {tab === "history" && (
           <Panel
+            flush
             title="Change history"
-            description="Every structural and status change, with who made it and why"
+            description="A record of every change to this parts list, who made it, and why."
           >
             <SimpleTable
               isLoading={historyLoading}

@@ -195,8 +195,9 @@ export default function PickListDetailPage() {
         )}
 
         <Panel
+          flush
           title="Pick tasks"
-          description="Walk order follows the bin traversal sequence. Leave the quantity blank to confirm everything outstanding on a line."
+          description="The items to collect, listed in the order you walk the warehouse. Leave the amount blank to confirm the whole line."
         >
           <SimpleTable
             isLoading={isLoading}
@@ -333,8 +334,9 @@ export default function PickListDetailPage() {
           pickList?.status !== "SHIPPED" &&
           pickList?.status !== "CANCELLED" && (
             <Panel
+              flush
               title="Pack picked goods"
-              description="Only quantities that have actually been picked can be packed."
+              description="Put collected items into a package. You can only pack what has already been picked."
             >
               <form
                 onSubmit={event => {
@@ -451,6 +453,7 @@ export default function PickListDetailPage() {
 
         {packages.length > 0 && (
           <Panel
+            flush
             title="Packages"
             actions={
               unshippedPackages.length > 0 && (

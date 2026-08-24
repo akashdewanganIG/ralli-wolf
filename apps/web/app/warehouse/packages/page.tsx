@@ -20,6 +20,7 @@ import {
   humanizeEnum,
 } from "@/lib/utils/decimal";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { DashboardToolbar } from "@repo/ui/components/ui/dashboard-toolbar";
 
 export default function PackagesPage() {
   const [page, setPage] = useState(1);
@@ -36,28 +37,35 @@ export default function PackagesPage() {
       <PageShell>
         <PageHeader
           title="Packages"
-          subtitle="Track packed goods awaiting dispatch."
-          actions={
-            <SelectField
-              className="w-full sm:w-48"
-              value={status}
-              onChange={event => {
-                setStatus(event.target.value);
-                setPage(1);
-              }}
-            >
-              <option value="">All statuses</option>
-              <option value="OPEN">Open</option>
-              <option value="PACKED">Packed — awaiting dispatch</option>
-              <option value="SHIPPED">Shipped</option>
-              <option value="CANCELLED">Cancelled</option>
-            </SelectField>
-          }
+          subtitle="Parcels that are packed and waiting to be sent out."
         />
 
         <ErrorBanner error={error} />
 
-        <Panel>
+        <Panel
+          flush
+          actions={
+            <DashboardToolbar
+              actions={
+                <SelectField
+                  aria-label="Filter by status"
+                  className="w-full sm:w-48"
+                  value={status}
+                  onChange={event => {
+                    setStatus(event.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <option value="">All statuses</option>
+                  <option value="OPEN">Open</option>
+                  <option value="PACKED">Packed — awaiting dispatch</option>
+                  <option value="SHIPPED">Shipped</option>
+                  <option value="CANCELLED">Cancelled</option>
+                </SelectField>
+              }
+            />
+          }
+        >
           <SimpleTable
             isLoading={isLoading}
             rows={packages}

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Moon, Sun } from "@repo/ui/icons";
+import { Desktop, Moon, Sun } from "@repo/ui/icons";
 import { cn } from "@repo/ui/lib/utils";
 import { useTheme, type Theme } from "./theme-provider";
 
@@ -10,14 +10,18 @@ const OPTIONS: Array<{
   label: string;
   Icon: typeof Sun;
 }> = [
+  { value: "system", label: "System", Icon: Desktop },
   { value: "light", label: "Light", Icon: Sun },
   { value: "dark", label: "Dark", Icon: Moon },
 ];
 
 /**
- * Two-way theme switch. There is no "follow the OS" option: the app ships dark
- * and stays wherever the user puts it, so the control only ever reports a
- * choice someone actually made.
+ * Theme switch: follow the OS, or pin light or dark.
+ *
+ * `System` is first and is the default, because it is the choice the user has
+ * usually already made at the OS level. The control reports the *stored*
+ * preference rather than the painted result — with System selected the app may
+ * be dark, but "Dark" is not what was chosen and must not read as selected.
  */
 export function ThemeToggle({ className }: { className?: string }) {
   const { theme, setTheme } = useTheme();
@@ -50,8 +54,12 @@ export function ThemeToggle({ className }: { className?: string }) {
             className={cn(
               "inline-flex size-7 items-center justify-center rounded-md outline-none transition-colors",
               "focus-visible:ring-2 focus-visible:ring-ring/40",
+              // Same selected treatment as CategorySwitcher and the sidebar, so
+              // "this one is chosen" looks the same everywhere. Kept a
+              // radiogroup rather than reusing that component: this picks a
+              // setting, it does not switch what is on screen.
               selected
-                ? "bg-surface text-foreground shadow-xs"
+                ? "bg-primary-surface text-primary-surface-foreground"
                 : "text-muted-foreground hover:bg-hover hover:text-foreground"
             )}
           >

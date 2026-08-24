@@ -61,6 +61,7 @@ import { buttonVariants } from "@repo/ui/components/ui/button";
 import { cn } from "@repo/ui/lib/utils";
 import { DashboardToolbar } from "@repo/ui/components/ui/dashboard-toolbar";
 import { Tag } from "@repo/ui/components/ui/tag";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 const REGION_LABELS: Record<string, string> = {
   SOUTH: "South",
@@ -998,7 +999,7 @@ export const LeadManagementDashboard: React.FC = () => {
   if (currentError) {
     return (
       <div className="bg-background pb-4">
-        <div className="app-page">
+        <PageShell>
           <div className="rounded-xl border border-error/20 bg-error-surface px-5 py-10 text-center">
             <h2 className="mb-2 text-xl font-semibold text-error-foreground">
               Unable to load this workspace
@@ -1007,7 +1008,7 @@ export const LeadManagementDashboard: React.FC = () => {
               {currentError?.message || "An error occurred while loading data"}
             </p>
           </div>
-        </div>
+        </PageShell>
       </div>
     );
   }
@@ -1019,7 +1020,41 @@ export const LeadManagementDashboard: React.FC = () => {
         <div className="space-y-4">
           {/* Lead Master Content */}
           <div className="space-y-3">
-            <DashboardToolbar
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowExportModal(true)}
+              >
+                <Upload className="size-4" />
+                Export
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowImportModal(true)}
+              >
+                <Download className="size-4" />
+                Import
+              </Button>
+              <Button type="button" onClick={() => setShowAddLeadModal(true)}>
+                <Plus className="size-4" />
+                Add
+              </Button>
+            </div>
+            {selectedLeads.length > 0 && (
+              <SelectedLeadsActions
+                count={selectedLeads.length}
+                onSendToEmail={handleBulkEmail}
+                onEmailExcel={() => setShowSendLeadsEmailModal(true)}
+                onAssign={handleBulkAssignModal}
+                onConvert={() => {}}
+                onDelete={handleBulkDelete}
+              />
+            )}
+            <LeadTable
+              leads={currentData.data.map(mapLeadForTable)}
+              title="Leads"
               search={
                 <LeadSearchInput
                   value={leadSearchQuery}
@@ -1037,47 +1072,6 @@ export const LeadManagementDashboard: React.FC = () => {
                   className="w-full"
                 />
               }
-              actions={[
-                <Button
-                  key="export"
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowExportModal(true)}
-                >
-                  <Upload className="size-4" />
-                  Export
-                </Button>,
-                <Button
-                  key="import"
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowImportModal(true)}
-                >
-                  <Download className="size-4" />
-                  Import
-                </Button>,
-                <Button
-                  key="add"
-                  type="button"
-                  onClick={() => setShowAddLeadModal(true)}
-                >
-                  <Plus className="size-4" />
-                  Add
-                </Button>,
-              ]}
-            />
-            {selectedLeads.length > 0 && (
-              <SelectedLeadsActions
-                count={selectedLeads.length}
-                onSendToEmail={handleBulkEmail}
-                onEmailExcel={() => setShowSendLeadsEmailModal(true)}
-                onAssign={handleBulkAssignModal}
-                onConvert={() => {}}
-                onDelete={handleBulkDelete}
-              />
-            )}
-            <LeadTable
-              leads={currentData.data.map(mapLeadForTable)}
               onLeadClick={lead =>
                 handleLeadClick(
                   currentData.data.find(l => l.id.toString() === lead.id)
@@ -1712,7 +1706,7 @@ export const LeadManagementDashboard: React.FC = () => {
   return (
     <div className="bg-background">
       {/* Content */}
-      <div className="app-page">{renderContent()}</div>
+      <PageShell>{renderContent()}</PageShell>
 
       {/* Bulk Confirmation Dialogs */}
       <ConvertConfirmationDialog

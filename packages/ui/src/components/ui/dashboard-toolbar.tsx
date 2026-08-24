@@ -54,7 +54,10 @@ export function DashboardToolbar({
       <div className={cn("flex w-full min-w-0 flex-col gap-2", className)}>
         <div className="min-w-0">{search}</div>
         {count ? (
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
+          // `sm:w-auto` on the children: a filter that declares `w-full` for
+          // the phone layout must stop doing so here, or one control takes the
+          // row and the rest wrap beneath it.
+          <div className="flex min-w-0 flex-wrap items-center gap-2 [&>*]:min-w-0 sm:[&>*]:w-auto">
             {actionList}
           </div>
         ) : null}

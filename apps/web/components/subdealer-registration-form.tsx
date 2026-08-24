@@ -653,6 +653,7 @@ import {
 import { Product } from "@/lib/api/types";
 import { CheckCircle, FileUp, ShoppingCart, Trash2 } from "@repo/ui/icons";
 import { SearchInput } from "@repo/ui/components/ui/search-input";
+import { formatMoney } from "@/lib/utils/decimal";
 
 function PostVerificationFlow({
   gstDetails,
@@ -939,7 +940,7 @@ function OrderBookingView({
                 </div>
                 <div className="flex justify-between text-lg font-bold">
                   <span>Total Amount:</span>
-                  <span>₹{totalCost.toLocaleString()}</span>
+                  <span>{formatMoney(totalCost)}</span>
                 </div>
               </div>
               <div className="flex gap-3">
@@ -985,7 +986,7 @@ function OrderBookingView({
                 <div className="h-px bg-border my-2" />
                 <p className="text-sm text-muted-foreground">Total Amount</p>
                 <p className="text-xl font-bold">
-                  ₹{Number(orderSuccess.totalAmount).toLocaleString()}
+                  {formatMoney(orderSuccess.totalAmount)}
                 </p>
               </div>
               <Button className="w-full" onClick={onBack}>
@@ -1045,7 +1046,7 @@ function OrderBookingView({
                         </p>
                       </div>
                       <p className="font-bold text-lg">
-                        ₹{Number(product.price).toLocaleString()}
+                        {formatMoney(product.price)}
                       </p>
                     </div>
                     {product.description && (
@@ -1135,7 +1136,7 @@ function OrderBookingView({
                             {product.name}
                           </h4>
                           <p className="text-xs text-muted-foreground">
-                            ₹{Number(product.price).toLocaleString()} x {qty}
+                            {formatMoney(product.price)} x {qty}
                           </p>
 
                           <div className="flex items-center justify-between mt-2">
@@ -1180,7 +1181,7 @@ function OrderBookingView({
                 </div>
                 <div className="flex justify-between text-lg font-bold">
                   <span>Total:</span>
-                  <span>₹{totalCost.toLocaleString()}</span>
+                  <span>{formatMoney(totalCost)}</span>
                 </div>
                 <Button
                   className="w-full"

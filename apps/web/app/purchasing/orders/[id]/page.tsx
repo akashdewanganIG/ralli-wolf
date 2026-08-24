@@ -223,7 +223,7 @@ export default function PurchaseOrderDetailPage() {
         {canEdit && (
           <Panel
             title="Submit for approval"
-            description="Purchase approvals use the same approval queue and notifications as sales."
+            description="Send this order to someone who can approve it before it goes to the supplier."
           >
             <form
               className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap"
@@ -274,8 +274,9 @@ export default function PurchaseOrderDetailPage() {
 
         {showReceive && canReceive && (
           <Panel
+            flush
             title="Record a goods receipt"
-            description="Enter what physically arrived per line. The receipt is created but not posted — post it once quantities and QC are confirmed."
+            description="Write down what actually arrived. Nothing is added to stock until you confirm the amounts and the quality check."
           >
             <form
               className="space-y-4"
@@ -483,7 +484,7 @@ export default function PurchaseOrderDetailPage() {
           </Panel>
         )}
 
-        <Panel title="Lines">
+        <Panel flush title="Lines">
           <SimpleTable
             isLoading={isLoading}
             rows={lines}
@@ -596,7 +597,7 @@ export default function PurchaseOrderDetailPage() {
         </Panel>
 
         {approvals.length > 0 && (
-          <Panel title="Approval history">
+          <Panel flush title="Approval history">
             <SimpleTable
               rows={approvals}
               keyOf={row => row.id}
@@ -632,7 +633,7 @@ export default function PurchaseOrderDetailPage() {
         )}
 
         {receipts.length > 0 && (
-          <Panel title="Goods receipts">
+          <Panel flush title="Goods receipts">
             <SimpleTable
               rows={receipts}
               keyOf={row => row.id}

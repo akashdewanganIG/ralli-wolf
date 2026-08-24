@@ -11,7 +11,6 @@ import {
   SimpleTable,
   StatCard,
   StatusBadge,
-  TabBar,
 } from "@/components/supply-chain/shared";
 import {
   useProductStock,
@@ -28,6 +27,7 @@ import {
 } from "@/lib/utils/decimal";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { Tag } from "@repo/ui/components/ui/tag";
+import { CategorySwitcher } from "@repo/ui/components/ui/category-switcher";
 
 export default function ProductStockDetailPage() {
   const params = useParams<{ productId: string }>();
@@ -76,7 +76,7 @@ export default function ProductStockDetailPage() {
           }
           subtitle={
             detail
-              ? `${humanizeEnum(detail.product.itemType ?? "")} · ${humanizeEnum(detail.product.trackingType ?? "NONE")} tracking · ${detail.product.pickingStrategy} picking · ${humanizeEnum(detail.product.valuationMethod)} valuation`
+              ? `Everything about one item: where it is stored, how much is promised, and every time it moved. This one is a ${humanizeEnum(detail.product.itemType ?? "").toLowerCase()}.`
               : undefined
           }
           breadcrumb={[
@@ -109,7 +109,7 @@ export default function ProductStockDetailPage() {
         </div>
 
         {totals.length > 1 && (
-          <Panel title="By warehouse">
+          <Panel flush title="By warehouse">
             <SimpleTable
               rows={totals}
               keyOf={row => row.warehouse.id}
@@ -143,28 +143,31 @@ export default function ProductStockDetailPage() {
           </Panel>
         )}
 
-        <TabBar
+        <CategorySwitcher
           label="Stock detail sections"
           value={tab}
-          onChange={setTab}
+          onValueChange={setTab}
           items={[
-            [
-              "locations",
-              `Locations & lots (${detail?.locations.length ?? 0})`,
-            ],
-            ["movements", "Ledger"],
-            [
-              "reservations",
-              `Reservations (${detail?.reservations.length ?? 0})`,
-            ],
-            ["whereUsed", "Where used"],
+            {
+              value: "locations",
+              label: "Locations & lots",
+              count: detail?.locations.length ?? 0,
+            },
+            { value: "movements", label: "Ledger" },
+            {
+              value: "reservations",
+              label: "Reservations",
+              count: detail?.reservations.length ?? 0,
+            },
+            { value: "whereUsed", label: "Where used" },
           ]}
         />
 
         {tab === "locations" && (
           <Panel
+            flush
             title="Where this stock physically is"
-            description="Each row is one bin/lot slot. FEFO picks the earliest expiry first; FIFO the earliest receipt."
+            description="Every place this item is stored right now, and how much sits in each. The oldest stock is used first."
           >
             <SimpleTable
               isLoading={isLoading}
@@ -261,8 +264,9 @@ export default function ProductStockDetailPage() {
 
         {tab === "movements" && (
           <Panel
+            flush
             title="Stock ledger"
-            description="Every posted movement for this item, newest first"
+            description="Every time this item moved in or out, newest first."
           >
             <SimpleTable
               isLoading={movementsLoading}
@@ -333,8 +337,9 @@ export default function ProductStockDetailPage() {
 
         {tab === "reservations" && (
           <Panel
+            flush
             title="Active reservations"
-            description="Stock promised to a demand document and not free to sell"
+            description="Stock already promised to an order, so it cannot be sold to anyone else."
           >
             <SimpleTable
               isLoading={isLoading}
@@ -376,8 +381,9 @@ export default function ProductStockDetailPage() {
         {tab === "whereUsed" && (
           <div className="space-y-4">
             <Panel
+              flush
               title="Used as a component"
-              description="Bills of materials that consume this item"
+              description="The products that are built using this item."
             >
               <SimpleTable
                 isLoading={whereUsedLoading}
@@ -419,8 +425,9 @@ export default function ProductStockDetailPage() {
               />
             </Panel>
             <Panel
+              flush
               title="Approved as a substitute"
-              description="Where this item can stand in for another component"
+              description="Other parts this item is allowed to replace when they run out."
             >
               <SimpleTable
                 isLoading={whereUsedLoading}

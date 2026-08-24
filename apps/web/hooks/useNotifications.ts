@@ -1,7 +1,11 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { notificationService } from "@/lib/api/services";
+import {
+  notificationService,
+  type NotificationPreference,
+} from "@/lib/api/services";
+import { toast } from "@/lib/toast";
 
 export type AppNotification = {
   id: number;
@@ -70,5 +74,32 @@ export function useMarkAllNotificationsRead() {
       if (ctx?.prev) qc.setQueryData(["notifications"], ctx.prev);
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+}
+
+export type { NotificationPreference };
+
+export function useNotificationPreferences() {
+  return useQuery({
+    queryKey: ["notification-preferences"],
+    queryFn: () => notificationService.getPreferences(),
+    staleTime: 60_000,
+  });
+}
+
+export function useUpdateNotificationPreferences() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (preferences: NotificationPreference[]) =>
+      notificationService.updatePreferences(
+        preferences.map(({ type, inApp, email }) => ({ type, inApp, email }))
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notification-preferences"] });
+      // Switching a channel off changes what the bell should show.
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+      toast.success("Notification preferences saved");
+    },
+    onError: () => toast.error("Could not save your notification preferences"),
   });
 }

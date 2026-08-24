@@ -37,6 +37,7 @@ import { ChartColumnIcon, Check, Copy, Plus } from "@repo/ui/icons";
 import { useEffect, useState } from "react";
 import { DEFAULT_PAGE_SIZE } from "@/components/data-table";
 import { Tag } from "@repo/ui/components/ui/tag";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 export default function LandingPageTrackersPage() {
   const { user } = useAuth();
@@ -285,10 +286,10 @@ export default function LandingPageTrackersPage() {
 
   return (
     <RoleGuard allowedRoles={["ADMIN"]}>
-      <div className="app-page space-y-5">
+      <PageShell>
         <PageHeader
           title="Landing page trackers"
-          description="Manage landing-page trackers and the enquiries attributed to them."
+          description="See which landing page each enquiry came from, so you know what is working."
           actions={
             <Button onClick={() => setIsCreateModalOpen(true)}>
               <Plus className="size-4" />
@@ -580,7 +581,7 @@ export default function LandingPageTrackersPage() {
 
         {/* Delete Confirmation Modal */}
         {/* TODO: Add delete confirmation modal */}
-      </div>
+      </PageShell>
     </RoleGuard>
   );
 }

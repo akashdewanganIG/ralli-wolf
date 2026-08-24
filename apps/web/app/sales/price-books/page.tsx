@@ -23,6 +23,7 @@ import {
 import { SearchFilterToolbar } from "@repo/ui/components/ui/toolbar";
 import { Search } from "@repo/ui/icons";
 import { TablePageSkeleton } from "@/components/skeletons";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 type SortField =
   | "id"
@@ -141,19 +142,19 @@ export default function PriceBookEntriesPage() {
   if (isLoading) return <TablePageSkeleton filters={1} />;
   if (error)
     return (
-      <div className="app-page">
+      <PageShell>
         <Alert tone="error" title="Price books could not be loaded">
           Refresh the page to try again. If the issue continues, contact an
           administrator.
         </Alert>
-      </div>
+      </PageShell>
     );
 
   return (
-    <div className="app-page space-y-5">
+    <PageShell>
       <PageHeader
         title="Price books"
-        description="Manage the price lists used for opportunities, quotes, and orders."
+        description="Your price lists. These decide what a customer is charged on a quote or order."
       />
 
       {/* Filter and Sort Controls */}
@@ -199,12 +200,11 @@ export default function PriceBookEntriesPage() {
       />
 
       <DataTable
-        title="Price Books"
         data={filteredAndSortedData}
         columns={columns}
         count={filteredAndSortedData.length}
         getRowHref={item => `/sales/price-books/${item.id}`}
       />
-    </div>
+    </PageShell>
   );
 }

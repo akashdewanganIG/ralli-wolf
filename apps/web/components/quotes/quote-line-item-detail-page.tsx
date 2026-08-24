@@ -22,6 +22,7 @@ import { useQuoteLineItemsStore } from "./use-quote-line-items-store";
 import { useQuotesStore } from "./use-quotes-store";
 import { DUMMY_PRICEBOOKS, DUMMY_PRODUCTS } from "./quote-dummy-data";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { formatMoney } from "@/lib/utils/decimal";
 
 type QuoteLineItemDetailPageProps = {
   quoteId: string;
@@ -224,11 +225,11 @@ export function QuoteLineItemDetailPage({
               />
               <InfoField
                 label="List Unit Price"
-                value={`₹${lineItem.listUnitPrice.toLocaleString()}`}
+                value={formatMoney(lineItem.listUnitPrice)}
               />
               <InfoField
                 label="Net Price"
-                value={`₹${lineItem.netPrice.toLocaleString()}`}
+                value={formatMoney(lineItem.netPrice)}
               />
               <InfoField label="Created By" value={lineItem.createdBy} />
               <InfoField

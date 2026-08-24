@@ -58,12 +58,13 @@ export default function StockPositionsPage() {
       <PageShell>
         <PageHeader
           title="Stock positions"
-          subtitle="Review on-hand, reserved, and available inventory."
+          subtitle="What you hold, what is already promised, and what is free to sell."
         />
 
         <ErrorBanner error={error} />
 
         <Panel
+          flush
           actions={
             <DashboardToolbar
               search={

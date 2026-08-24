@@ -30,8 +30,8 @@ import {
   TableSkeleton,
 } from "./skeletons";
 
-import { useCurrency } from "@/contexts/CurrencyContext";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { formatMoney } from "@/lib/utils/decimal";
 
 interface ProductDetailPageProps {
   productId: number;
@@ -52,7 +52,6 @@ export function ProductDetailPage({
 
   const { data: pricebookEntriesData, isLoading: pricebookEntriesLoading } =
     usePricebookEntries({ productId });
-  const { symbol: currencySymbol } = useCurrency();
 
   const [showAddPriceBookEntryModal, setShowAddPriceBookEntryModal] =
     React.useState(false);
@@ -85,7 +84,7 @@ export function ProductDetailPage({
     {
       key: "listPrice",
       label: "List Price",
-      render: value => `${currencySymbol} ${value}`,
+      render: value => formatMoney(value as string | number),
     },
     {
       key: "isActive",

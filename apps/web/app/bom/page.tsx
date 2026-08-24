@@ -78,7 +78,7 @@ export default function BomListPage() {
       <PageShell>
         <PageHeader
           title="Bills of materials"
-          subtitle="Manage product structures, components, substitutes, and revisions."
+          subtitle="Recipes that list which parts go into each product you build."
           actions={
             <Button
               type="button"
@@ -97,7 +97,7 @@ export default function BomListPage() {
           open={showForm}
           onOpenChange={setShowForm}
           title="New bill of materials"
-          description="Created as a draft. Add its components on the next screen, then activate it — an active BOM is frozen so production orders stay reproducible."
+          description="This starts as a draft. Add the parts on the next screen, then activate it. Once active it is locked, so past jobs can still be rebuilt exactly."
         >
           <form onSubmit={submit} className="grid gap-4 md:grid-cols-3">
             <Field
@@ -122,7 +122,7 @@ export default function BomListPage() {
             </Field>
             <Field
               label="Output quantity"
-              hint="How many units one run of this BOM produces"
+              hint="How many finished units one run of this recipe makes"
             >
               <Input
                 value={outputQuantity}
@@ -160,6 +160,7 @@ export default function BomListPage() {
         </FormDialog>
 
         <Panel
+          flush
           actions={
             <SearchFilterToolbar
               search={

@@ -864,7 +864,7 @@ export default function UserManagementPage() {
   return (
     <ProtectedRoute fallback={skeletonView}>
       <RoleGuard allowedRoles={["ADMIN"]}>
-        <div className="app-page space-y-5">
+        <PageShell>
           {/* Error Message */}
           {errorMessage && (
             <Alert tone="error" title="Unable to load users">
@@ -2036,7 +2036,7 @@ export default function UserManagementPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        </div>
+        </PageShell>
       </RoleGuard>
     </ProtectedRoute>
   );

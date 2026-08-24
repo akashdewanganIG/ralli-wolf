@@ -50,8 +50,6 @@ import {
   Tabs,
   TabsContent,
   TabsContents,
-  TabsList,
-  TabsTrigger,
   Textarea,
 } from "@repo/ui";
 import { Pencil, Trash2, X } from "@repo/ui/icons";
@@ -61,6 +59,7 @@ import { NuqsAdapter } from "nuqs/adapters/next/app";
 import * as React from "react";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { Tag, type TagTone } from "@repo/ui/components/ui/tag";
+import { CategorySwitcher } from "@repo/ui/components/ui/category-switcher";
 
 function formatDateTime(iso: string | null | undefined) {
   if (!iso) return "N/A";
@@ -748,27 +747,15 @@ function OpportunityDetailContent() {
       </div>
 
       <Tabs value={tab} onValueChange={v => setTab(v)}>
-        <div className="flex items-center justify-between border-b border-input">
-          <TabsList className="justify-start space-x-16 border-b-0">
-            <TabsTrigger
-              value="details"
-              className="text-lg font-medium data-[state=active]:border-b-[3px] data-[state=active]:border-border"
-            >
-              Details
-            </TabsTrigger>
-            <TabsTrigger
-              value="products"
-              className="text-lg font-medium data-[state=active]:border-b-[3px] data-[state=active]:border-border"
-            >
-              Products
-            </TabsTrigger>
-            <TabsTrigger
-              value="quotes"
-              className="text-lg font-medium data-[state=active]:border-b-[3px] data-[state=active]:border-border"
-            >
-              Quotes
-            </TabsTrigger>
-          </TabsList>
+        <div className="flex items-center justify-between gap-3">
+          <CategorySwitcher
+            label="Opportunity sections"
+            items={[
+              { value: "details", label: "Details" },
+              { value: "products", label: "Products" },
+              { value: "quotes", label: "Quotes" },
+            ]}
+          />
           {isAdmin && tab === "details" && (
             <Button
               variant="destructive"
@@ -781,7 +768,7 @@ function OpportunityDetailContent() {
           )}
         </div>
 
-        <TabsContents className="mt-8">
+        <TabsContents>
           <TabsContent value="details">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               {/* Main info card */}

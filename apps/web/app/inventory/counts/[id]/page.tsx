@@ -20,7 +20,6 @@ import {
   formatDateTime,
   formatMoney,
   formatQuantity,
-  humanizeEnum,
 } from "@/lib/utils/decimal";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 
@@ -69,7 +68,7 @@ export default function StockCountDetailPage() {
           title={count ? `Count ${count.countNumber}` : "Stock count"}
           subtitle={
             count
-              ? `${humanizeEnum(count.countType)} count in ${count.warehouse?.code ?? ""} · ${stats.counted} of ${stats.total} line(s) counted`
+              ? `Checking what is really on the shelves at ${count.warehouse?.code ?? ""}. ${stats.counted} of ${stats.total} line(s) done.`
               : undefined
           }
           breadcrumb={[
@@ -195,11 +194,12 @@ export default function StockCountDetailPage() {
         )}
 
         <Panel
+          flush
           title="Count sheet"
           description={
             isClosed
-              ? "This count is closed and read only."
-              : "Enter the quantity physically found in each location, then save."
+              ? "This stock count is finished, so it can only be viewed."
+              : "Write down how much you actually found in each place, then save."
           }
         >
           <SimpleTable

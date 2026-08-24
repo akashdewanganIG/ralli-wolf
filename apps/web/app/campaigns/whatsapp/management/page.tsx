@@ -29,6 +29,9 @@ import {
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Tag } from "@repo/ui/components/ui/tag";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { PageHeader } from "@repo/ui/components/ui/page-header";
+import { CategorySwitcher } from "@repo/ui/components/ui/category-switcher";
 
 const ALLOW_UTILITY_TEMPLATES =
   process.env.NEXT_PUBLIC_ALLOW_UTILITY_TEMPLATES === "true";
@@ -532,46 +535,26 @@ export default function WhatsAppManagementPage() {
   ];
 
   return (
-    <div className="p-4">
-      <div className="flex justify-between items-center mb-4">
-        <div>
-          <h1 className="text-base sm:text-lg font-semibold">
-            WhatsApp Management
-          </h1>
-          <p className="text-text-secondary">
-            Manage your WhatsApp templates and numbers
-          </p>
-        </div>
-        <Button variant="outline" onClick={() => router.back()}>
-          Back
-        </Button>
-      </div>
+    <PageShell>
+      {/* The back button is gone: this is a listing the sidebar links to, so
+          "back" navigated to history rather than up a hierarchy. */}
+      <PageHeader
+        title="WhatsApp management"
+        description="Your approved WhatsApp message layouts and the phone numbers you send from."
+      />
 
-      {/* Tabs */}
-      <div className="mb-4 flex gap-1 overflow-x-auto border-b border-border">
-        <button
-          type="button"
-          className={`-mb-px inline-flex h-10 shrink-0 items-center justify-center whitespace-nowrap border-b-2 px-4 text-sm font-medium transition-colors ${
-            activeTab === "templates"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-          onClick={() => setActiveTab("templates")}
-        >
-          Templates
-        </button>
-        <button
-          type="button"
-          className={`-mb-px inline-flex h-10 shrink-0 items-center justify-center whitespace-nowrap border-b-2 px-4 text-sm font-medium transition-colors ${
-            activeTab === "numbers"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-          onClick={() => setActiveTab("numbers")}
-        >
-          Numbers
-        </button>
-      </div>
+      {/* The shared tab bar, not a pair of hand-rolled buttons: it carries the
+          tablist/tab roles, a roving tabindex and arrow-key navigation, none of
+          which the local version had. */}
+      <CategorySwitcher
+        items={[
+          { value: "templates", label: "Templates" },
+          { value: "numbers", label: "Numbers" },
+        ]}
+        value={activeTab}
+        onValueChange={setActiveTab}
+        label="WhatsApp management sections"
+      />
 
       {/* Templates Tab */}
       {activeTab === "templates" && (
@@ -866,6 +849,6 @@ export default function WhatsAppManagementPage() {
           loading={deletingTemplate}
         />
       )}
-    </div>
+    </PageShell>
   );
 }

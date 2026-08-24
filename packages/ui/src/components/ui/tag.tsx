@@ -42,6 +42,8 @@ const ACRONYMS = new Set([
   "MRP",
   "SLA",
   "KPI",
+  "N/A",
+  "NA",
 ]);
 
 /**
@@ -69,6 +71,10 @@ function toSentenceCase(value: string): string {
     .map((word, index) => {
       const upper = word.toUpperCase();
       if (ACRONYMS.has(upper)) return upper;
+      // A capital *inside* a word is deliberate — brand names like WhatsApp,
+      // or product names like eCommerce. Lower-casing those is a worse error
+      // than leaving a stray capital, so they pass through untouched.
+      if (/[a-z][A-Z]/.test(word)) return word;
       const lower = word.toLowerCase();
       return index === 0
         ? lower.charAt(0).toUpperCase() + lower.slice(1)

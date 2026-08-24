@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@repo/ui";
-import { SegmentedControl } from "@repo/ui/components/ui/segmented-control";
+import { CategorySwitcher } from "@repo/ui/components/ui/category-switcher";
 import { PageHeader } from "@repo/ui/components/ui/page-header";
 import { ApprovalsTable } from "@/components/approvals/approvals-table";
 import { useAllApprovals, useMyApprovals } from "@/hooks/useApprovals";
@@ -185,15 +185,12 @@ function ApprovalsPageContent() {
     <PageShell>
       <PageHeader
         title="Approvals"
-        description="Review requests and track decisions across the sales workflow."
+        description="Requests waiting on a decision, and what has already been approved or rejected."
       />
 
       <Tabs value={tab} onValueChange={setTab}>
-        <SegmentedControl
-          value={tab}
-          onValueChange={setTab}
+        <CategorySwitcher
           label="Approval category"
-          className="w-full sm:w-fit"
           items={[
             { value: "all", label: "All approvals" },
             { value: "my", label: "My approvals" },

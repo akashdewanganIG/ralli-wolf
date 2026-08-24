@@ -43,7 +43,7 @@ export default function InventoryValuationPage() {
       <PageShell>
         <PageHeader
           title="Inventory valuation"
-          subtitle="Review inventory value by item and warehouse."
+          subtitle="What your stock is worth, broken down by item and location."
           actions={
             <>
               <WarehouseFilter
@@ -81,7 +81,7 @@ export default function InventoryValuationPage() {
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
-          <Panel title="By warehouse">
+          <Panel flush title="By warehouse">
             <SimpleTable
               isLoading={isLoading}
               rows={valuation?.byWarehouse ?? []}
@@ -105,7 +105,7 @@ export default function InventoryValuationPage() {
               ]}
             />
           </Panel>
-          <Panel title="By item type">
+          <Panel flush title="By item type">
             <SimpleTable
               isLoading={isLoading}
               rows={valuation?.byItemType ?? []}
@@ -131,7 +131,7 @@ export default function InventoryValuationPage() {
           </Panel>
         </div>
 
-        <Panel title="By item" description="Highest value first">
+        <Panel flush title="By item" description="Highest value first">
           <SimpleTable
             isLoading={isLoading}
             rows={valuation?.products ?? []}

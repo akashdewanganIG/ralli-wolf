@@ -26,6 +26,7 @@ export {
 } from "@repo/ui/components/ui/skeleton";
 
 import { Skeleton } from "@repo/ui/components/ui/skeleton";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 type SkeletonProps = React.ComponentProps<typeof Skeleton>;
 
@@ -185,7 +186,7 @@ export const TablePageSkeleton: React.FC<{
   rows?: number;
   filters?: number;
 }> = ({ rows = 7, filters = 3 }) => (
-  <div className="app-page space-y-5" role="status" aria-label="Loading page">
+  <PageShell role="status" aria-label="Loading page">
     <PageHeaderSkeleton />
     <div className="space-y-3">
       <div className="flex flex-col gap-2 md:flex-row">
@@ -199,15 +200,11 @@ export const TablePageSkeleton: React.FC<{
       </div>
     </div>
     <span className="sr-only">Loading…</span>
-  </div>
+  </PageShell>
 );
 
 export const DetailPageSkeleton: React.FC = () => (
-  <div
-    className="app-page space-y-5"
-    role="status"
-    aria-label="Loading details"
-  >
+  <PageShell role="status" aria-label="Loading details">
     <PageHeaderSkeleton actions={2} />
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <div className="space-y-4">
@@ -219,5 +216,5 @@ export const DetailPageSkeleton: React.FC = () => (
       <DetailSidebarSkeleton />
     </div>
     <span className="sr-only">Loading details…</span>
-  </div>
+  </PageShell>
 );

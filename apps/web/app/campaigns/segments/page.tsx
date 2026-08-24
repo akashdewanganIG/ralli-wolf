@@ -27,6 +27,7 @@ import {
   SegmentFormValues,
 } from "@/components/segment-form-modal";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { PageHeader } from "@repo/ui/components/ui/page-header";
 
 function getRuleSummary(segment: Segment) {
   if (!segment.rules?.length) return "No rules";
@@ -136,20 +137,16 @@ export default function SegmentsPage() {
 
   return (
     <PageShell>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-base sm:text-lg font-semibold tracking-tight">
-            Segments
-          </h1>
-          <p className="text-muted-foreground">
-            Define reusable audiences for WhatsApp campaigns
-          </p>
-        </div>
-        <Button className="w-full sm:w-auto" onClick={handleCreateClick}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Segment
-        </Button>
-      </div>
+      <PageHeader
+        title="Segments"
+        description="Saved groups of contacts you can message again and again."
+        actions={
+          <Button onClick={handleCreateClick}>
+            <Plus className="size-4" />
+            New segment
+          </Button>
+        }
+      />
 
       <Card className="p-0">
         <Table>

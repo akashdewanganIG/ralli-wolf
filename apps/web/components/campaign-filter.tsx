@@ -21,7 +21,6 @@ import { cn } from "@repo/ui/lib/utils";
 import { toast } from "@/lib/toast";
 import { SlidersHorizontal } from "@repo/ui/icons";
 import React, { useEffect, useState } from "react";
-import filterStyles from "./filter-button.module.css";
 
 export interface CampaignFilterValues {
   status?: string;
@@ -114,19 +113,16 @@ export const CampaignFilter: React.FC<CampaignFilterProps> = ({
 
   return (
     <>
-      <button
+      <Button
         type="button"
+        variant="outline"
         onClick={() => setOpen(true)}
-        className={cn(
-          filterStyles.filterBtn,
-          "relative",
-          open && filterStyles.open
-        )}
+        className={cn("relative", hasActive && "border-primary bg-primary/10")}
       >
-        <SlidersHorizontal className="h-3 w-3 mr-1" />
+        <SlidersHorizontal className="size-4" />
         Filter
-        {hasActive && <span className="ml-1 h-2 w-2 bg-primary rounded-full" />}
-      </button>
+        {hasActive && <span className="size-2 rounded-full bg-primary" />}
+      </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-[31.25rem]">

@@ -2,36 +2,36 @@
 
 import * as React from "react";
 
-export type Theme = "light" | "dark";
+/** What the user chose. `system` defers to the OS. */
+export type Theme = "light" | "dark" | "system";
+/** What is actually painted. `system` has already been resolved away. */
+export type ResolvedTheme = "light" | "dark";
 
 const STORAGE_KEY = "ralli-wolf-theme";
 
 interface ThemeContextValue {
-  /** What the user chose. */
+  /** The user's choice, including `system`. */
   theme: Theme;
-  /**
-   * What is actually painted right now. Identical to `theme` — kept as its own
-   * field so callers that only care about the painted result (the toast
-   * surface, for one) do not have to know how the choice is stored.
-   */
-  resolvedTheme: Theme;
+  /** The painted result — never `system`. */
+  resolvedTheme: ResolvedTheme;
   setTheme: (theme: Theme) => void;
 }
 
 /**
- * Dark is the product's default. A first-time visitor gets it without having
- * chosen anything, and the OS preference is deliberately not consulted: the
- * app is a single, deliberate surface rather than one that changes character
- * with whatever the machine is set to.
+ * Following the OS is the default.
+ *
+ * A first-time visitor gets whatever their machine is already set to, which is
+ * the setting they have effectively already made everywhere else. An explicit
+ * light or dark choice overrides it and sticks until they change it again.
  */
-const DEFAULT_THEME: Theme = "dark";
+const DEFAULT_THEME: Theme = "system";
 
 const ThemeContext = React.createContext<ThemeContextValue | undefined>(
   undefined
 );
 
 function isTheme(value: unknown): value is Theme {
-  return value === "light" || value === "dark";
+  return value === "light" || value === "dark" || value === "system";
 }
 
 /**
@@ -41,20 +41,32 @@ function isTheme(value: unknown): value is Theme {
  * frame renders — without it a dark-mode user sees a white flash on every
  * navigation that touches the document.
  *
- * Anything other than a stored "light" resolves to dark, which also retires
- * the "system" value earlier builds could have written without needing a
- * migration step.
+ * An absent or `system` preference consults `prefers-color-scheme` here, at the
+ * same moment and by the same rule the React provider will use, so the two can
+ * never disagree on the first frame.
  *
- * Kept in sync with `applyTheme` below; both must set the same class.
+ * Kept in sync with `resolve`/`applyTheme` below; all three must agree.
  */
 export const themeInitScript = `(function(){try{var s=localStorage.getItem(${JSON.stringify(
   STORAGE_KEY
-)});var d=s!=="light";document.documentElement.classList.toggle("dark",d);document.documentElement.style.colorScheme=d?"dark":"light";}catch(e){}})();`;
+)});var d=s==="dark"||((s===null||s==="system")&&window.matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",d);document.documentElement.style.colorScheme=d?"dark":"light";}catch(e){}})();`;
 
-function applyTheme(theme: Theme) {
+/** The OS preference, or `light` where it cannot be read (SSR). */
+function systemTheme(): ResolvedTheme {
+  if (typeof window === "undefined" || !window.matchMedia) return "light";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+}
+
+function resolve(theme: Theme): ResolvedTheme {
+  return theme === "system" ? systemTheme() : theme;
+}
+
+function applyTheme(resolved: ResolvedTheme) {
   const root = document.documentElement;
-  root.classList.toggle("dark", theme === "dark");
-  root.style.colorScheme = theme;
+  root.classList.toggle("dark", resolved === "dark");
+  root.style.colorScheme = resolved;
 }
 
 export function ThemeProvider({
@@ -65,9 +77,12 @@ export function ThemeProvider({
   defaultTheme?: Theme;
 }) {
   const [theme, setThemeState] = React.useState<Theme>(defaultTheme);
+  // Starts light so the server and the first client render agree; the effect
+  // below corrects it before paint is committed.
+  const [resolvedTheme, setResolvedTheme] =
+    React.useState<ResolvedTheme>("light");
 
-  // Adopt whatever the pre-paint script already decided, so the first client
-  // render agrees with the server-rendered markup.
+  // Adopt whatever the pre-paint script already decided.
   React.useEffect(() => {
     let stored: string | null = null;
     try {
@@ -76,9 +91,26 @@ export function ThemeProvider({
       // Private-mode browsers can throw on access; fall back to the default.
     }
     const next = isTheme(stored) ? stored : defaultTheme;
+    const painted = resolve(next);
     setThemeState(next);
-    applyTheme(next);
+    setResolvedTheme(painted);
+    applyTheme(painted);
   }, [defaultTheme]);
+
+  // While following the OS, track it live: a machine that switches to dark at
+  // sunset should take the app with it without a reload.
+  React.useEffect(() => {
+    if (theme !== "system") return;
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const query = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => {
+      const painted = systemTheme();
+      setResolvedTheme(painted);
+      applyTheme(painted);
+    };
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, [theme]);
 
   const setTheme = React.useCallback((next: Theme) => {
     setThemeState(next);
@@ -87,12 +119,14 @@ export function ThemeProvider({
     } catch {
       // Not persisting is survivable; the session still switches.
     }
-    applyTheme(next);
+    const painted = resolve(next);
+    setResolvedTheme(painted);
+    applyTheme(painted);
   }, []);
 
   const value = React.useMemo(
-    () => ({ theme, resolvedTheme: theme, setTheme }),
-    [theme, setTheme]
+    () => ({ theme, resolvedTheme, setTheme }),
+    [theme, resolvedTheme, setTheme]
   );
 
   return (

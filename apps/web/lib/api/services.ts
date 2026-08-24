@@ -2070,6 +2070,28 @@ export const notificationService = {
   markAllRead: async (): Promise<void> => {
     await apiClient.patch("/api/notifications/read-all");
   },
+
+  getPreferences: async (): Promise<{ data: NotificationPreference[] }> => {
+    const response = await apiClient.get("/api/notifications/preferences");
+    return response.data;
+  },
+
+  updatePreferences: async (
+    preferences: { type: string; inApp: boolean; email: boolean }[]
+  ): Promise<void> => {
+    await apiClient.put("/api/notifications/preferences", { preferences });
+  },
+};
+
+/** One configurable notification, as the API describes it. */
+export type NotificationPreference = {
+  type: string;
+  label: string;
+  description: string;
+  group: string;
+  supportsEmail: boolean;
+  inApp: boolean;
+  email: boolean;
 };
 
 // Sales Order Services

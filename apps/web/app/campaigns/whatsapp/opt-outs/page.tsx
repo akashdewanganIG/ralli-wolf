@@ -26,6 +26,7 @@ import { DataTable, TableColumn } from "../../../../components/data-table";
 import apiClient from "../../../../lib/api/client";
 import { toast } from "../../../../lib/toast";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { PageHeader } from "@repo/ui/components/ui/page-header";
 
 interface OptOut {
   id: number;
@@ -193,71 +194,64 @@ export default function OptOutsPage() {
 
   return (
     <PageShell>
-      <div className="flex items-center gap-2 mb-2"></div>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-base sm:text-lg font-semibold tracking-tight">
-              WhatsApp Opt-Out Management
-            </h1>
-            <Badge variant="secondary" className="text-xs">
-              WhatsApp Only
-            </Badge>
-          </div>
-          <p className="text-muted-foreground">
-            Manage phone numbers that have opted out of WhatsApp communications
-          </p>
-        </div>
-        <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="w-full sm:w-auto">
-              <Plus className="h-4 w-4" />
-              Add Opt-Out
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add Phone to WhatsApp Opt-Out List</DialogTitle>
-              <DialogDescription>
-                Manually add a phone number to the WhatsApp opt-out list
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="phone">Phone Number</Label>
-                <Input
-                  id="phone"
-                  placeholder="919876543210"
-                  value={newOptOut.phone}
-                  onChange={e =>
-                    setNewOptOut({ ...newOptOut, phone: e.target.value })
-                  }
-                />
-                <p className="text-sm text-muted-foreground mt-1">
-                  Enter phone number with country code (e.g., 919876543210)
-                </p>
-              </div>
-              <div>
-                <Label htmlFor="reason">Reason (Optional)</Label>
-                <Input
-                  id="reason"
-                  placeholder="Customer request, compliance, etc."
-                  value={newOptOut.reason}
-                  onChange={e =>
-                    setNewOptOut({ ...newOptOut, reason: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setAddDialogOpen(false)}>
-                Cancel
+      <PageHeader
+        title="WhatsApp opt-outs"
+        description="People who asked to stop getting WhatsApp messages. Every campaign skips them automatically."
+        actions={
+          <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="w-full sm:w-auto">
+                <Plus className="h-4 w-4" />
+                Add Opt-Out
               </Button>
-              <Button onClick={handleAddOptOut}>Add Opt-Out</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add Phone to WhatsApp Opt-Out List</DialogTitle>
+                <DialogDescription>
+                  Manually add a phone number to the WhatsApp opt-out list
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="phone">Phone Number</Label>
+                  <Input
+                    id="phone"
+                    placeholder="919876543210"
+                    value={newOptOut.phone}
+                    onChange={e =>
+                      setNewOptOut({ ...newOptOut, phone: e.target.value })
+                    }
+                  />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Enter phone number with country code (e.g., 919876543210)
+                  </p>
+                </div>
+                <div>
+                  <Label htmlFor="reason">Reason (Optional)</Label>
+                  <Input
+                    id="reason"
+                    placeholder="Customer request, compliance, etc."
+                    value={newOptOut.reason}
+                    onChange={e =>
+                      setNewOptOut({ ...newOptOut, reason: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setAddDialogOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={handleAddOptOut}>Add Opt-Out</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        }
+      />
 
       {/* Stats Card */}
       {stats && (

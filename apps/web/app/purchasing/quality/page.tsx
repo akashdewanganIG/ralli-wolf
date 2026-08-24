@@ -46,7 +46,7 @@ export default function QualityChecksPage() {
       <PageShell>
         <PageHeader
           title="Quality checks"
-          subtitle="Review receipt inspections and supplier quality results."
+          subtitle="Quality checks on deliveries, and which suppliers pass or fail them."
         />
 
         <ErrorBanner error={error} />
@@ -71,6 +71,7 @@ export default function QualityChecksPage() {
         </div>
 
         <Panel
+          flush
           actions={
             <FilterBar>
               <SelectField

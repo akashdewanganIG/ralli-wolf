@@ -9,6 +9,7 @@ import { Badge, Button, Input, Label } from "@repo/ui";
 import { Alert } from "@repo/ui/components/ui/alert";
 import { useEffect, useState } from "react";
 import { Tag } from "@repo/ui/components/ui/tag";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 interface LeadWithRemarks extends Lead {
   remarks?: Array<{
@@ -175,7 +176,7 @@ export default function SalesPage() {
     <RoleGuard allowedRoles={["SALES"]}>
       <div>
         {/* The application shell already renders the header; this page only owns its content. */}
-        <div className="app-page">
+        <PageShell>
           {/* Error Message */}
           {error && (
             <Alert
@@ -530,7 +531,7 @@ export default function SalesPage() {
               )}
             </div>
           )}
-        </div>
+        </PageShell>
       </div>
     </RoleGuard>
   );

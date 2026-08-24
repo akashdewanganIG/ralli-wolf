@@ -247,7 +247,7 @@ export default function GoodsReceiptDetailPage() {
           </Panel>
         )}
 
-        <Panel title="Received lines">
+        <Panel flush title="Received lines">
           <SimpleTable
             isLoading={isLoading}
             rows={lines}
@@ -446,7 +446,7 @@ export default function GoodsReceiptDetailPage() {
         </Panel>
 
         {lines.some(line => line.qualityChecks.length > 0) && (
-          <Panel title="Quality inspections">
+          <Panel flush title="Quality inspections">
             <SimpleTable
               rows={lines.flatMap(line =>
                 line.qualityChecks.map(check => ({

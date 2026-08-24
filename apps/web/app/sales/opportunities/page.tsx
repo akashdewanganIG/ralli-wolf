@@ -82,7 +82,7 @@ function OpportunitiesContent() {
 
   if (isError) {
     return (
-      <div className="app-page">
+      <PageShell>
         <Alert
           tone="error"
           title="Opportunities could not be loaded"
@@ -98,7 +98,7 @@ function OpportunitiesContent() {
         >
           Check your connection and try again.
         </Alert>
-      </div>
+      </PageShell>
     );
   }
 
@@ -106,7 +106,7 @@ function OpportunitiesContent() {
     <PageShell>
       <PageHeader
         title="Opportunities"
-        description="Track active deals from qualification through close."
+        description="Deals you are working on, from first interest through to winning or losing them."
         actions={
           <button
             type="button"

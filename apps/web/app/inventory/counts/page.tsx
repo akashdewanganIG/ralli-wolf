@@ -66,7 +66,7 @@ export default function StockCountsPage() {
       <PageShell>
         <PageHeader
           title="Stock counts"
-          subtitle="Plan, record, and post physical stock counts."
+          subtitle="Counting what is really on the shelves, and fixing the records to match."
           actions={
             <Button
               type="button"
@@ -127,6 +127,7 @@ export default function StockCountsPage() {
         </FormDialog>
 
         <Panel
+          flush
           actions={
             <FilterBar>
               <SelectField

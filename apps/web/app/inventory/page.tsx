@@ -47,7 +47,7 @@ export default function InventoryDashboardPage() {
       <PageShell>
         <PageHeader
           title="Inventory"
-          subtitle="Monitor live stock, availability, and value across locations."
+          subtitle="How much stock you have right now, where it is, and what it is worth."
           actions={
             <>
               <WarehouseFilter
@@ -130,7 +130,7 @@ export default function InventoryDashboardPage() {
               <StatCard
                 label="Lots expiring in 30 days"
                 value={isLoading ? "—" : (dashboard?.lotsExpiringSoon ?? 0)}
-                hint="FEFO picking uses these first"
+                hint="Stock closest to its expiry date is used first"
                 tone={dashboard?.lotsExpiringSoon ? "warning" : "neutral"}
                 href="/inventory/stock"
               />
@@ -138,11 +138,14 @@ export default function InventoryDashboardPage() {
 
             <div className="grid gap-4 lg:grid-cols-3">
               <Panel
+                flush
                 title="Movement summary"
                 description={
+                  // `?? 0` matters: a dashboard that loads without a count
+                  // otherwise renders the literal word "undefined" mid-sentence.
                   dashboard
-                    ? `${dashboard.movementCount} ledger entries in the selected period`
-                    : undefined
+                    ? `Stock coming in and going out over the period you picked. ${dashboard.movementCount ?? 0} entries.`
+                    : "Stock coming in and going out over the period you picked."
                 }
                 className="lg:col-span-2"
               >

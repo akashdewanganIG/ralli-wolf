@@ -52,7 +52,7 @@ export default function MaterialsPage() {
       <PageShell>
         <PageHeader
           title="Material management"
-          subtitle="Manage materials and monitor availability against safety stock."
+          subtitle="The raw materials you buy and use, and whether you still have enough."
           actions={
             <>
               <WarehouseFilter
@@ -102,6 +102,8 @@ export default function MaterialsPage() {
         </div>
 
         <Panel
+          title="Materials"
+          flush
           actions={
             <DashboardToolbar
               search={

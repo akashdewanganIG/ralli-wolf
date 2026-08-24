@@ -78,7 +78,10 @@ export function ProfileDropdown({
           )}
           aria-label={`Open account menu for ${user.name}`}
         >
-          <Avatar className="size-7">
+          {/* Concentric with the trigger, not a circle inside a rounded square.
+              The trigger is 8px with the avatar inset 4px, so the inner radius
+              is 8 − 4 = 4px; anything else leaves an uneven gap at the corners. */}
+          <Avatar className="size-7 rounded-sm">
             <AvatarImage src={user.avatar} alt="" />
             <AvatarFallback className="bg-primary text-[0.6875rem] font-semibold text-primary-foreground">
               {initials}

@@ -10,6 +10,7 @@ import { ChangePasswordModal } from "./change-password-modal";
 import { NotificationDropdown } from "./notification-dropdown";
 import { Menu } from "@repo/ui/icons";
 import { ThemeToggle } from "./theme-toggle";
+import { CurrencyToggle } from "./currency-toggle";
 
 interface HeaderWrapperProps {
   icon?: React.ReactNode;
@@ -60,10 +61,13 @@ export function HeaderWrapper({
           )
         }
         actionSlot={
-          <SystemStatusDropdown
-            groups={statusGroups}
-            summaryLabel={summaryLabel}
-          />
+          <>
+            <CurrencyToggle />
+            <SystemStatusDropdown
+              groups={statusGroups}
+              summaryLabel={summaryLabel}
+            />
+          </>
         }
         preferences={<ThemeToggle className="flex w-full [&>button]:flex-1" />}
         notificationSlot={

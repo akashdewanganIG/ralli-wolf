@@ -63,7 +63,7 @@ export default function StockAlertsPage() {
       <PageShell>
         <PageHeader
           title="Stock alerts"
-          subtitle="Review and resolve replenishment and expiry exceptions."
+          subtitle="Warnings about stock running low or about to expire."
           actions={
             <Button
               type="button"
@@ -116,6 +116,8 @@ export default function StockAlertsPage() {
         </div>
 
         <Panel
+          title="Alerts"
+          flush
           actions={
             <DashboardToolbar
               actions={[

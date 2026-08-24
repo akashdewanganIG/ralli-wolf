@@ -12,8 +12,6 @@ import {
   Tabs,
   TabsContent,
   TabsContents,
-  TabsList,
-  TabsTrigger,
 } from "@repo/ui";
 import {
   Building2,
@@ -43,6 +41,7 @@ import {
   TableSkeleton,
 } from "./skeletons";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { CategorySwitcher } from "@repo/ui/components/ui/category-switcher";
 
 interface Account {
   id: string;
@@ -711,16 +710,16 @@ export const AccountDetailPage = React.memo(function AccountDetailPage({
       {/* Tabs */}
       {/* @ts-ignore */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        {/* @ts-ignore */}
-        <TabsList>
-          {/* @ts-ignore */}
-          <TabsTrigger value="related">Related</TabsTrigger>
-          {/* @ts-ignore */}
-          <TabsTrigger value="details">Details</TabsTrigger>
-        </TabsList>
+        <CategorySwitcher
+          label="Account sections"
+          items={[
+            { value: "related", label: "Related" },
+            { value: "details", label: "Details" },
+          ]}
+        />
 
         {/* @ts-ignore */}
-        <TabsContents className="mt-4">
+        <TabsContents>
           {/* @ts-ignore */}
           <TabsContent value="related">
             <RelatedTab />

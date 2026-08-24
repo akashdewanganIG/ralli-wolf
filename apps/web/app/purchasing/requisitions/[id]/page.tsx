@@ -70,7 +70,7 @@ export default function PurchaseRequisitionDetailPage() {
           }
           subtitle={
             requisition
-              ? `${requisition.warehouse.code} · ${humanizeEnum(requisition.origin)} · raised by ${`${requisition.requestedBy.firstName ?? ""} ${requisition.requestedBy.lastName ?? ""}`.trim()}`
+              ? `A request to buy something for ${requisition.warehouse.code}, raised by ${`${requisition.requestedBy.firstName ?? ""} ${requisition.requestedBy.lastName ?? ""}`.trim()}.`
               : undefined
           }
           breadcrumb={[
@@ -164,7 +164,7 @@ export default function PurchaseRequisitionDetailPage() {
         {canConvert && (
           <Panel
             title="Convert to a purchase order"
-            description="Only lines that have not been fully ordered are included, so converting twice cannot double-order. Prices come from the supplier's catalogue where the estimate is blank."
+            description="Turn this request into a real order to a supplier. Anything already ordered is left out, so nothing is ordered twice."
           >
             <form
               className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap"
@@ -262,7 +262,7 @@ export default function PurchaseRequisitionDetailPage() {
           </Panel>
         )}
 
-        <Panel title="Lines">
+        <Panel flush title="Lines">
           <SimpleTable
             isLoading={isLoading}
             rows={lines}
@@ -333,7 +333,7 @@ export default function PurchaseRequisitionDetailPage() {
 
         {requisition?.purchaseOrders &&
           requisition.purchaseOrders.length > 0 && (
-            <Panel title="Purchase orders raised from this requisition">
+            <Panel flush title="Purchase orders raised from this requisition">
               <SimpleTable
                 rows={requisition.purchaseOrders}
                 keyOf={row => row.id}

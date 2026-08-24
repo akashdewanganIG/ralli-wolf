@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { DataTable, type TableColumn } from "@/components/data-table";
+import { formatMoney } from "@/lib/utils/decimal";
 
 export type QuoteLineItemRow = {
   id: string;
@@ -63,7 +64,7 @@ export function QuoteLineItemsTable({
         label: "List Price",
         render: v => (
           <span className="text-muted-foreground">
-            {v != null ? `₹${Number(v).toLocaleString()}` : "—"}
+            {formatMoney(v)}
           </span>
         ),
       },
@@ -81,7 +82,7 @@ export function QuoteLineItemsTable({
         label: "Unit Price",
         render: v => (
           <span className="text-muted-foreground">
-            {v != null ? `₹${Number(v).toLocaleString()}` : "—"}
+            {formatMoney(v)}
           </span>
         ),
       },
@@ -90,7 +91,7 @@ export function QuoteLineItemsTable({
         label: "Total Price",
         render: v => (
           <span className="text-muted-foreground">
-            {v != null ? `₹${Number(v).toLocaleString()}` : "—"}
+            {formatMoney(v)}
           </span>
         ),
       },

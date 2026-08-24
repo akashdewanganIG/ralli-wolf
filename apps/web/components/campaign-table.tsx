@@ -7,7 +7,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  ExploreButton,
   SearchInput,
 } from "@repo/ui";
 import { PageHeader } from "@repo/ui/components/ui/page-header";
@@ -19,6 +18,7 @@ import { CampaignFilter, CampaignFilterValues } from "./campaign-filter";
 import { DataTable, TableColumn } from "./data-table";
 import { TablePageSkeleton } from "./skeletons";
 import { StatusBadge } from "@repo/ui/components/ui/status-badge";
+import { Plus } from "@repo/ui/icons";
 
 export interface Campaign {
   id: string;
@@ -299,7 +299,7 @@ export const CampaignTable: React.FC<CampaignTableProps> = ({
     <div className="space-y-4">
       <PageHeader
         title={title ?? "Campaign Management"}
-        description={subtitle ?? "Manage your campaigns"}
+        description={subtitle ?? "Your marketing campaigns and how each one is performing."}
         titleClassName={cn(
           !titleClassName && "font-bold",
           titleClassName,
@@ -309,9 +309,10 @@ export const CampaignTable: React.FC<CampaignTableProps> = ({
           <>
             {headerActions}
             {onCreateClick && (
-              <ExploreButton onClick={onCreateClick}>
-                Create Campaign
-              </ExploreButton>
+              <Button onClick={onCreateClick}>
+                <Plus className="size-4" />
+                Create campaign
+              </Button>
             )}
           </>
         }

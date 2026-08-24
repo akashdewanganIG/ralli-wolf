@@ -106,8 +106,8 @@ export function useSystemStatus(): {
           level: browserOnline ? "healthy" : "offline",
           detail: browserOnline ? "Online" : "Offline",
           tooltip: browserOnline
-            ? "This browser reports an active network connection."
-            : "This browser reports no network connection. Requests will fail until it returns.",
+            ? "Your device is connected to the internet."
+            : "Your device has lost its internet connection. Nothing will load until it comes back.",
         },
         {
           id: "api",
@@ -120,8 +120,8 @@ export function useSystemStatus(): {
                 ? "Reachable"
                 : "Unreachable",
           tooltip: dataUpdatedAt
-            ? `Health checked at ${formatClock(dataUpdatedAt)}. Re-checked every 30 seconds.`
-            : "Waiting for the first health check.",
+            ? `Last checked at ${formatClock(dataUpdatedAt)}. The app checks again every 30 seconds.`
+            : "Still checking whether the server can be reached.",
         },
         {
           id: "database",
@@ -137,8 +137,8 @@ export function useSystemStatus(): {
                   : "Disconnected",
           tooltip:
             databaseLevel === "healthy"
-              ? "The API completed a test query against the database."
-              : "The API could not complete a test query against the database.",
+              ? "The server can reach the database where your information is kept."
+              : "The server cannot reach the database, so your information may not load.",
         },
       ],
     },
@@ -160,8 +160,8 @@ export function useSystemStatus(): {
                   : "Not started",
           tooltip:
             syncLevel === "warning"
-              ? "One or more requests failed. Reload the affected screen or use its refresh action."
-              : "Screens refetch on their own schedule; this reflects every request the app has in flight.",
+              ? "Something did not load. Refresh the page to try again."
+              : "Whether the app is still loading anything from the server right now.",
         },
         {
           id: "last",
@@ -169,8 +169,8 @@ export function useSystemStatus(): {
           level: lastSuccess ? "healthy" : "unknown",
           detail: lastSuccess ? formatClock(lastSuccess) : "—",
           tooltip: lastSuccess
-            ? `Most recent successful response: ${new Date(lastSuccess).toLocaleString()}.`
-            : "No successful response recorded yet in this session.",
+            ? `The app last loaded data successfully at ${new Date(lastSuccess).toLocaleString()}.`
+            : "Nothing has loaded from the server yet.",
         },
         {
           id: "loaded",
@@ -178,7 +178,7 @@ export function useSystemStatus(): {
           level: succeeded.length ? "healthy" : "unknown",
           detail: `${succeeded.length}`,
           tooltip:
-            "Number of data sources that have returned successfully in this session.",
+            "How many parts of this page have loaded their information successfully.",
         },
         ...(failed.length
           ? [
@@ -188,7 +188,7 @@ export function useSystemStatus(): {
                 level: "error" as StatusLevel,
                 detail: `${failed.length}`,
                 tooltip:
-                  "Data sources whose most recent request errored. They retry when their screen refetches.",
+                  "Parts of this page that failed to load. They try again when you refresh.",
               },
             ]
           : []),

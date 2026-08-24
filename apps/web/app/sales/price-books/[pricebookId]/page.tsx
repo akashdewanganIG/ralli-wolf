@@ -14,14 +14,21 @@ import {
   InfoField,
   Badge,
   Tabs,
-  TabsList,
-  TabsTrigger,
   TabsContent,
   TabsContents,
 } from "@repo/ui";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { formatMoney } from "@/lib/utils/decimal";
+import { CategorySwitcher } from "@repo/ui/components/ui/category-switcher";
 
-const entryColumns: TableColumn<PriceBookEntry>[] = [
+/**
+ * A price book is denominated in its own currency, so its prices are shown in
+ * that currency rather than the display currency — relabelling a EUR price
+ * book as USD would misstate what a customer is actually quoted.
+ */
+const buildEntryColumns = (
+  currencyCode?: string
+): TableColumn<PriceBookEntry>[] => [
   {
     key: "id",
     label: "ID",
@@ -35,7 +42,7 @@ const entryColumns: TableColumn<PriceBookEntry>[] = [
   {
     key: "listPrice",
     label: "List Price",
-    render: listPrice => `₹${Number(listPrice).toLocaleString("en-IN")}`,
+    render: listPrice => formatMoney(listPrice as string | number, currencyCode),
   },
   {
     key: "isActive",
@@ -123,16 +130,15 @@ export default function PriceBookDetailPage({ params }: PageProps) {
       />
 
       <Tabs defaultValue="details">
-        <TabsList className="justify-start border-b border-input">
-          <TabsTrigger value="details" className="text-base font-medium">
-            Details
-          </TabsTrigger>
-          <TabsTrigger value="entries" className="text-base font-medium">
-            Entries ({entries.length})
-          </TabsTrigger>
-        </TabsList>
+        <CategorySwitcher
+          label="Price book sections"
+          items={[
+            { value: "details", label: "Details" },
+            { value: "entries", label: "Entries", count: entries.length },
+          ]}
+        />
 
-        <TabsContents className="mt-4">
+        <TabsContents>
           {/* ── Details Tab ───────────────────────────── */}
           <TabsContent value="details">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -214,7 +220,7 @@ export default function PriceBookDetailPage({ params }: PageProps) {
             <DataTable
               title="Price Book Entries"
               data={entries}
-              columns={entryColumns}
+              columns={buildEntryColumns(pb.currencyCode ?? pb.currencyISOCode)}
               count={entries.length}
               columnPreferenceKey="pricebook-entries"
             />

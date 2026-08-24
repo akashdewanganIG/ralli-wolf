@@ -49,7 +49,8 @@ export interface TableColumn<T> {
 export interface DataTableProps<T> {
   data: T[];
   columns: TableColumn<T>[];
-  title: string;
+  /** List name. Omit when the page heading already says it. */
+  title?: string;
   count: number;
   actionItems?: Array<{
     label: string;
@@ -377,10 +378,12 @@ export function DataTable<T extends Record<string, any>>({
               border on a gap inside one padded box would have inset it by
               12px at each end and left it floating. */}
           <div className="flex min-w-0 flex-wrap items-baseline gap-2 border-b border-border px-3 py-2.5">
-            <h3 className="shrink-0 text-sm font-semibold text-foreground">
-              {title}
-              {titleSuffix}
-            </h3>
+            {title || titleSuffix ? (
+              <h3 className="shrink-0 text-sm font-semibold text-foreground">
+                {title}
+                {titleSuffix}
+              </h3>
+            ) : null}
             {isSearchMode && searchQuery && (
               <span className="truncate text-sm text-muted-foreground">
                 — results for &quot;{searchQuery}&quot;
@@ -403,10 +406,12 @@ export function DataTable<T extends Record<string, any>>({
               search && "flex-1"
             )}
           >
-            <h3 className="shrink-0 text-sm font-semibold text-foreground">
-              {title}
-              {titleSuffix}
-            </h3>
+            {title || titleSuffix ? (
+              <h3 className="shrink-0 text-sm font-semibold text-foreground">
+                {title}
+                {titleSuffix}
+              </h3>
+            ) : null}
             {/* The search takes the slack in the row; everything else keeps its
                 natural width. */}
             {search ? <div className="min-w-0 flex-1">{search}</div> : null}

@@ -11,6 +11,7 @@ import { whatsappService } from "@/lib/api/services";
 import { Alert } from "@repo/ui/components/ui/alert";
 import { TablePageSkeleton } from "@/components/skeletons";
 import { DEFAULT_PAGE_SIZE } from "@/components/data-table";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 const CreateCampaignModal = dynamic(
   () =>
@@ -192,7 +193,7 @@ export default function WhatsappCampaignsPage() {
   }
 
   return (
-    <div className="app-page space-y-4">
+    <PageShell gap="tight">
       {loadError ? (
         <Alert
           tone="error"
@@ -223,7 +224,7 @@ export default function WhatsappCampaignsPage() {
         <CampaignTable
           campaigns={paginatedData.data}
           title="WhatsApp Campaigns"
-          subtitle="Browse and manage your WhatsApp campaigns"
+          subtitle="Message campaigns you have sent or scheduled on WhatsApp."
           searchQuery={searchQuery}
           filters={filters}
           channelFilter={"WhatsApp"}
@@ -267,6 +268,6 @@ export default function WhatsappCampaignsPage() {
         onSuccess={handleCreateSuccess}
         editCampaignId={editCampaignId}
       />
-    </div>
+    </PageShell>
   );
 }

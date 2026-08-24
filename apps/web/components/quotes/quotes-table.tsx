@@ -4,6 +4,7 @@ import * as React from "react";
 import { Checkbox, Button } from "@repo/ui";
 import { DataTable, type TableColumn } from "@/components/data-table";
 import type { Quote } from "./quote-types";
+import { formatMoney } from "@/lib/utils/decimal";
 
 type QuotesTableProps = {
   quotes: Quote[];
@@ -54,7 +55,7 @@ export function QuotesTable({
         label: "Net Amount",
         render: value => (
           <span className="text-muted-foreground">
-            ₹{Number(value || 0).toLocaleString()}
+            {formatMoney(value ?? 0)}
           </span>
         ),
       },

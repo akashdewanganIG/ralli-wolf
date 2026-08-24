@@ -41,6 +41,7 @@ import {
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { WhatsAppPreview } from "./whatsapp-preview";
+import { CategorySwitcher } from "@repo/ui/components/ui/category-switcher";
 
 interface CreateCampaignModalProps {
   open: boolean;
@@ -238,24 +239,16 @@ function MediaUploadField({
     <div className="grid gap-2">
       <Label htmlFor={fieldKey}>{label}</Label>
 
-      <div className="flex gap-2 mb-2">
-        <Button
-          type="button"
-          variant={mode === "upload" ? "default" : "outline"}
-          size="sm"
-          onClick={() => setMode("upload")}
-        >
-          Upload to S3
-        </Button>
-        <Button
-          type="button"
-          variant={mode === "url" ? "default" : "outline"}
-          size="sm"
-          onClick={() => setMode("url")}
-        >
-          Use URL
-        </Button>
-      </div>
+      <CategorySwitcher
+        className="mb-2"
+        label={`${label} source`}
+        value={mode}
+        onValueChange={setMode}
+        items={[
+          { value: "upload", label: "Upload to S3" },
+          { value: "url", label: "Use URL" },
+        ]}
+      />
 
       {mode === "url" ? (
         <div className="space-y-2">

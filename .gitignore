@@ -61,3 +61,6 @@ pnpm-debug.log*
 # OS / Temp
 Thumbs.db
 tmp/
+
+# Database snapshots — these contain user password hashes and must never be committed.
+db-backup-*.json

@@ -101,7 +101,7 @@ export default function ReorderRulesPage() {
       <PageShell>
         <PageHeader
           title="Reorder policies"
-          subtitle="Manage replenishment policies by item and warehouse."
+          subtitle="Rules that decide when an item is reordered and how much to buy."
           actions={
             <Button
               type="button"
@@ -224,6 +224,7 @@ export default function ReorderRulesPage() {
         </FormDialog>
 
         <Panel
+          flush
           actions={
             <div className="w-full sm:w-56">
               <WarehouseFilter

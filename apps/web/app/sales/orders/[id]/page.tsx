@@ -16,8 +16,6 @@ import {
   Tabs,
   TabsContent,
   TabsContents,
-  TabsList,
-  TabsTrigger,
 } from "@repo/ui";
 import {
   Building2,
@@ -43,6 +41,8 @@ import * as React from "react";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { statusTone } from "@repo/ui/components/ui/status-badge";
 import { Tag } from "@repo/ui/components/ui/tag";
+import { formatMoney } from "@/lib/utils/decimal";
+import { CategorySwitcher } from "@repo/ui/components/ui/category-switcher";
 
 function formatDate(iso: string | null | undefined) {
   if (!iso) return "N/A";
@@ -59,10 +59,7 @@ function formatCurrency(val: number | string | null | undefined) {
   if (val == null) return "N/A";
   const n = Number(val);
   if (Number.isNaN(n)) return String(val);
-  return n.toLocaleString("en-IN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  return formatMoney(n);
 }
 
 function formatPercent(val: number | string | null | undefined) {
@@ -194,22 +191,15 @@ function OrderDetailContent() {
       />
 
       <Tabs value={tab} onValueChange={v => setTab(v)}>
-        <TabsList className="justify-start space-x-16 border-b border-input">
-          <TabsTrigger
-            value="details"
-            className="text-lg font-medium data-[state=active]:border-b-[3px] data-[state=active]:border-border"
-          >
-            Details
-          </TabsTrigger>
-          <TabsTrigger
-            value="products"
-            className="text-lg font-medium data-[state=active]:border-b-[3px] data-[state=active]:border-border"
-          >
-            Products
-          </TabsTrigger>
-        </TabsList>
+        <CategorySwitcher
+          label="Order sections"
+          items={[
+            { value: "details", label: "Details" },
+            { value: "products", label: "Products" },
+          ]}
+        />
 
-        <TabsContents className="mt-8">
+        <TabsContents>
           {/* ── Details Tab ─────────────────────────────────────────────── */}
           <TabsContent value="details">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -299,7 +289,7 @@ function OrderDetailContent() {
                       Grand Total
                     </p>
                     <p className="mt-1 text-3xl font-bold">
-                      ₹{formatCurrency(order.grandTotal)}
+                      {formatCurrency(order.grandTotal)}
                     </p>
                     <div className="mt-3 flex flex-wrap gap-4 text-sm opacity-90">
                       <div>
@@ -307,7 +297,7 @@ function OrderDetailContent() {
                           Subtotal
                         </p>
                         <p className="font-semibold">
-                          ₹{formatCurrency(order.subtotal)}
+                          {formatCurrency(order.subtotal)}
                         </p>
                       </div>
                       <div>
@@ -331,7 +321,7 @@ function OrderDetailContent() {
                           Shipping
                         </p>
                         <p className="font-semibold">
-                          ₹{formatCurrency(order.shippingAmount)}
+                          {formatCurrency(order.shippingAmount)}
                         </p>
                       </div>
                     </div>

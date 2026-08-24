@@ -8,7 +8,11 @@ import {
 } from "../utils/errorHandler.js";
 import { buildFullName } from "../utils/nameHelpers.js";
 import { emailService } from "../services/email.service.js";
-import { createNotification } from "./notification.controller.js";
+import { NotificationType } from "@prisma/client";
+import {
+  createNotification,
+  shouldSendEmail,
+} from "./notification.controller.js";
 
 export class ApprovalController {
   private parseId(
@@ -511,30 +515,47 @@ export class ApprovalController {
         title: `Approval Requested — ${objectLabel} ${objectNumber}`,
         message: `${requesterName} has submitted ${objectName} for your approval.`,
         link: objectLink,
+        // The dedicated email below carries the reference numbers and requester
+        // that a generic notification body cannot, so it is used instead of the
+        // one createNotification would send.
+        emailHandledByCaller: true,
       }).catch(err =>
         console.error("[Approval] Failed to create notification:", err)
       );
 
-      // Send notification email to approver (fire-and-forget)
-      emailService
-        .sendApprovalRequestEmail({
-          approverName: buildFullName(approver.firstName, approver.lastName),
-          approverEmail: approver.email,
-          requesterName: buildFullName(
-            requester?.firstName ?? null,
-            requester?.lastName ?? null
-          ),
-          objectType: objectLabel,
-          objectName,
-          objectNumber,
-          approvalId: approval.id,
-        })
-        .catch(err =>
-          console.error(
-            "[Approval] Failed to send approval request email:",
-            err
-          )
-        );
+      // Send notification email to approver (fire-and-forget), unless they have
+      // switched approval email off.
+      void shouldSendEmail(parsedRequestedToId, "APPROVAL_REQUESTED").then(
+        allowed => {
+          if (!allowed) return;
+          return emailService
+            .sendApprovalRequestEmail({
+              approverName: buildFullName(
+                approver.firstName,
+                approver.lastName
+              ),
+              approverEmail: approver.email,
+              requesterName: buildFullName(
+                requester?.firstName ?? null,
+                requester?.lastName ?? null
+              ),
+              objectType: objectLabel,
+              objectName,
+              objectNumber,
+              approvalId: approval.id,
+            })
+            .catch(err =>
+              console.error(
+                "[Approval] Failed to send approval request email:",
+                err
+              )
+            );
+        }
+      ).catch(err =>
+        // A preference lookup that fails must not become an unhandled
+        // rejection; the approval itself has already been recorded.
+        console.error("[Approval] Could not resolve email preference:", err)
+      );
 
       return res.status(201).json({ data: approval });
     } catch (error) {
@@ -711,46 +732,65 @@ export class ApprovalController {
         }
       });
 
-      // Send notification email to requester (fire-and-forget)
-      emailService
-        .sendApprovalActionEmail({
-          requesterName: buildFullName(
-            approval.createdBy.firstName,
-            approval.createdBy.lastName
-          ),
-          requesterEmail: approval.createdBy.email,
-          actorName: buildFullName(
-            actor?.firstName ?? null,
-            actor?.lastName ?? null
-          ),
-          action: newStatus,
-          objectType,
-          objectName,
-          objectNumber,
-          comment: comment || undefined,
-        })
-        .catch(err =>
-          console.error("[Approval] Failed to send approval action email:", err)
-        );
+      const isPurchaseOrder = approval.targetObjectName === "PURCHASE_ORDER";
+      const decisionType: NotificationType =
+        newStatus === "APPROVED"
+          ? "PURCHASE_ORDER_APPROVED"
+          : "PURCHASE_ORDER_REJECTED";
 
       // Purchase approvals gate real spend, so the buyer is told in-app as
       // well as by email — waiting on an inbox delays the order going out.
-      if (approval.targetObjectName === "PURCHASE_ORDER") {
+      if (isPurchaseOrder) {
         createNotification({
           userId: approval.createdById,
-          type:
-            newStatus === "APPROVED"
-              ? "PURCHASE_ORDER_APPROVED"
-              : "PURCHASE_ORDER_REJECTED",
+          type: decisionType,
           title: `Purchase Order ${objectNumber} ${newStatus === "APPROVED" ? "approved" : "rejected"}`,
           message:
             newStatus === "APPROVED"
               ? `${buildFullName(actor?.firstName ?? null, actor?.lastName ?? null)} approved ${objectNumber}. It can now be sent to the supplier.`
               : `${buildFullName(actor?.firstName ?? null, actor?.lastName ?? null)} rejected ${objectNumber}${comment ? `: ${comment}` : ""}.`,
           link: `/purchasing/orders/${approval.targetRecordId}`,
+          // The decision email below is the richer one, so the generic
+          // notification email is suppressed to avoid sending two.
+          emailHandledByCaller: true,
         }).catch(err =>
           console.error("[Approval] Failed to create notification:", err)
         );
+      }
+
+      // Send the decision email to the requester (fire-and-forget).
+      //
+      // Only purchase-order decisions are configurable — quotes and
+      // opportunities have no notification type in the catalogue, so their
+      // email is not something a user can switch off and always sends.
+      const decisionEmailAllowed = isPurchaseOrder
+        ? await shouldSendEmail(approval.createdById, decisionType)
+        : true;
+
+      if (decisionEmailAllowed) {
+        emailService
+          .sendApprovalActionEmail({
+            requesterName: buildFullName(
+              approval.createdBy.firstName,
+              approval.createdBy.lastName
+            ),
+            requesterEmail: approval.createdBy.email,
+            actorName: buildFullName(
+              actor?.firstName ?? null,
+              actor?.lastName ?? null
+            ),
+            action: newStatus,
+            objectType,
+            objectName,
+            objectNumber,
+            comment: comment || undefined,
+          })
+          .catch(err =>
+            console.error(
+              "[Approval] Failed to send approval action email:",
+              err
+            )
+          );
       }
 
       const updated = await prisma.approvalProcess.findUnique({

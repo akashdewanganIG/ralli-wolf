@@ -49,65 +49,6 @@ export function PageHeader({
   );
 }
 
-export function TabBar<T extends string>({
-  items,
-  value,
-  onChange,
-  label = "Page sections",
-}: {
-  items: ReadonlyArray<readonly [T, React.ReactNode]>;
-  value: T;
-  onChange: (value: T) => void;
-  label?: string;
-}) {
-  return (
-    <div
-      role="tablist"
-      aria-label={label}
-      className="flex max-w-full overscroll-x-contain overflow-x-auto border-b border-border"
-    >
-      {items.map(([key, itemLabel], index) => (
-        <button
-          key={key}
-          type="button"
-          role="tab"
-          aria-selected={value === key}
-          tabIndex={value === key ? 0 : -1}
-          onClick={() => onChange(key)}
-          onKeyDown={event => {
-            if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
-              return;
-            event.preventDefault();
-            const nextIndex =
-              event.key === "Home"
-                ? 0
-                : event.key === "End"
-                  ? items.length - 1
-                  : event.key === "ArrowRight"
-                    ? (index + 1) % items.length
-                    : (index - 1 + items.length) % items.length;
-            const nextItem = items[nextIndex];
-            if (!nextItem) return;
-            onChange(nextItem[0]);
-            const tabs =
-              event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
-                '[role="tab"]'
-              );
-            tabs?.[nextIndex]?.focus();
-          }}
-          className={`-mb-px inline-flex min-h-10 shrink-0 items-center whitespace-nowrap border-b-2 px-3 text-sm font-medium outline-none transition-[border-color,color] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/30 sm:px-4 ${
-            value === key
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {itemLabel}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 export function FilterBar({
   children,
   className = "",
@@ -180,6 +121,7 @@ export function Panel({
   description,
   actions,
   footerAction,
+  flush = false,
   children,
   className = "",
 }: {
@@ -190,6 +132,15 @@ export function Panel({
   actions?: React.ReactNode;
   /** Full-width action closing the panel, e.g. "View all orders". */
   footerAction?: React.ReactNode;
+  /**
+   * Removes the body padding so a table can meet the card's edges.
+   *
+   * A table already pads its own cells; wrapping it in a padded body inset it
+   * from the card by another 12px on all four sides, which is the white band
+   * that made these panels look unlike the CRM tables. Use it for tables, not
+   * for forms — those still need the body padding.
+   */
+  flush?: boolean;
   children: React.ReactNode;
   className?: string;
 }) {
@@ -222,7 +173,7 @@ export function Panel({
       {/* Equal on all four sides: the old header/body split used px-4 pt-4 with
           sm:px-5, so the gap above the first row never matched the gap beside
           it. */}
-      <div className="min-w-0 flex-1 p-3">{children}</div>
+      <div className={`min-w-0 flex-1 ${flush ? "" : "p-3"}`}>{children}</div>
       {footerAction && (
         <div className="flex flex-col border-t border-border p-3 pt-2.5">
           {footerAction}
@@ -365,7 +316,9 @@ export function Pager({
   if (pages <= 1) return null;
 
   return (
-    <div className="flex flex-col gap-3 pt-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+    // Padded and ruled off itself, matching the CRM table footer — the panel
+    // body around it may be flush.
+    <div className="flex flex-col gap-3 border-t border-border p-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
       <span>
         Page {page} of {pages}
       </span>

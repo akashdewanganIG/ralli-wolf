@@ -7,6 +7,7 @@ import { whatsappService } from "@/lib/api/services";
 import { Alert } from "@repo/ui/components/ui/alert";
 import { Button } from "@repo/ui/components/ui/button";
 import { DetailPageSkeleton } from "@/components/skeletons";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 function formatDate(date: string | Date | null | undefined): string {
   if (!date) return "-";
@@ -161,7 +162,7 @@ export default function WhatsappCampaignDetailPage() {
 
   if (error && !campaign) {
     return (
-      <div className="app-page">
+      <PageShell>
         <Alert
           tone="error"
           title="Campaign could not be loaded"
@@ -173,13 +174,13 @@ export default function WhatsappCampaignDetailPage() {
         >
           {error}
         </Alert>
-      </div>
+      </PageShell>
     );
   }
 
   if (!campaign) {
     return (
-      <div className="p-4">
+      <PageShell>
         <p>Campaign not found</p>
         <button
           type="button"
@@ -188,7 +189,7 @@ export default function WhatsappCampaignDetailPage() {
         >
           Back to campaigns
         </button>
-      </div>
+      </PageShell>
     );
   }
 

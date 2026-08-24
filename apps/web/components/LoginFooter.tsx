@@ -1,8 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import ralliWolfLogo from "../app/assets/images/logos/ralli-wolf-logo.png";
+import { ThemeToggle } from "./theme-toggle";
 
 /**
  * Footer for the sign-in page.
@@ -90,12 +90,10 @@ export default function LoginFooter() {
             © {new Date().getFullYear()} Innovun Global · Authorized access
             only.
           </p>
-          <Link
-            href="/forgot-password"
-            className="rounded-sm text-xs font-medium text-primary outline-none hover:text-info focus-visible:ring-2 focus-visible:ring-ring/30"
-          >
-            Reset your password
-          </Link>
+          {/* The theme switch, not a password-reset link: the sign-in form
+              above already carries "Forgot password?" where someone who needs
+              it is actually looking. */}
+          <ThemeToggle />
         </div>
       </div>
     </footer>

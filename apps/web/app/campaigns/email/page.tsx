@@ -10,6 +10,7 @@ import { DeleteConfirmationDialog } from "@repo/ui";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { DEFAULT_PAGE_SIZE } from "@/components/data-table";
+import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 function paginateArray<T>(
   array: T[],
@@ -233,7 +234,7 @@ export default function EmailCampaignsPage() {
   };
 
   return (
-    <div className="p-4">
+    <PageShell>
       <style
         dangerouslySetInnerHTML={{
           __html: `@import url('https://fonts.googleapis.com/css2?family=Courgette&family=Karla:wght@400&display=swap');`,
@@ -307,6 +308,6 @@ export default function EmailCampaignsPage() {
           onUpdated={handleEditUpdated}
         />
       )}
-    </div>
+    </PageShell>
   );
 }
