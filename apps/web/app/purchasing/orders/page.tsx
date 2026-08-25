@@ -30,6 +30,7 @@ import {
 import { formatDate, formatMoney } from "@/lib/utils/decimal";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { FormDialog } from "@repo/ui/components/ui/form-dialog";
+import { DataTransfer } from "@/components/data-transfer/DataTransfer";
 
 interface DraftLine {
   product: PickedProduct | null;
@@ -122,13 +123,16 @@ export default function PurchaseOrdersPage() {
           title="Purchase orders"
           subtitle="Orders you place with suppliers, from draft through to delivered."
           actions={
-            <Button
-              type="button"
-              onClick={() => setShowForm(true)}
-              className="px-3 whitespace-nowrap"
-            >
-              New purchase order
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                onClick={() => setShowForm(true)}
+                className="px-3 whitespace-nowrap"
+              >
+                New purchase order
+              </Button>
+              <DataTransfer entity="purchase-orders" />
+            </div>
           }
         />
 

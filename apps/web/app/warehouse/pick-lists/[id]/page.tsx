@@ -334,7 +334,6 @@ export default function PickListDetailPage() {
           pickList?.status !== "SHIPPED" &&
           pickList?.status !== "CANCELLED" && (
             <Panel
-              flush
               title="Pack picked goods"
               description="Put collected items into a package. You can only pack what has already been picked."
             >

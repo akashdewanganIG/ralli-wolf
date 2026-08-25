@@ -21,6 +21,7 @@ import { useSupplierMutations, useSuppliers } from "@/hooks/useSupplyChain";
 import { formatPercent } from "@/lib/utils/decimal";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { FormDialog } from "@repo/ui/components/ui/form-dialog";
+import { DataTransfer } from "@/components/data-transfer/DataTransfer";
 
 export default function SuppliersPage() {
   const router = useRouter();
@@ -80,13 +81,16 @@ export default function SuppliersPage() {
           title="Suppliers"
           subtitle="The companies you buy from, their prices, and how well they deliver."
           actions={
-            <Button
-              type="button"
-              onClick={() => setShowForm(true)}
-              className="px-3 whitespace-nowrap"
-            >
-              New supplier
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                onClick={() => setShowForm(true)}
+                className="px-3 whitespace-nowrap"
+              >
+                New supplier
+              </Button>
+              <DataTransfer entity="suppliers" />
+            </div>
           }
         />
 

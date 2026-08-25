@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   Bar,
   BarChart,
+  LabelList,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -118,43 +119,56 @@ export type CategoryDatum = {
 /**
  * Thick vertical columns for comparing magnitude across named categories.
  *
- * Columns rather than horizontal bars, and deliberately fat ones: the band is
- * almost entirely fill, so the silhouette itself carries the comparison before
- * anyone reads an axis. A crosshatch sits inside the fill so the marks survive
- * greyscale, forced-colours and colour-blind viewing without relying on hue.
+ * Horizontal bars rather than columns, because the axis that grows is the one
+ * that can afford to. A new movement type adds a row; columns would have had
+ * to share the same width between more and more of them until each was a
+ * sliver. Rows also give category names a full line to sit on instead of a
+ * cramped tick under a column.
  *
- * A brighter stroke traces the top of every column and runs on to meet the next
- * one, which turns a set of separate magnitudes into a readable trend without
- * adding a second axis or a second series.
+ * The bars are deliberately slim. A fat column carried the comparison by
+ * silhouette when there were six of them across a wide panel; in a stack of
+ * rows the length alone does that, and thickness only costs vertical space
+ * that more categories will want.
  *
- * Values sit in a header band above the plot, aligned on one line rather than
- * floating at each column's own height — a row of numbers is easier to scan
- * when it is actually a row. The category names take the axis underneath.
+ * A crosshatch sits inside the fill so the marks survive greyscale,
+ * forced-colours and colour-blind viewing without relying on hue, and a
+ * brighter cap closes the measuring end of each bar.
+ *
+ * Values sit at the end of their own bar, which is where the eye already is
+ * after reading its length.
  */
 
 /**
- * Fraction of each category band left empty. The columns still have to read
- * fat, so this is the smallest gap that keeps neighbours distinct.
- */
-const CATEGORY_GAP = 0.18;
-const AXIS_WIDTH = 44;
-const XAXIS_HEIGHT = 28;
-/**
- * The hover wash. Pre-mixed rather than an opacity, because the same value has
- * to work as a CSS background behind live text — an `opacity` there would fade
- * the number along with the wash.
+ * The hover wash. Pre-mixed rather than an opacity so it can also be used as a
+ * plain CSS background without fading text drawn over it.
  */
 const HOVER_FILL = "color-mix(in srgb, var(--chart-track) 45%, transparent)";
+/** Width reserved for category names. Enough for "Production consumption". */
+const NAME_WIDTH = 148;
+/** Height of one category row, and the thickness of the bar inside it. */
+const ROW_HEIGHT = 32;
+const BAR_SIZE = 13;
 /**
- * The column hatch, as CSS rather than an SVG pattern, for marks drawn in plain
+ * The numeric scale is kept but not drawn. Every bar already carries its own
+ * value at the end, so a row of ticks underneath repeats what is written and
+ * costs a strip of height that the rows themselves can use — and when the
+ * plot scrolls, a bottom axis is the first thing to fall out of view.
+ */
+const XAXIS_HEIGHT = 0;
+/** Room at the right for the value that sits past the end of the longest bar. */
+const VALUE_INSET = 64;
+/**
+ * Beyond this many rows the plot scrolls instead of growing without bound, so
+ * a panel cannot be pushed off the page by a long tail of categories.
+ */
+const MAX_VISIBLE_ROWS = 10;
+/**
+ * The same hatch as CSS rather than an SVG pattern, for marks drawn in plain
  * HTML. Same 7px lattice so the two forms read as one material.
  */
 const HATCH_CSS =
   "repeating-linear-gradient(45deg, var(--chart-mark-hatch) 0 1px, transparent 1px 7px), " +
   "repeating-linear-gradient(-45deg, var(--chart-mark-hatch) 0 1px, transparent 1px 7px)";
-/** Small breathing room at the plot's right edge, matched by the header band. */
-const RIGHT_INSET = 4;
-const HEADER_HEIGHT = 30;
 const HATCH_ID = "rw-column-hatch";
 
 function ColumnHatch() {
@@ -173,7 +187,7 @@ function ColumnHatch() {
   );
 }
 
-type ColumnProps = {
+type BarShapeProps = {
   x?: number;
   y?: number;
   width?: number;
@@ -183,174 +197,112 @@ type ColumnProps = {
 };
 
 /**
- * One column, drawn flat.
+ * One bar, drawn flat and measuring left to right.
  *
- * It was previously extruded into a cuboid — a lit top face and a right face
- * stepping back from the front plane. That reads as an object sitting on the
- * page rather than as a measurement of it, and the depth adds width that is not
- * data: the silhouette a reader compares is no longer the value.
- *
- * What remains is the plane that carries the reading, with the crosshatch that
- * survives at small sizes and a lit top edge to seat it against the plot.
+ * The crosshatch carries the mark without relying on hue, and a 2px cap closes
+ * the measuring end — the right edge here, where a column had it on top.
  */
-function Column({
+function BarMark({
   x = 0,
   y = 0,
   width = 0,
   height = 0,
   index = 0,
   series,
-}: ColumnProps) {
+}: BarShapeProps) {
   const datum = series[index];
   if (!datum || width <= 0 || height <= 0) return null;
 
+  const cap = Math.min(2, width);
   return (
     <g>
-      <rect x={x} y={y} width={width} height={height} fill={`url(#${HATCH_ID})`} />
-      {/* A 2px cap, not a face: it closes the top of the bar without implying
-          a surface receding behind it. */}
       <rect
         x={x}
         y={y}
         width={width}
-        height={Math.min(2, height)}
+        height={height}
+        fill={`url(#${HATCH_ID})`}
+      />
+      <rect
+        x={x + width - cap}
+        y={y}
+        width={cap}
+        height={height}
         fill="var(--chart-accent)"
       />
     </g>
   );
 }
 
-/** Axis ticks read as 12k / 1.4M rather than a wall of digits. */
-function compactTick(value: number) {
-  const abs = Math.abs(value);
-  if (abs >= 1_000_000)
-    return `${(value / 1_000_000).toFixed(abs >= 10_000_000 ? 0 : 1)}M`;
-  if (abs >= 1_000) return `${(value / 1_000).toFixed(abs >= 10_000 ? 0 : 1)}k`;
-  return String(value);
-}
-
-/**
- * Resolves the hovered category to an index into the data.
- *
- * Recharts reports it as its `TooltipIndex`, which is a *string* — comparing it
- * with `typeof === "number"` silently never matches, and the hover state just
- * never turns on. Coerce, then bounds-check against the data actually rendered.
- */
-function activeBandIndex(value: unknown, length: number): number | null {
-  if (value == null || value === "") return null;
-  const index = Number(value);
-  return Number.isInteger(index) && index >= 0 && index < length ? index : null;
-}
-
 export function CategoryBarChart({
   data,
   className,
-  height,
-  minHeight = 148,
   valueLabel = "Value",
+  maxVisibleRows = MAX_VISIBLE_ROWS,
 }: {
   data: CategoryDatum[];
   className?: string;
-  /**
-   * Fixed pixel height for the whole figure, header band included. Omit it and
-   * the figure fills its parent instead, which is what a panel wants when a
-   * sibling panel sets the row height.
-   */
-  height?: number;
-  /** Floor for the fill case, so few categories still read as a chart. */
-  minHeight?: number;
   valueLabel?: string;
+  /** Rows shown before the plot starts scrolling instead of growing. */
+  maxVisibleRows?: number;
 }) {
-  const [activeIndex, setActiveIndex] = React.useState<number | null>(null);
-  const bands = Math.max(1, data.length);
+  const rows = data.length;
+  // The plot is sized by its content, not by a figure given a fixed height:
+  // every category gets the same row, however many there are. Past the cap the
+  // wrapper scrolls, so a long tail of categories never squashes the rows nor
+  // pushes the rest of the panel off the page.
+  const plotHeight = rows * ROW_HEIGHT + XAXIS_HEIGHT;
+  const visibleHeight =
+    Math.min(rows, maxVisibleRows) * ROW_HEIGHT + XAXIS_HEIGHT;
 
   return (
     <div
       className={cn(
-        "relative flex w-full flex-col",
-        height == null && "h-full min-h-0",
+        "w-full overflow-y-auto overscroll-y-contain",
+        // The numeric axis is pinned to the bottom of the plot, so when the
+        // rows scroll it travels with them rather than floating unlabelled.
         className
       )}
-      style={height == null ? { minHeight } : { height }}
-      onMouseLeave={() => setActiveIndex(null)}
+      style={{ maxHeight: visibleHeight }}
     >
-      {/* One highlight for the hovered category, drawn behind both the number
-          and its column so the two read as a single band. Recharts' own cursor
-          is switched off below: it can only paint inside the plot, which would
-          stop the wash short of the header. */}
-      {activeIndex != null ? (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute top-0 rounded-sm"
-          style={{
-            bottom: XAXIS_HEIGHT,
-            left: `calc(${AXIS_WIDTH}px + (100% - ${AXIS_WIDTH + RIGHT_INSET}px) * ${activeIndex} / ${bands})`,
-            width: `calc((100% - ${AXIS_WIDTH + RIGHT_INSET}px) / ${bands})`,
-            backgroundColor: HOVER_FILL,
-          }}
-        />
-      ) : null}
-
-      {/* Aligned with the plot by reserving exactly the axis width, so each
-          number sits over its own column. */}
-      <div
-        className="relative flex shrink-0"
-        style={{
-          paddingLeft: AXIS_WIDTH,
-          paddingRight: RIGHT_INSET,
-          height: HEADER_HEIGHT,
-        }}
-      >
-        {data.map(datum => (
-          <div
-            key={datum.name}
-            className="flex min-w-0 flex-1 items-center justify-center px-1.5"
-          >
-            <span className="truncate text-[13px] font-semibold tabular-nums text-foreground">
-              {datum.display}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      <div className="relative min-h-0 flex-1">
+      <div style={{ height: plotHeight, minWidth: NAME_WIDTH + 160 }}>
         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           <BarChart
             data={data}
-            margin={{ top: 6, right: RIGHT_INSET, left: 0, bottom: 0 }}
-            barCategoryGap={`${CATEGORY_GAP * 100}%`}
-            onMouseMove={state =>
-              setActiveIndex(
-                activeBandIndex(state?.activeTooltipIndex, data.length)
-              )
-            }
-            onMouseLeave={() => setActiveIndex(null)}
+            layout="vertical"
+            margin={{ top: 4, right: VALUE_INSET, left: 0, bottom: 0 }}
+            barSize={BAR_SIZE}
           >
             <ColumnHatch />
-            <XAxis
-              dataKey="name"
-              interval={0}
-              axisLine={false}
-              tickLine={false}
-              tick={AXIS_TICK}
-              height={XAXIS_HEIGHT}
-            />
+            <XAxis type="number" hide />
             <YAxis
-              width={AXIS_WIDTH}
+              type="category"
+              dataKey="name"
+              width={NAME_WIDTH}
               axisLine={false}
               tickLine={false}
               tick={AXIS_TICK}
-              tickFormatter={compactTick}
+              interval={0}
             />
+            {/* Recharts paints its own band here, which is exactly the shape we
+                want now that the values sit inside the plot rather than in a
+                header band above it. */}
             <Tooltip
-              cursor={false}
+              cursor={{ fill: HOVER_FILL }}
               content={<CategoryTooltip valueLabel={valueLabel} />}
             />
             <Bar
               dataKey="value"
               isAnimationActive={false}
-              shape={props => <Column {...props} series={data} />}
-            />
+              shape={props => <BarMark {...props} series={data} />}
+            >
+              <LabelList
+                dataKey="display"
+                position="right"
+                offset={8}
+                className="fill-foreground text-[12px] font-semibold tabular-nums"
+              />
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>

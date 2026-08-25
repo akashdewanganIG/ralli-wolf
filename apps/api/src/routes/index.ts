@@ -31,6 +31,8 @@ import quoteRoutes from "./quote.routes.js";
 import salesOrderRoutes from "./salesOrder.routes.js";
 import approvalRoutes from "./approval.routes.js";
 import notificationRoutes from "./notification.routes.js";
+import { financeRouter, planningRouter } from "./finance.routes.js";
+import { dataTransferRouter } from "./dataTransfer.routes.js";
 import {
   warehouseRouter,
   inventoryRouter,
@@ -118,6 +120,12 @@ export function setupRoutes(app: Express) {
   app.use("/api/sales-orders", salesOrderRoutes);
   app.use("/api/approvals", approvalRoutes);
   app.use("/api/notifications", notificationRoutes);
+
+  // Finance and production planning (each router carries its own auth)
+  app.use("/api/finance", financeRouter);
+  app.use("/api/planning", planningRouter);
+  // Import and export for every dataset in the transfer registry.
+  app.use("/api/data", dataTransferRouter);
 
   // Supply chain modules (each router carries its own auth + role guard)
   app.use("/api/warehouses", warehouseRouter);

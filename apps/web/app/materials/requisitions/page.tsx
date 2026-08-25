@@ -29,6 +29,7 @@ import {
 import { formatDate, formatDateTime } from "@/lib/utils/decimal";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { FormDialog } from "@repo/ui/components/ui/form-dialog";
+import { DataTransfer } from "@/components/data-transfer/DataTransfer";
 
 interface DraftLine {
   product: PickedProduct | null;
@@ -103,13 +104,16 @@ export default function MaterialRequisitionsPage() {
           title="Material requisitions"
           subtitle="Requests from the floor for materials, and handing those materials out."
           actions={
-            <Button
-              type="button"
-              onClick={() => setShowForm(true)}
-              className="px-3 whitespace-nowrap"
-            >
-              New requisition
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                onClick={() => setShowForm(true)}
+                className="px-3 whitespace-nowrap"
+              >
+                New requisition
+              </Button>
+              <DataTransfer entity="material-requisitions" />
+            </div>
           }
         />
 

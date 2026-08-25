@@ -326,7 +326,11 @@ export default function BomDetailPage() {
           value={tab}
           onValueChange={setTab}
           items={[
-            { value: "structure", label: "Structure", count: components.length },
+            {
+              value: "structure",
+              label: "Structure",
+              count: components.length,
+            },
             { value: "explosion", label: "Multi-level explosion" },
             { value: "costing", label: "Header & costing" },
             { value: "history", label: "Change history" },

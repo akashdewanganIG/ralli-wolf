@@ -18,6 +18,7 @@ import {
 import { useQualityChecks, useSuppliers } from "@/hooks/useSupplyChain";
 import { formatDateTime, formatQuantity } from "@/lib/utils/decimal";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { DataTransfer } from "@/components/data-transfer/DataTransfer";
 
 export default function QualityChecksPage() {
   const [page, setPage] = useState(1);
@@ -47,6 +48,7 @@ export default function QualityChecksPage() {
         <PageHeader
           title="Quality checks"
           subtitle="Quality checks on deliveries, and which suppliers pass or fail them."
+          actions={<DataTransfer entity="quality-checks" />}
         />
 
         <ErrorBanner error={error} />

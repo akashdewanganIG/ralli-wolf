@@ -24,6 +24,7 @@ import {
   humanizeEnum,
 } from "@/lib/utils/decimal";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { DataTransfer } from "@/components/data-transfer/DataTransfer";
 
 export default function GoodsReceiptsPage() {
   const router = useRouter();
@@ -49,6 +50,7 @@ export default function GoodsReceiptsPage() {
         <PageHeader
           title="Goods receipts"
           subtitle="Deliveries that have arrived, and what happened to them afterwards."
+          actions={<DataTransfer entity="goods-receipts" />}
         />
 
         <ErrorBanner error={error} />

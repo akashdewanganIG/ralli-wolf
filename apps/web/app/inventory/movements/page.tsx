@@ -24,6 +24,7 @@ import type { StockMovementType } from "@/lib/api/types/supplyChain";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { DashboardToolbar } from "@repo/ui/components/ui/dashboard-toolbar";
 import { Tag } from "@repo/ui/components/ui/tag";
+import { DataTransfer } from "@/components/data-transfer/DataTransfer";
 
 const MOVEMENT_TYPES: StockMovementType[] = [
   "OPENING_BALANCE",
@@ -80,6 +81,7 @@ export default function StockLedgerPage() {
         <PageHeader
           title="Stock ledger"
           subtitle="A full history of stock arriving, leaving, and moving between places."
+          actions={<DataTransfer entity="stock-movements" />}
         />
 
         <ErrorBanner error={error} />

@@ -129,7 +129,12 @@ export default function PurchasingDashboardPage() {
           ))}
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-2">
+        {/* Stacked, not side by side. The watchlist carries six columns
+            including a supplier name and two dates; at half the page it lost
+            its right-hand columns off the edge, so the reader could not see
+            what was outstanding — the very thing the panel is for. Full width
+            each, one above the other, and every column fits. */}
+        <div className="grid gap-4">
           <Panel flush title="Orders by status">
             <SimpleTable
               isLoading={isLoading}

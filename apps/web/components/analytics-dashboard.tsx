@@ -246,8 +246,9 @@ export function AnalyticsDashboard() {
       display: formatQuantity(row.quantity),
       detail: [{ label: "Ledger entries", value: String(row.count) }],
     }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 6);
+    // Largest first; the chart gives every type its own row and scrolls past
+    // its cap, so there is no longer a reason to drop the smaller ones.
+    .sort((a, b) => b.value - a.value);
 
   const orderStatusRows = purchasing?.ordersByStatus ?? [];
   const committedOrderValue = orderStatusRows.reduce(
@@ -425,16 +426,14 @@ export function AnalyticsDashboard() {
           </p>
         ) : (
           <div className="flex flex-col">
-            {/* This panel no longer shares a row with a sibling that sets the
-                height, so the chart is given an explicit one. In fill mode it
-                would resolve `height:100%` against an auto-height parent and
-                collapse to nothing. Columns are a fixed height regardless of
-                how many categories there are — they grow sideways, not down. */}
+            {/* No fixed height: the chart is one row per movement type and
+                sizes itself from the data. Past its row cap it scrolls, so a
+                workspace that grows new movement types over time never
+                squashes the rows nor pushes this panel off the page. */}
             <div className="pb-3">
               <CategoryBarChart
                 data={movementChartData}
                 valueLabel="Quantity"
-                height={300}
               />
             </div>
             <MetricTiles>

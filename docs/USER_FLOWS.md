@@ -83,13 +83,22 @@ flowchart TD
 
     LIVE --> BOM["10 · Bills of materials<br/>(only if you manufacture)"]
     BOM --> PRODN["11 · Production orders"]
+    PRODN --> WC["12 · Work centres<br/>Planning → Work Centres"]
+    WC --> ROUTE["13 · Routing on each BOM<br/>then Schedule on the board"]
+
+    LIVE --> FIN["14 · Finance<br/>invoice what you have received<br/>and what you have shipped"]
 
     style W fill:#fef2f2,stroke:#c5101b
     style LIVE fill:#f5f5f5,stroke:#737373
 ```
 
 Steps 1–6 are mandatory for everyone. Steps 7–9 matter as soon as you buy
-anything. Steps 10–11 only apply if you manufacture.
+anything. Steps 10–11 only apply if you manufacture, and 12–13 only if you want
+to schedule that manufacturing onto real machines rather than just track it.
+
+**Step 14 has no prerequisites of its own** beyond having bought or sold
+something. Finance reads the purchase and sales orders that already exist — it
+does not need its own setup, and there is no chart of accounts to configure.
 
 **There are exactly three ways stock can enter the system through the UI:**
 
@@ -278,6 +287,103 @@ is auditable.
 
 ---
 
+## Planning the shop floor
+
+A BOM tells you what a product is made of. A **routing** tells you how it gets
+made — which machine, in what order, for how long. Without one, a production
+order is just a quantity with no plan behind it.
+
+```mermaid
+flowchart TD
+    A["Planning → Work Centres → Add work centre"] --> B["One per machine, line<br/>or bench, tied to a plant"]
+    B --> C["Set the shift length,<br/>efficiency and how many<br/>jobs run side by side"]
+    C --> D["Real capacity is worked<br/>out for you"]
+
+    D --> E["Add routing steps<br/>to a bill of materials"]
+    E --> F{"Is the BOM<br/>active?"}
+    F -->|yes| G["Blocked — create a<br/>revision first"]
+    F -->|no| H["Add each step: which centre,<br/>setup time, time per unit"]
+
+    H --> I["Planning → Production Board"]
+    I --> J{"Does the order's BOM<br/>have a routing?"}
+    J -->|no| K["'No routing' — nothing<br/>to schedule against"]
+    J -->|yes| L["Schedule"]
+    L --> M["Steps get real dates,<br/>laid out back to back"]
+    M --> N["Planning → Capacity<br/>shows the load"]
+    N --> O{"Any day<br/>over 100%?"}
+    O -->|yes| P["Move work or add a shift"]
+    O -->|no| Q["The plan fits"]
+
+    style L fill:#fef2f2,stroke:#c5101b
+    style G fill:#fef2f2,stroke:#c5101b
+```
+
+**So: work centres first, then routing, then scheduling.** You cannot schedule
+against a machine that does not exist, and you cannot route a BOM that has
+already been activated — same rule as components, and for the same reason: live
+production orders reference it.
+
+Two things worth knowing:
+
+- **"Efficiency" and "jobs in parallel" are not decoration.** A line rated 8
+  hours at 90% with four stations gives you 28.8 usable hours a day, and that
+  is the number capacity is measured against — not the 8.
+- **Scheduling replaces, it does not add.** Scheduling an order a second time
+  wipes its old steps and lays fresh ones. That is what makes it safe to
+  reschedule after a date slips.
+
+---
+
+## Getting paid, and paying
+
+Invoices are not typed from scratch. A supplier invoice is raised from a
+purchase order you have already received against; a customer invoice is raised
+from a sales order you have already shipped. Both pull their amounts across, so
+the numbers cannot drift from the order.
+
+```mermaid
+flowchart TD
+    subgraph Pay["Paying a supplier"]
+        A["Finance → Accounts Payable"] --> B["'Waiting to be invoiced'<br/>lists received POs"]
+        B --> C["Raise invoice"]
+        C --> D["Awaiting approval"]
+        D --> E["Approve"]
+        E --> F["Pay — amount pre-filled<br/>with the full balance"]
+    end
+
+    subgraph Collect["Collecting from a customer"]
+        G["Finance → Accounts Receivable"] --> H["'Ready to invoice'<br/>lists shipped orders"]
+        H --> I["Raise invoice"]
+        I --> J["Receive — when the<br/>money arrives"]
+    end
+
+    F --> K["Balance falls · status<br/>follows the numbers"]
+    J --> K
+    K --> L["Finance → Payments<br/>shows every movement"]
+
+    style E fill:#fef2f2,stroke:#c5101b
+    style K fill:#fef2f2,stroke:#c5101b
+```
+
+**So: receive the goods before you can bill for them.** Nothing appears in
+"waiting to be invoiced" until the purchase order has actually been received,
+and nothing appears in "ready to invoice" until the sales order has shipped.
+
+The three things the system will not let you do:
+
+- **Pay more than is outstanding.** You get the exact figure back: *"SINV-… has
+  62 619.20 outstanding; cannot apply 99 999.00."*
+- **Record money the wrong way round.** A supplier invoice can only be settled
+  by a payment going out, a customer invoice by one coming in.
+- **Pay in the wrong currency.** The payment currency must match the invoice.
+  Totals are never added across currencies either — the headline figures name
+  the currency they are in, and other currencies are listed beside them.
+
+A part payment is fine — the invoice goes to **Partially paid** and shows what
+is left. Pay the remainder and it closes itself.
+
+---
+
 ## Marketing
 
 ```mermaid
@@ -394,6 +500,28 @@ Every action button, what it does, and what must exist first.
 | **My approvals / All approvals** | Approvals | Switches between your queue and everything | — |
 | Approve / Reject | Approval → detail | Decides a request. Nothing proceeds until you do | A pending approval |
 
+### Planning
+
+| Action | Where | What it does | Needs first |
+|---|---|---|---|
+| **Add work centre** | Planning → Work Centres | Registers a machine, line or bench that work can be scheduled on | A warehouse to put it in |
+| **Schedule** | Planning → Production Board | Lays the order's routing out on the work centres with real dates | A production order whose BOM has a routing |
+| Click a row | Planning → Production Board | Opens the order's steps, in order, with their centre and hours | — |
+| **7 / 14 / 30 days** | Planning → Capacity | Changes how far ahead the load is measured | — |
+
+### Finance
+
+| Action | Where | What it does | Needs first |
+|---|---|---|---|
+| **Raise invoice** | Accounts Payable → Waiting to be invoiced | Creates a supplier invoice from a received purchase order, amounts carried across | A received purchase order |
+| **Raise invoice** | Accounts Receivable → Ready to invoice | Creates a customer invoice from a shipped sales order | A shipped sales order |
+| **Approve** | Accounts Payable | Clears a supplier invoice for payment | An invoice awaiting approval |
+| **Pay** | Accounts Payable | Records money going out against the invoice | An approved invoice with a balance |
+| **Receive** | Accounts Receivable | Records money coming in against the invoice | An invoice with a balance |
+| **Show overdue only** | Payables / Receivables | Filters to invoices past their due date | — |
+| **Money out / Money in** | Finance → Payments | Filters the history by direction | — |
+
+
 ### Marketing
 
 | Action | Where | What it does | Needs first |
@@ -423,6 +551,12 @@ Common dead ends, and what they actually mean.
 | `/campaigns/email` stuck loading | It reads from Brevo, not this database, and no API key is configured | Configure Brevo, or use WhatsApp campaigns |
 | A sales user lands on a 404 | `SALES` accounts are confined to `/sales/*` | Use an admin account, or add the path to the guard's allow-list |
 | Prices show the wrong currency | The header currency picker is a **display** setting; it relabels, it does not convert | Pick the currency you want in the header |
+| **Schedule** replaced by "No routing" | The order's bill of materials has no operations on it | Add routing steps to the BOM — on a draft revision, not an active one |
+| Cannot add routing to a BOM | Active BOMs are frozen | **Create revision**, add the steps, then activate |
+| Capacity shows a centre over 100% | More work is booked on that day than the centre can do | Reschedule an order, or raise the shift length / parallel capacity |
+| **Raise invoice** shows nothing to raise | Everything already has an invoice against it | Correct — the list only holds received POs and shipped orders that are still unbilled |
+| A payment is rejected | You are over the balance, going the wrong direction, or in the wrong currency | The message says which; the figures in it are the live ones |
+| Finance or Planning bounces you to another page | Both are admin-only, like the rest of the supply chain | Use an admin account |
 
 ---
 

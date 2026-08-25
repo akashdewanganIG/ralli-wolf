@@ -29,6 +29,7 @@ import {
 import { formatDateTime, formatQuantity } from "@/lib/utils/decimal";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { FormDialog } from "@repo/ui/components/ui/form-dialog";
+import { DataTransfer } from "@/components/data-transfer/DataTransfer";
 
 export default function ReorderRulesPage() {
   const [page, setPage] = useState(1);
@@ -103,13 +104,16 @@ export default function ReorderRulesPage() {
           title="Reorder policies"
           subtitle="Rules that decide when an item is reordered and how much to buy."
           actions={
-            <Button
-              type="button"
-              onClick={() => setShowForm(true)}
-              className="px-3 whitespace-nowrap"
-            >
-              Add / update policy
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                onClick={() => setShowForm(true)}
+                className="px-3 whitespace-nowrap"
+              >
+                Add / update policy
+              </Button>
+              <DataTransfer entity="reorder-rules" />
+            </div>
           }
         />
 

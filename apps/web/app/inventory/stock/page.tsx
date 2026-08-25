@@ -23,6 +23,7 @@ import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { DashboardToolbar } from "@repo/ui/components/ui/dashboard-toolbar";
 import { SearchInput } from "@repo/ui/components/ui/search-input";
 import { Tag } from "@repo/ui/components/ui/tag";
+import { DataTransfer } from "@/components/data-transfer/DataTransfer";
 
 const ITEM_TYPES: ItemType[] = [
   "FINISHED_GOOD",
@@ -59,6 +60,7 @@ export default function StockPositionsPage() {
         <PageHeader
           title="Stock positions"
           subtitle="What you hold, what is already promised, and what is free to sell."
+          actions={<DataTransfer entity="stock-positions" />}
         />
 
         <ErrorBanner error={error} />

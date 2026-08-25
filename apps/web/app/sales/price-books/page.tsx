@@ -24,6 +24,7 @@ import { SearchFilterToolbar } from "@repo/ui/components/ui/toolbar";
 import { Search } from "@repo/ui/icons";
 import { TablePageSkeleton } from "@/components/skeletons";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { DataTransfer } from "@/components/data-transfer/DataTransfer";
 
 type SortField =
   | "id"
@@ -155,6 +156,7 @@ export default function PriceBookEntriesPage() {
       <PageHeader
         title="Price books"
         description="Your price lists. These decide what a customer is charged on a quote or order."
+        actions={<DataTransfer entity="price-books" />}
       />
 
       {/* Filter and Sort Controls */}

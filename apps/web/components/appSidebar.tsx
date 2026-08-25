@@ -56,6 +56,10 @@ import {
   FileCheck2,
   BadgeCheck,
   Wallet,
+  Calendar,
+  Activity,
+  CircleDollarSign,
+  CreditCard,
   X,
 } from "@repo/ui/icons";
 import { useEffect, useState } from "react";
@@ -103,6 +107,10 @@ export function AppSidebar({
   const isBomActive =
     pathname.startsWith("/bom") || pathname.startsWith("/production");
   const isPurchasingActive = pathname.startsWith("/purchasing");
+  const isPlanningActive = pathname.startsWith("/planning");
+
+  // Finance
+  const isFinanceActive = pathname.startsWith("/finance");
 
   return (
     <SidebarProvider>
@@ -468,6 +476,67 @@ export function AppSidebar({
                 href="/production"
                 active={isClient && pathname.startsWith("/production")}
                 icon={Factory}
+              />
+            </SidebarCollapsibleItem>
+            <SidebarCollapsibleItem
+              icon={Calendar}
+              label="Planning"
+              active={isClient && isPlanningActive}
+              defaultOpen={isClient && isPlanningActive}
+            >
+              <SidebarItem
+                label="Production Board"
+                href="/planning"
+                active={isClient && pathname === "/planning"}
+                icon={ClipboardList}
+              />
+              <SidebarItem
+                label="Capacity"
+                href="/planning/capacity"
+                active={isClient && pathname.startsWith("/planning/capacity")}
+                icon={Activity}
+              />
+              <SidebarItem
+                label="Work Centres"
+                href="/planning/work-centers"
+                active={
+                  isClient && pathname.startsWith("/planning/work-centers")
+                }
+                icon={Component}
+              />
+            </SidebarCollapsibleItem>
+          </SidebarGroup>
+
+          <SidebarGroup title="Finance">
+            <SidebarCollapsibleItem
+              icon={Wallet}
+              label="Finance"
+              active={isClient && isFinanceActive}
+              defaultOpen={isClient && isFinanceActive}
+            >
+              <SidebarItem
+                label="Overview"
+                href="/finance"
+                active={isClient && pathname === "/finance"}
+                icon={BarChart}
+              />
+              <SidebarItem
+                label="Accounts Payable"
+                href="/finance/payables"
+                active={isClient && pathname.startsWith("/finance/payables")}
+                icon={ReceiptText}
+              />
+              <SidebarItem
+                label="Accounts Receivable"
+                href="/finance/receivables"
+                active={isClient && pathname.startsWith("/finance/receivables")}
+                icon={CircleDollarSign}
+              />
+              <SidebarItem
+                label="Payments"
+                href="/finance/payments"
+                active={isClient && pathname.startsWith("/finance/payments")}
+                icon={CreditCard}
               />
             </SidebarCollapsibleItem>
           </SidebarGroup>

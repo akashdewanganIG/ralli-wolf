@@ -48,6 +48,69 @@ export function getActiveCurrency(): string {
   return activeCurrency;
 }
 
+/**
+ * The symbol to show for a currency code.
+ *
+ * The `currencies` table stores a symbol per row, and for a good third of the
+ * world those are scripts a Latin UI font has no glyphs for: AED, BHD, DZD,
+ * IQD, JOD, KWD, MAD, OMR, QAR, SAR, TND and YER all carry Arabic-script
+ * symbols that render as slivers or blanks, and being right-to-left they also
+ * reorder the text around them.
+ *
+ * `Intl.NumberFormat` already knows every ISO 4217 currency — it is the
+ * runtime's own CLDR data, so it needs no package and cannot go stale the way
+ * a checked-in table does. In an English locale it returns a symbol only where
+ * a legible one exists and the ISO code otherwise, which is exactly how these
+ * currencies are written in English-language finance anyway.
+ *
+ * `symbol` rather than `narrowSymbol` on purpose: narrow strips the
+ * disambiguating prefix and turns USD, CAD, AUD, NZD, HKD, MXN and eight more
+ * into an identical bare "$".
+ */
+const symbolCache = new Map<string, string>();
+
+export function currencySymbol(
+  code: string | null | undefined,
+  fallback?: string | null
+): string {
+  if (!code) return fallback ?? "";
+  const cached = symbolCache.get(code);
+  if (cached !== undefined) return cached;
+
+  let resolved: string;
+  try {
+    resolved =
+      new Intl.NumberFormat("en", {
+        style: "currency",
+        currency: code,
+        currencyDisplay: "symbol",
+      })
+        .formatToParts(1)
+        .find(part => part.type === "currency")?.value ?? code;
+  } catch {
+    // An unknown or malformed code throws rather than returning anything.
+    resolved = fallback ?? code;
+  }
+
+  symbolCache.set(code, resolved);
+  return resolved;
+}
+
+/**
+ * The symbol only when it says something the ISO code does not.
+ *
+ * For roughly half the world's currencies the canonical "symbol" *is* the
+ * code, so a row that already prints the code would otherwise print it twice.
+ * Returns an empty string in that case, leaving the slot blank.
+ */
+export function distinctCurrencySymbol(
+  code: string | null | undefined,
+  fallback?: string | null
+): string {
+  const symbol = currencySymbol(code, fallback);
+  return symbol === code ? "" : symbol;
+}
+
 export function formatMoney(
   value: DecimalLike,
   currency: string = activeCurrency

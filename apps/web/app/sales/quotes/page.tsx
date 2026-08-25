@@ -12,6 +12,7 @@ import { PageHeader } from "@repo/ui/components/ui/page-header";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { DEFAULT_PAGE_SIZE } from "@/components/data-table";
 import { formatMoney } from "@/lib/utils/decimal";
+import { DataTransfer } from "@/components/data-transfer/DataTransfer";
 
 export type QuoteTableRow = {
   id: string;
@@ -164,6 +165,7 @@ export default function QuotesPage() {
         <PageHeader
           title="Quotes"
           description={`Prices you have offered customers, before they become orders. ${totalItems} in total.`}
+          actions={<DataTransfer entity="quotes" />}
         />
 
         <DataTable<QuoteTableRow>

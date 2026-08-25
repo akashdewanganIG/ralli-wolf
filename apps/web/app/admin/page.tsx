@@ -10,10 +10,7 @@ import {
   CardTitle,
 } from "@repo/ui/components/ui/card";
 import { Label } from "@repo/ui/components/ui/label";
-import {
-  Tabs,
-  TabsContent,
-} from "@repo/ui/components/ui/tabs";
+import { Tabs, TabsContent } from "@repo/ui/components/ui/tabs";
 import { Textarea } from "@repo/ui/components/ui/textarea";
 import { useState } from "react";
 import { ProtectedRoute } from "../../components/ProtectedRoute";

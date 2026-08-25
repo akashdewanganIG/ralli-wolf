@@ -18,6 +18,7 @@ import { PageHeader } from "@repo/ui/components/ui/page-header";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { buttonVariants } from "@repo/ui/components/ui/button";
 import { cn } from "@repo/ui/lib/utils";
+import { DataTransfer } from "@/components/data-transfer/DataTransfer";
 
 function OpportunitiesContent() {
   const router = useRouter();
@@ -108,18 +109,21 @@ function OpportunitiesContent() {
         title="Opportunities"
         description="Deals you are working on, from first interest through to winning or losing them."
         actions={
-          <button
-            type="button"
-            onClick={() => setCreateOpen(true)}
-            data-slot="button"
-            className={cn(
-              buttonVariants({ variant: "default" }),
-              "w-full sm:w-auto"
-            )}
-          >
-            <Plus className="size-4" />
-            Create Opportunity
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCreateOpen(true)}
+              data-slot="button"
+              className={cn(
+                buttonVariants({ variant: "default" }),
+                "w-full sm:w-auto"
+              )}
+            >
+              <Plus className="size-4" />
+              Create Opportunity
+            </button>
+            <DataTransfer entity="opportunities" />
+          </div>
         }
       />
 

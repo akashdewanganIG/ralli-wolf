@@ -34,6 +34,7 @@ import {
 } from "@/lib/utils/decimal";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { FormDialog } from "@repo/ui/components/ui/form-dialog";
+import { DataTransfer } from "@/components/data-transfer/DataTransfer";
 
 export default function ProductionOrdersPage() {
   const router = useRouter();
@@ -87,13 +88,16 @@ export default function ProductionOrdersPage() {
           title="Production orders"
           subtitle="Jobs to build products, and how far each one has got."
           actions={
-            <Button
-              type="button"
-              onClick={() => setShowForm(true)}
-              className="px-3 whitespace-nowrap"
-            >
-              New production order
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                onClick={() => setShowForm(true)}
+                className="px-3 whitespace-nowrap"
+              >
+                New production order
+              </Button>
+              <DataTransfer entity="production-orders" />
+            </div>
           }
         />
 

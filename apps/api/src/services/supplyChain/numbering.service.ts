@@ -21,6 +21,10 @@ export const SEQUENCE_KEYS = {
   QUALITY_CHECK: "QUALITY_CHECK",
   MATERIAL_REQUISITION: "MATERIAL_REQUISITION",
   PRODUCTION_ORDER: "PRODUCTION_ORDER",
+  SUPPLIER_INVOICE: "SUPPLIER_INVOICE",
+  CUSTOMER_INVOICE: "CUSTOMER_INVOICE",
+  PAYMENT: "PAYMENT",
+  WORK_CENTER: "WORK_CENTER",
 } as const;
 
 export type SequenceKey = (typeof SEQUENCE_KEYS)[keyof typeof SEQUENCE_KEYS];
@@ -52,6 +56,10 @@ const SEQUENCE_DEFAULTS: Record<SequenceKey, SequenceDefaults> = {
   QUALITY_CHECK: { prefix: "QC", padding: 5, resetPeriod: "YEARLY" },
   MATERIAL_REQUISITION: { prefix: "MR", padding: 5, resetPeriod: "YEARLY" },
   PRODUCTION_ORDER: { prefix: "PRO", padding: 5, resetPeriod: "YEARLY" },
+  SUPPLIER_INVOICE: { prefix: "SINV", padding: 5, resetPeriod: "YEARLY" },
+  CUSTOMER_INVOICE: { prefix: "INV", padding: 5, resetPeriod: "YEARLY" },
+  PAYMENT: { prefix: "PAY", padding: 6, resetPeriod: "YEARLY" },
+  WORK_CENTER: { prefix: "WC", padding: 4, resetPeriod: "NONE" },
 };
 
 function periodKeyFor(resetPeriod: string, now: Date): string {

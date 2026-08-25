@@ -26,6 +26,7 @@ import { useBomMutations, useBoms } from "@/hooks/useSupplyChain";
 import { formatDate, formatMoney, formatQuantity } from "@/lib/utils/decimal";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { FormDialog } from "@repo/ui/components/ui/form-dialog";
+import { DataTransfer } from "@/components/data-transfer/DataTransfer";
 
 export default function BomListPage() {
   const router = useRouter();
@@ -80,13 +81,16 @@ export default function BomListPage() {
           title="Bills of materials"
           subtitle="Recipes that list which parts go into each product you build."
           actions={
-            <Button
-              type="button"
-              onClick={() => setShowForm(true)}
-              className="px-3 whitespace-nowrap"
-            >
-              New BOM
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                onClick={() => setShowForm(true)}
+                className="px-3 whitespace-nowrap"
+              >
+                New BOM
+              </Button>
+              <DataTransfer entity="boms" />
+            </div>
           }
         />
 

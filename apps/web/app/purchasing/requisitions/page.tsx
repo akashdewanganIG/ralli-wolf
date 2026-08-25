@@ -30,6 +30,7 @@ import { formatDate, formatMoney, humanizeEnum } from "@/lib/utils/decimal";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { FormDialog } from "@repo/ui/components/ui/form-dialog";
 import { Tag } from "@repo/ui/components/ui/tag";
+import { DataTransfer } from "@/components/data-transfer/DataTransfer";
 
 interface DraftLine {
   product: PickedProduct | null;
@@ -97,13 +98,16 @@ export default function PurchaseRequisitionsPage() {
           title="Purchase requisitions"
           subtitle="Internal requests to buy something, before a real order is placed."
           actions={
-            <Button
-              type="button"
-              onClick={() => setShowForm(true)}
-              className="px-3 whitespace-nowrap"
-            >
-              New requisition
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                onClick={() => setShowForm(true)}
+                className="px-3 whitespace-nowrap"
+              >
+                New requisition
+              </Button>
+              <DataTransfer entity="purchase-requisitions" />
+            </div>
           }
         />
 

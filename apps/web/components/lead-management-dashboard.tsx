@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@repo/ui/components/ui/select";
-import { Download, Plus, Upload, X } from "@repo/ui/icons";
+import { Download, Plus } from "@repo/ui/icons";
 import { usePathname, useRouter } from "next/navigation";
 import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
@@ -46,7 +46,6 @@ import { AccountTable } from "./account-table";
 import AddLeadModal from "./AddLeadModal";
 import { AssignLeadsModal } from "./assign-leads-modal";
 import { ContactTable } from "./contact-table";
-import { ExportModal } from "./ExportModal";
 import { ImportLeadsModal } from "./ImportLeadsModal";
 import { LeadSearchInput } from "./lead-search-input";
 import { LeadTable } from "./lead-table";
@@ -62,6 +61,8 @@ import { cn } from "@repo/ui/lib/utils";
 import { DashboardToolbar } from "@repo/ui/components/ui/dashboard-toolbar";
 import { Tag } from "@repo/ui/components/ui/tag";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { DataTransfer } from "@/components/data-transfer/DataTransfer";
+import { useQueryClient } from "@tanstack/react-query";
 
 const REGION_LABELS: Record<string, string> = {
   SOUTH: "South",
@@ -204,6 +205,24 @@ export const LeadManagementDashboard: React.FC = () => {
     setSelectedSalesRegion,
   } = useLeadManagementContext();
 
+  /** Which dataset the visible tab is showing, for import and export. */
+  const transferEntity =
+    activeTab === "accounts"
+      ? "accounts"
+      : activeTab === "contacts"
+        ? "contacts"
+        : "leads";
+
+  /**
+   * Pull the visible list again after an import.
+   *
+   * The queries here are keyed per tab, so invalidating the whole lead
+   * namespace is both correct and simpler than naming the one in view.
+   */
+  const queryClient = useQueryClient();
+  const refetchCurrent = () =>
+    queryClient.invalidateQueries({ queryKey: ["leads"] });
+
   // Selection state (not in URL)
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
@@ -215,7 +234,6 @@ export const LeadManagementDashboard: React.FC = () => {
   const [showBulkContactsDeleteDialog, setShowBulkContactsDeleteDialog] =
     useState(false);
   const [showAssignDialog, setShowAssignDialog] = useState(false);
-  const [showExportModal, setShowExportModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showAddLeadModal, setShowAddLeadModal] = useState(false);
   const [showSendLeadsEmailModal, setShowSendLeadsEmailModal] = useState(false);
@@ -1021,14 +1039,11 @@ export const LeadManagementDashboard: React.FC = () => {
           {/* Lead Master Content */}
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowExportModal(true)}
-              >
-                <Upload className="size-4" />
-                Export
-              </Button>
+              <DataTransfer
+                entity={transferEntity}
+                allowImport={false}
+                size="default"
+              />
               <Button
                 type="button"
                 variant="outline"
@@ -1400,14 +1415,12 @@ export const LeadManagementDashboard: React.FC = () => {
                 />
               }
               actions={
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowExportModal(true)}
-                >
-                  <Download className="size-4" />
-                  Export
-                </Button>
+                <DataTransfer
+                  entity={transferEntity}
+                  allowImport={activeTab !== "leads"}
+                  onImported={() => void refetchCurrent()}
+                  size="default"
+                />
               }
             />
             {selectedLeads.length > 0 && (
@@ -1507,14 +1520,12 @@ export const LeadManagementDashboard: React.FC = () => {
                 />
               </div>
               <div className="flex w-full items-center gap-2 sm:w-auto">
-                <Button
+                <DataTransfer
+                  entity={transferEntity}
+                  onImported={() => void refetchCurrent()}
+                  size="default"
                   className="w-full sm:w-auto"
-                  variant="outline"
-                  onClick={() => setShowExportModal(true)}
-                >
-                  <Download className="h-4 w-4" />
-                  Export
-                </Button>
+                />
               </div>
             </div>
             {selectedAccounts.length > 0 && (
@@ -1609,14 +1620,12 @@ export const LeadManagementDashboard: React.FC = () => {
                 />
               </div>
               <div className="flex w-full items-center gap-2 sm:w-auto">
-                <Button
+                <DataTransfer
+                  entity={transferEntity}
+                  onImported={() => void refetchCurrent()}
+                  size="default"
                   className="w-full sm:w-auto"
-                  variant="outline"
-                  onClick={() => setShowExportModal(true)}
-                >
-                  <Download className="h-4 w-4" />
-                  Export
-                </Button>
+                />
               </div>
             </div>
             {selectedContacts.length > 0 && (
@@ -1748,17 +1757,6 @@ export const LeadManagementDashboard: React.FC = () => {
         selectedLeadsCount={selectedLeads.length}
       />
 
-      <ExportModal
-        open={showExportModal}
-        onOpenChange={setShowExportModal}
-        defaultEntity={
-          activeTab === "accounts"
-            ? "accounts"
-            : activeTab === "contacts"
-              ? "contacts"
-              : "leads"
-        }
-      />
       <ImportLeadsModal
         open={showImportModal}
         onOpenChange={setShowImportModal}

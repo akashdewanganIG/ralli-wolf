@@ -274,7 +274,6 @@ export default function PurchaseOrderDetailPage() {
 
         {showReceive && canReceive && (
           <Panel
-            flush
             title="Record a goods receipt"
             description="Write down what actually arrived. Nothing is added to stock until you confirm the amounts and the quality check."
           >

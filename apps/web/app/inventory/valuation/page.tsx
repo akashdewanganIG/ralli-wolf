@@ -17,6 +17,7 @@ import { formatMoney, formatQuantity, humanizeEnum } from "@/lib/utils/decimal";
 import type { ItemType } from "@/lib/api/types/supplyChain";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { Tag } from "@repo/ui/components/ui/tag";
+import { DataTransfer } from "@/components/data-transfer/DataTransfer";
 
 const ITEM_TYPES: ItemType[] = [
   "FINISHED_GOOD",
@@ -45,25 +46,28 @@ export default function InventoryValuationPage() {
           title="Inventory valuation"
           subtitle="What your stock is worth, broken down by item and location."
           actions={
-            <>
-              <WarehouseFilter
-                value={warehouseId}
-                onChange={setWarehouseId}
-                className="w-full sm:w-56"
-              />
-              <SelectField
-                className="w-full sm:w-48"
-                value={itemType}
-                onChange={event => setItemType(event.target.value)}
-              >
-                <option value="">All item types</option>
-                {ITEM_TYPES.map(type => (
-                  <option key={type} value={type}>
-                    {humanizeEnum(type)}
-                  </option>
-                ))}
-              </SelectField>
-            </>
+            <div className="flex flex-wrap items-center gap-2">
+              <>
+                <WarehouseFilter
+                  value={warehouseId}
+                  onChange={setWarehouseId}
+                  className="w-full sm:w-56"
+                />
+                <SelectField
+                  className="w-full sm:w-48"
+                  value={itemType}
+                  onChange={event => setItemType(event.target.value)}
+                >
+                  <option value="">All item types</option>
+                  {ITEM_TYPES.map(type => (
+                    <option key={type} value={type}>
+                      {humanizeEnum(type)}
+                    </option>
+                  ))}
+                </SelectField>
+              </>
+              <DataTransfer entity="stock-lots" />
+            </div>
           }
         />
 

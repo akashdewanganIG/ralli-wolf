@@ -928,8 +928,14 @@ async function production(ctx: any) {
     });
   }
 
-  const poStatuses = ["RELEASED", "IN_PROGRESS", "COMPLETED", "PLANNED", "IN_PROGRESS"];
-  for (let i = 0; i < 5; i++) {
+  // A plant this size carries a dozen live build orders, not four. The board
+  // and the capacity chart only say anything useful against a real order book.
+  const poStatuses = [
+    "RELEASED", "IN_PROGRESS", "COMPLETED", "PLANNED", "IN_PROGRESS",
+    "PLANNED", "RELEASED", "PLANNED", "COMPLETED", "RELEASED",
+    "PLANNED", "PLANNED",
+  ];
+  for (let i = 0; i < poStatuses.length; i++) {
     const bom = boms[i % 3]!;
     const planned = 100 + i * 40;
     const status = poStatuses[i]!;
@@ -944,8 +950,8 @@ async function production(ctx: any) {
         producedQuantity: done ? qty(planned) : running ? qty(planned * 0.55) : qty(0),
         scrappedQuantity: done ? qty(3) : qty(0),
         status,
-        plannedStartDate: ago(12 - i), plannedEndDate: days(4 + i),
-        actualStartDate: status === "PLANNED" ? null : ago(10 - i),
+        plannedStartDate: ago(Math.max(12 - i, 1)), plannedEndDate: days(4 + i),
+        actualStartDate: status === "PLANNED" ? null : ago(Math.max(10 - i, 1)),
         actualEndDate: done ? ago(2) : null,
         plannedMaterialCost: money(planned * 1200),
         actualMaterialCost: done ? money(planned * 1240) : running ? money(planned * 700) : money(0),
@@ -985,7 +991,7 @@ async function production(ctx: any) {
       }
     }
   }
-  console.log(`  ${boms.length} bills of materials, 5 production orders`);
+  console.log(`  ${boms.length} bills of materials, ${poStatuses.length} production orders`);
 
   await purchasing(ctx);
 }
@@ -1238,6 +1244,9 @@ async function purchasing(ctx: any) {
   console.log("  6 requisitions, 9 purchase orders, 5 receipts, 5 material requisitions, 4 shaped shortages");
 
   await marketing(ctx);
+  await planning(ctx);
+  await finance(ctx);
+  await sequences(ctx);
 }
 
 async function marketing(ctx: any) {
@@ -1415,6 +1424,320 @@ async function marketing(ctx: any) {
       description: "Identifies the presentation dataset",
     },
   });
+}
+
+
+async function planning(ctx) {
+  const { db, warehouses } = ctx;
+  console.log("production planning…");
+
+  const plant = warehouses["MUM-PLANT"];
+  const centreSpecs = [
+    { code: "WC-CNC",  name: "CNC Machining Cell",    type: "MACHINE",       cap: 480, eff: 82, cost: 1450, par: 2 },
+    { code: "WC-WIND", name: "Armature Winding Line", type: "ASSEMBLY_LINE", cap: 480, eff: 88, cost: 980,  par: 3 },
+    { code: "WC-ASSY", name: "Final Assembly Line",   type: "ASSEMBLY_LINE", cap: 480, eff: 90, cost: 760,  par: 4 },
+    { code: "WC-TEST", name: "Electrical Test Bench", type: "INSPECTION",    cap: 420, eff: 95, cost: 540,  par: 2 },
+    { code: "WC-PACK", name: "Packing Station",       type: "PACKING",       cap: 480, eff: 92, cost: 380,  par: 2 },
+  ];
+  const centres = {};
+  for (const c of centreSpecs) {
+    centres[c.code] = await db.workCenter.create({
+      data: {
+        code: c.code, name: c.name, warehouseId: plant.id, type: c.type,
+        description: `${c.name} at ${plant.code}`,
+        capacityMinutesPerDay: c.cap, efficiencyPercent: c.eff.toFixed(2),
+        costPerHour: c.cost.toFixed(2), parallelCapacity: c.par, isActive: true,
+      },
+    });
+  }
+
+  // Routing is written directly rather than through the API, because the API
+  // correctly refuses to change an active BOM. In reality the routing is
+  // authored before the BOM is activated, which is the state this recreates.
+  const ROUTING = [
+    ["WC-CNC",  "Machine housing and spindle", 30, 1.6],
+    ["WC-WIND", "Wind and varnish armature",   25, 2.4],
+    ["WC-ASSY", "Assemble and align",          15, 3.1],
+    ["WC-TEST", "Electrical safety test",      10, 0.9],
+    ["WC-PACK", "Pack and label",               5, 0.6],
+  ];
+  const boms = await db.billOfMaterials.findMany({ orderBy: { id: "asc" } });
+  for (const bom of boms) {
+    for (let i = 0; i < ROUTING.length; i++) {
+      const [wc, name, setup, run] = ROUTING[i];
+      await db.bomOperation.create({
+        data: {
+          bomId: bom.id, workCenterId: centres[wc].id,
+          sequence: (i + 1) * 10, name,
+          setupMinutes: setup, runMinutesPerUnit: run.toFixed(4),
+          isBlocking: true,
+        },
+      });
+    }
+  }
+
+  // Lay each unfinished order's operations back to back from its planned
+  // start — the same arithmetic the scheduling endpoint uses.
+  const orders = await db.productionOrder.findMany({
+    where: { status: { in: ["DRAFT", "PLANNED", "RELEASED", "IN_PROGRESS"] } },
+    orderBy: { id: "asc" },
+  });
+  let scheduled = 0;
+  for (const order of orders) {
+    const routing = await db.bomOperation.findMany({
+      where: { bomId: order.bomId }, orderBy: { sequence: "asc" },
+    });
+    if (!routing.length) continue;
+    const qty = Number(order.plannedQuantity);
+    // Work already under way keeps its real start; anything still to be built
+    // is laid out from today onward, staggered a day apart. A capacity board
+    // that only shows the past answers no useful question.
+    let cursor =
+      order.status === "IN_PROGRESS" && order.plannedStartDate
+        ? new Date(order.plannedStartDate)
+        : days(scheduled);
+    cursor.setHours(8, 0, 0, 0);
+    const firstStart = new Date(cursor);
+    let lastEnd = new Date(cursor);
+    for (const op of routing) {
+      const minutes = Math.ceil(op.setupMinutes + Number(op.runMinutesPerUnit) * qty);
+      const start = new Date(cursor);
+      const end = new Date(start.getTime() + minutes * 60000);
+      lastEnd = end;
+      const status =
+        order.status === "IN_PROGRESS" && op.sequence <= 20
+          ? "COMPLETED"
+          : order.status === "IN_PROGRESS" && op.sequence === 30
+            ? "IN_PROGRESS"
+            : "SCHEDULED";
+      await db.productionOrderOperation.create({
+        data: {
+          productionOrderId: order.id, workCenterId: op.workCenterId,
+          sequence: op.sequence, name: op.name, status,
+          plannedMinutes: minutes, scheduledStart: start, scheduledEnd: end,
+          completedQuantity: status === "COMPLETED" ? qty.toFixed(4) : "0.0000",
+        },
+      });
+      cursor = end;
+    }
+    // The order's own window follows from its operations, exactly as the
+    // scheduling endpoint does it — otherwise the board's dates contradict
+    // the plan sitting underneath them.
+    await db.productionOrder.update({
+      where: { id: order.id },
+      data: { plannedStartDate: firstStart, plannedEndDate: lastEnd },
+    });
+    scheduled++;
+  }
+  console.log(`  ${centreSpecs.length} work centres, routing on ${boms.length} BOMs, ${scheduled} orders scheduled`);
+}
+
+async function finance(ctx) {
+  const { db, admin, pick } = ctx;
+  console.log("finance…");
+
+  const purchaseOrders = await db.purchaseOrder.findMany({
+    where: { status: { in: ["PARTIALLY_RECEIVED", "RECEIVED", "ACKNOWLEDGED", "SENT"] } },
+    include: { supplier: true }, orderBy: { id: "asc" },
+  });
+  const salesOrders = await db.salesOrder.findMany({
+    where: { status: { in: ["SHIPPED", "DELIVERED", "IN_FULFILLMENT", "APPROVED"] } },
+    orderBy: { id: "asc" },
+  });
+
+  // Due dates are spread across the ageing buckets on purpose, so the finance
+  // dashboard shows a real profile instead of everything sitting in "not due".
+  const apOffsets = [-52, -38, -21, -12, -4, 6, 14, 25];
+  const supplierInvoices = [];
+  for (let i = 0; i < Math.min(purchaseOrders.length, apOffsets.length); i++) {
+    const po = purchaseOrders[i];
+    const sub = Number(po.subtotal ?? 0) || 100000;
+    const tax = Number(po.taxAmount ?? 0) || sub * 0.18;
+    supplierInvoices.push(
+      await db.supplierInvoice.create({
+        data: {
+          invoiceNumber: `SINV-2026-${String(1 + i).padStart(5, "0")}`,
+          supplierRef: `${po.supplier.code.slice(-3)}/26/${4400 + i}`,
+          supplierId: po.supplierId, purchaseOrderId: po.id,
+          status: i < 5 ? "APPROVED" : "AWAITING_APPROVAL",
+          invoiceDate: days(apOffsets[i] - 30), dueDate: days(apOffsets[i]),
+          currencyCode: po.currencyCode,
+          subtotal: sub.toFixed(2), taxAmount: tax.toFixed(2),
+          totalAmount: (sub + tax).toFixed(2),
+          notes: "Three-way matched against the goods receipt.",
+          createdById: admin.id,
+          approvedById: i < 5 ? admin.id : null,
+          approvedAt: i < 5 ? days(apOffsets[i] - 20) : null,
+        },
+      })
+    );
+  }
+
+  const arOffsets = [-44, -29, -15, -6, 8, 18, 30];
+  const customerInvoices = [];
+  for (let i = 0; i < Math.min(salesOrders.length, arOffsets.length); i++) {
+    const so = salesOrders[i];
+    const sub = Number(so.subtotal ?? 0) || 120000;
+    const tax = Number(so.taxAmount ?? 0) || sub * 0.18;
+    customerInvoices.push(
+      await db.customerInvoice.create({
+        data: {
+          invoiceNumber: `INV-2026-${String(1 + i).padStart(5, "0")}`,
+          accountId: so.accountId, salesOrderId: so.id, status: "APPROVED",
+          invoiceDate: days(arOffsets[i] - 30), dueDate: days(arOffsets[i]),
+          subtotal: sub.toFixed(2), taxAmount: tax.toFixed(2),
+          totalAmount: (sub + tax).toFixed(2),
+          notes: "Payable within 30 days of invoice.",
+          createdById: admin.id,
+        },
+      })
+    );
+  }
+
+  // Payments go in through allocations, and the invoice balance is then
+  // recomputed from those allocations — the seed never writes amountPaid by
+  // hand, for the same reason the service does not.
+  let payNo = 1;
+  const settle = async (invoice, side, fraction, method, offset) => {
+    const total = Number(invoice.totalAmount);
+    const amount = Math.round(total * fraction * 100) / 100;
+    if (amount <= 0) return;
+    const payment = await db.payment.create({
+      data: {
+        paymentNumber: `PAY-2026-${String(payNo++).padStart(6, "0")}`,
+        direction: side === "SUPPLIER" ? "OUTGOING" : "INCOMING",
+        method,
+        reference: `${method === "CHEQUE" ? "CHQ" : "UTR"}${77000 + payNo}`,
+        paymentDate: days(offset),
+        currencyCode: invoice.currencyCode ?? "INR",
+        amount: amount.toFixed(2), unallocated: "0.00",
+        supplierId: side === "SUPPLIER" ? invoice.supplierId : null,
+        accountId: side === "CUSTOMER" ? invoice.accountId : null,
+        recordedById: pick(payNo).id,
+      },
+    });
+    await db.paymentAllocation.create({
+      data: {
+        paymentId: payment.id,
+        supplierInvoiceId: side === "SUPPLIER" ? invoice.id : null,
+        customerInvoiceId: side === "CUSTOMER" ? invoice.id : null,
+        amount: amount.toFixed(2),
+      },
+    });
+    const delegate = side === "SUPPLIER" ? db.supplierInvoice : db.customerInvoice;
+    const agg = await db.paymentAllocation.aggregate({
+      where:
+        side === "SUPPLIER"
+          ? { supplierInvoiceId: invoice.id }
+          : { customerInvoiceId: invoice.id },
+      _sum: { amount: true },
+    });
+    const paid = Number(agg._sum.amount ?? 0);
+    await delegate.update({
+      where: { id: invoice.id },
+      data: {
+        amountPaid: paid.toFixed(2),
+        status: paid >= total ? "PAID" : paid > 0 ? "PARTIALLY_PAID" : invoice.status,
+      },
+    });
+  };
+
+  // A mix of part-paid and settled, so every status is represented on screen.
+  if (supplierInvoices[0]) await settle(supplierInvoices[0], "SUPPLIER", 0.45, "BANK_TRANSFER", -18);
+  if (supplierInvoices[1]) await settle(supplierInvoices[1], "SUPPLIER", 0.6, "CHEQUE", -11);
+  if (supplierInvoices[4]) await settle(supplierInvoices[4], "SUPPLIER", 1, "BANK_TRANSFER", -3);
+  if (customerInvoices[0]) await settle(customerInvoices[0], "CUSTOMER", 0.5, "UPI", -14);
+  if (customerInvoices[1]) await settle(customerInvoices[1], "CUSTOMER", 0.35, "BANK_TRANSFER", -7);
+  if (customerInvoices[3]) await settle(customerInvoices[3], "CUSTOMER", 1, "BANK_TRANSFER", -2);
+
+  console.log(
+    `  ${supplierInvoices.length} supplier invoices, ${customerInvoices.length} customer invoices, ${payNo - 1} payments`
+  );
+}
+
+
+/**
+ * Every document number in this file is written by hand, but the running
+ * counters in `number_sequences` are cleared along with everything else. Left
+ * alone, the first document created through the UI would be issued number 1 —
+ * which already exists — and the write would fail on the unique index.
+ *
+ * So each family is caught up to the highest number actually on disk. The
+ * prefix, period segment and padding are read back off the seeded documents
+ * rather than restated here, so this cannot drift out of step with the
+ * numbering service's own defaults.
+ */
+async function sequences(ctx) {
+  const { db } = ctx;
+  console.log("document numbering…");
+
+  // Only the table and column need naming; the shape of the number is derived.
+  const FAMILIES = [
+    ["STOCK_MOVEMENT", db.stockMovement, "movementNumber"],
+    ["STOCK_COUNT", db.stockCount, "countNumber"],
+    ["PUTAWAY_TASK", db.putawayTask, "taskNumber"],
+    ["PICK_LIST", db.pickList, "pickListNumber"],
+    ["BOM", db.billOfMaterials, "bomNumber"],
+    ["SUPPLIER", db.supplier, "code"],
+    ["PURCHASE_REQUISITION", db.purchaseRequisition, "requisitionNumber"],
+    ["PURCHASE_ORDER", db.purchaseOrder, "poNumber"],
+    ["GOODS_RECEIPT", db.goodsReceiptNote, "grnNumber"],
+    ["QUALITY_CHECK", db.qualityCheck, "qcNumber"],
+    ["MATERIAL_REQUISITION", db.materialRequisition, "requisitionNumber"],
+    ["PRODUCTION_ORDER", db.productionOrder, "orderNumber"],
+    ["SUPPLIER_INVOICE", db.supplierInvoice, "invoiceNumber"],
+    ["CUSTOMER_INVOICE", db.customerInvoice, "invoiceNumber"],
+    ["PAYMENT", db.payment, "paymentNumber"],
+  ];
+
+  let synced = 0;
+  for (const [key, delegate, field] of FAMILIES) {
+    if (!delegate) continue;
+    const rows = await delegate.findMany({ select: { [field]: true } });
+
+    // PREFIX-PERIOD-00042 or PREFIX-00042; anything else is not ours to touch.
+    let best = null;
+    for (const row of rows) {
+      const value = row[field];
+      if (typeof value !== "string") continue;
+      const parts = value.split("-");
+      if (parts.length < 2) continue;
+      const counter = parts[parts.length - 1];
+      if (!/^\d+$/.test(counter)) continue;
+      const n = parseInt(counter, 10);
+      if (!best || n > best.value) {
+        best = {
+          value: n,
+          prefix: parts[0],
+          padding: counter.length,
+          periodKey: parts.length >= 3 ? parts[1] : null,
+        };
+      }
+    }
+    if (!best) continue;
+
+    await db.numberSequence.upsert({
+      where: { key },
+      create: {
+        key,
+        prefix: best.prefix,
+        lastValue: best.value,
+        padding: best.padding,
+        resetPeriod: best.periodKey ? "YEARLY" : "NONE",
+        periodKey: best.periodKey ?? "ALL",
+      },
+      update: {
+        prefix: best.prefix,
+        lastValue: best.value,
+        padding: best.padding,
+        resetPeriod: best.periodKey ? "YEARLY" : "NONE",
+        periodKey: best.periodKey ?? "ALL",
+      },
+    });
+    synced++;
+  }
+
+  console.log(`  ${synced} document counters caught up to the seeded data`);
 }
 
 main()

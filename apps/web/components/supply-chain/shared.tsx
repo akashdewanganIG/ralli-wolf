@@ -9,6 +9,10 @@ import { PageHeader as SharedPageHeader } from "@repo/ui/components/ui/page-head
 import { InfoHint } from "@repo/ui/components/ui/info-hint";
 import { CardActionButton } from "@repo/ui/components/ui/card-action-button";
 import {
+  Skeleton,
+  SkeletonRegion,
+} from "@repo/ui/components/ui/skeleton";
+import {
   MetricCard,
   type MetricTone,
 } from "@repo/ui/components/ui/metric-card";
@@ -184,6 +188,28 @@ export function Panel({
 }
 
 /**
+ * Restores the body padding inside a `flush` Panel.
+ *
+ * A panel is often mixed: a couple of summary cards, then a table. `flush`
+ * exists so the *table* can meet the card edges, but it strips the padding from
+ * everything, which leaves the cards flat against the border. Wrap the
+ * non-table part in this and each half gets what it needs — inset cards, a
+ * full-bleed table.
+ *
+ * The padding matches Panel's own `p-3` exactly, so an inset block lines up
+ * with the panel header above it.
+ */
+export function PanelInset({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return <div className={`px-3 pt-3 ${className}`}>{children}</div>;
+}
+
+/**
  * Simple table shell. The data-heavy screens here need dense, scrollable
  * tables with sticky headers rather than the card-styled CRM table.
  */
@@ -210,23 +236,70 @@ export function SimpleTable<T>({
   rowClassName?: (row: T) => string;
 }) {
   if (isLoading) {
+    // Render the real table shell — same header, same cell padding, same row
+    // height — and put placeholders in the cells. The previous version was a
+    // stack of bare bars with no horizontal padding, so it sat flat against
+    // the panel edge and then jumped inward by 16px once the data arrived.
     return (
-      <div
-        className="space-y-2 py-4"
-        role="status"
-        aria-label="Loading table data"
+      <SkeletonRegion
+        label="Loading table data"
+        className="max-w-full overflow-x-auto overscroll-x-contain"
       >
-        <span className="sr-only">Loading table data…</span>
-        {Array.from({ length: 5 }).map((_, index) => (
-          <div key={index} className="h-9 animate-pulse rounded bg-muted" />
-        ))}
-      </div>
+        <table className="w-full min-w-[45rem] border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-border bg-surface-subtle">
+              {columns.map(column => (
+                <th
+                  key={column.header}
+                  style={column.width ? { width: column.width } : undefined}
+                  className={`sticky top-0 z-10 h-10 whitespace-nowrap bg-surface-subtle px-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground ${
+                    column.align === "right"
+                      ? "text-right"
+                      : column.align === "center"
+                        ? "text-center"
+                        : "text-left"
+                  }`}
+                >
+                  {column.header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: 5 }).map((_, rowIndex) => (
+              <tr key={rowIndex} className="border-b border-border/80 last:border-0">
+                {columns.map((column, colIndex) => (
+                  <td key={column.header} className="px-4 py-3 align-middle">
+                    <Skeleton
+                      className={`h-3.5 ${
+                        column.align === "right" ? "ml-auto " : ""
+                      }${
+                        // Vary the widths so it does not read as a grid of
+                        // identical bars.
+                        colIndex === 0
+                          ? "w-3/4"
+                          : colIndex % 3 === 0
+                            ? "w-1/2"
+                            : "w-2/3"
+                      }`}
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </SkeletonRegion>
     );
   }
 
   if (rows.length === 0) {
+    // px-4 matches the table's cell padding, so a long message does not run
+    // into the panel border on a narrow screen.
     return (
-      <p className="py-8 text-center text-sm text-muted-foreground">{empty}</p>
+      <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+        {empty}
+      </p>
     );
   }
 

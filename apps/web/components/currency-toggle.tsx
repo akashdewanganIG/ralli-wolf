@@ -12,6 +12,7 @@ import { Check, Search } from "@repo/ui/icons";
 import { cn } from "@repo/ui/lib/utils";
 
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { currencySymbol, distinctCurrencySymbol } from "@/lib/utils/decimal";
 
 /**
  * Display currency for the whole application.
@@ -78,7 +79,7 @@ export function CurrencyToggle({ className }: { className?: string }) {
           aria-label={`Display currency: ${currency}. Change it.`}
         >
           <span aria-hidden="true" className="text-muted-foreground">
-            {symbol}
+            {currencySymbol(currency, symbol)}
           </span>
           {currency}
         </button>
@@ -123,19 +124,29 @@ export function CurrencyToggle({ className }: { className?: string }) {
               return (
                 <DropdownMenuItem
                   key={option.code}
-                  onClick={() => void updateCurrency(option.code, option.symbol)}
+                  onClick={() =>
+                    void updateCurrency(option.code, option.symbol)
+                  }
                   className="justify-between"
                 >
                   <span className="flex min-w-0 items-center gap-2">
-                    <span className="w-5 shrink-0 text-muted-foreground">
-                      {option.symbol ?? ""}
+                    <span
+                      dir="ltr"
+                      className="w-9 shrink-0 text-center text-[0.75rem] tabular-nums text-muted-foreground [unicode-bidi:isolate]"
+                    >
+                      {distinctCurrencySymbol(option.code, option.symbol)}
                     </span>
-                    <span className="truncate">{option.name ?? option.code}</span>
+                    <span className="truncate">
+                      {option.name ?? option.code}
+                    </span>
                   </span>
                   <span className="flex shrink-0 items-center gap-1.5 text-muted-foreground">
                     {option.code}
                     {selected ? (
-                      <Check aria-hidden="true" className="size-3.5 text-primary" />
+                      <Check
+                        aria-hidden="true"
+                        className="size-3.5 text-primary"
+                      />
                     ) : null}
                   </span>
                 </DropdownMenuItem>

@@ -23,6 +23,7 @@ import { formatDateTime, humanizeEnum } from "@/lib/utils/decimal";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { FormDialog } from "@repo/ui/components/ui/form-dialog";
 import { Tag } from "@repo/ui/components/ui/tag";
+import { DataTransfer } from "@/components/data-transfer/DataTransfer";
 
 export default function StockCountsPage() {
   const router = useRouter();
@@ -68,13 +69,16 @@ export default function StockCountsPage() {
           title="Stock counts"
           subtitle="Counting what is really on the shelves, and fixing the records to match."
           actions={
-            <Button
-              type="button"
-              onClick={() => setShowForm(true)}
-              className="px-3 whitespace-nowrap"
-            >
-              Start a count
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                onClick={() => setShowForm(true)}
+                className="px-3 whitespace-nowrap"
+              >
+                Start a count
+              </Button>
+              <DataTransfer entity="stock-counts" />
+            </div>
           }
         />
 

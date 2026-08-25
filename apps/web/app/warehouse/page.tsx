@@ -34,6 +34,7 @@ import { FormDialog } from "@repo/ui/components/ui/form-dialog";
 import { buttonVariants } from "@repo/ui/components/ui/button";
 import { cn } from "@repo/ui/lib/utils";
 import { Tag } from "@repo/ui/components/ui/tag";
+import { DataTransfer } from "@/components/data-transfer/DataTransfer";
 
 export default function WarehouseManagementPage() {
   const router = useRouter();
@@ -96,30 +97,33 @@ export default function WarehouseManagementPage() {
           title="Warehouse management"
           subtitle="Your buildings and the storage spaces inside them."
           actions={
-            <>
-              <Link
-                href="/warehouse/putaway"
-                data-slot="button"
-                className={cn(buttonVariants({ variant: "outline" }))}
-              >
-                Putaway queue
-              </Link>
-              <Link
-                href="/warehouse/pick-lists"
-                data-slot="button"
-                className={cn(buttonVariants({ variant: "outline" }))}
-              >
-                Pick lists
-              </Link>
-              <button
-                type="button"
-                onClick={() => setShowForm(true)}
-                data-slot="button"
-                className={cn(buttonVariants({ variant: "default" }))}
-              >
-                New warehouse
-              </button>
-            </>
+            <div className="flex flex-wrap items-center gap-2">
+              <>
+                <Link
+                  href="/warehouse/putaway"
+                  data-slot="button"
+                  className={cn(buttonVariants({ variant: "outline" }))}
+                >
+                  Putaway queue
+                </Link>
+                <Link
+                  href="/warehouse/pick-lists"
+                  data-slot="button"
+                  className={cn(buttonVariants({ variant: "outline" }))}
+                >
+                  Pick lists
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setShowForm(true)}
+                  data-slot="button"
+                  className={cn(buttonVariants({ variant: "default" }))}
+                >
+                  New warehouse
+                </button>
+              </>
+              <DataTransfer entity="warehouses" />
+            </div>
           }
         />
 

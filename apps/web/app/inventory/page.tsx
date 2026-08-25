@@ -12,6 +12,7 @@ import {
   SimpleTable,
   ErrorBanner,
   EmptyState,
+  PanelInset,
 } from "@/components/supply-chain/shared";
 import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
 import {
@@ -149,18 +150,20 @@ export default function InventoryDashboardPage() {
                 }
                 className="lg:col-span-2"
               >
-                <div className="mb-4 grid gap-4 sm:grid-cols-2">
-                  <StatCard
-                    label="Value received"
-                    value={formatMoney(dashboard?.inboundValue)}
-                    tone="positive"
-                  />
-                  <StatCard
-                    label="Value issued"
-                    value={formatMoney(dashboard?.outboundValue)}
-                    tone="info"
-                  />
-                </div>
+                <PanelInset className="pb-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <StatCard
+                      label="Value received"
+                      value={formatMoney(dashboard?.inboundValue)}
+                      tone="positive"
+                    />
+                    <StatCard
+                      label="Value issued"
+                      value={formatMoney(dashboard?.outboundValue)}
+                      tone="info"
+                    />
+                  </div>
+                </PanelInset>
                 <SimpleTable
                   isLoading={isLoading}
                   rows={dashboard?.movementsByType ?? []}

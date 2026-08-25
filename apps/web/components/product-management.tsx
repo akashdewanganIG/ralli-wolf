@@ -51,6 +51,7 @@ import { TablePageSkeleton } from "./skeletons";
 import { useRouter } from "next/navigation";
 import { ViewCategoriesModal } from "./ViewCategoriesModal";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { DataTransfer } from "@/components/data-transfer/DataTransfer";
 
 export function ProductManagement() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -310,26 +311,29 @@ export function ProductManagement() {
         title="Product configuration"
         description="Everything you sell, and the categories used to group it."
         actions={
-          <>
-            <Button
-              variant="outline"
-              onClick={() => setIsViewCategoriesModalOpen(true)}
-            >
-              <Tag className="h-4 w-4" />
-              View Categories
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setIsCategoryModalOpen(true)}
-            >
-              <Tag className="h-4 w-4" />
-              Add Category
-            </Button>
-            <Button onClick={handleCreateProduct}>
-              <Plus className="h-4 w-4" />
-              Add Product
-            </Button>
-          </>
+          <div className="flex flex-wrap items-center gap-2">
+            <>
+              <Button
+                variant="outline"
+                onClick={() => setIsViewCategoriesModalOpen(true)}
+              >
+                <Tag className="h-4 w-4" />
+                View Categories
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setIsCategoryModalOpen(true)}
+              >
+                <Tag className="h-4 w-4" />
+                Add Category
+              </Button>
+              <Button onClick={handleCreateProduct}>
+                <Plus className="h-4 w-4" />
+                Add Product
+              </Button>
+            </>
+            <DataTransfer entity="products" />
+          </div>
         }
       />
 

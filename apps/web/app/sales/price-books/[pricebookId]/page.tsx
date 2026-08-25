@@ -42,7 +42,8 @@ const buildEntryColumns = (
   {
     key: "listPrice",
     label: "List Price",
-    render: listPrice => formatMoney(listPrice as string | number, currencyCode),
+    render: listPrice =>
+      formatMoney(listPrice as string | number, currencyCode),
   },
   {
     key: "isActive",

@@ -17,6 +17,7 @@ import { useUpdateGlobalSetting } from "@/hooks/useSettings";
 import { settingsService } from "@/lib/api/services";
 import { toast } from "@/lib/toast";
 import { Skeleton } from "@/components/skeletons";
+import { distinctCurrencySymbol } from "@/lib/utils/decimal";
 
 interface CurrencyOption {
   code: string;
@@ -93,7 +94,10 @@ export default function CurrencySettings() {
           <SelectContent>
             {currencies.map(option => (
               <SelectItem key={option.code} value={option.code}>
-                {option.code} · {option.name} ({option.symbol})
+                {option.code} · {option.name}
+                {distinctCurrencySymbol(option.code, option.symbol)
+                  ? ` (${distinctCurrencySymbol(option.code, option.symbol)})`
+                  : ""}
               </SelectItem>
             ))}
           </SelectContent>

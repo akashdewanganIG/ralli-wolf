@@ -103,6 +103,10 @@ model User {
   requestedMaterialRequisitions MaterialRequisition[] @relation("MaterialRequisitionRequestedBy")
   issuedMaterialRequisitions    MaterialRequisition[] @relation("MaterialRequisitionIssuedBy")
   createdProductionOrders       ProductionOrder[]     @relation("ProductionOrderCreatedBy")
+  supplierInvoicesCreated  SupplierInvoice[] @relation("SupplierInvoiceCreatedBy")
+  supplierInvoicesApproved SupplierInvoice[] @relation("SupplierInvoiceApprovedBy")
+  customerInvoicesCreated  CustomerInvoice[] @relation("CustomerInvoiceCreatedBy")
+  paymentsRecorded         Payment[]         @relation("PaymentRecordedBy")
 
   @@index([region])
   @@map("users")
@@ -120,6 +124,8 @@ model Account {
   opportunities Opportunity[]
   quotes        Quote[]
   salesOrders   SalesOrder[]
+  invoices CustomerInvoice[]
+  payments Payment[]
 
   @@map("accounts")
 }
@@ -1225,6 +1231,7 @@ model SalesOrder {
   owner      User                 @relation("SalesOrderOwner", fields: [ownerId], references: [id])
   approvedBy User?                @relation("SalesOrderApprovedBy", fields: [approvedById], references: [id])
   lineItems  SalesOrderLineItem[]
+  customerInvoices CustomerInvoice[]
 
   @@index([quoteId])
   @@index([accountId])
@@ -1604,6 +1611,7 @@ model Warehouse {
   goodsReceiptNotes    GoodsReceiptNote[]
   materialRequisitions MaterialRequisition[]
   productionOrders     ProductionOrder[]
+  workCenters WorkCenter[]
 
   @@index([isActive])
   @@map("warehouses")
@@ -2142,6 +2150,7 @@ model BillOfMaterials {
   components       BomComponent[]
   changeLogs       BomChangeLog[]
   productionOrders ProductionOrder[]
+  operations BomOperation[]
 
   @@unique([productId, version])
   @@index([status])
@@ -2262,6 +2271,8 @@ model Supplier {
   performanceSnapshots SupplierPerformance[]
   reorderRules         ReorderRule[]
   stockLots            StockLot[]
+  invoices SupplierInvoice[]
+  payments Payment[]
 
   @@index([status])
   @@index([name])
@@ -2447,6 +2458,7 @@ model PurchaseOrder {
   approvedBy  User?                @relation("PurchaseOrderApprovedBy", fields: [approvedById], references: [id])
   lines       PurchaseOrderLine[]
   receipts    GoodsReceiptNote[]
+  supplierInvoices SupplierInvoice[]
 
   @@index([supplierId, status])
   @@index([status])
@@ -2518,6 +2530,7 @@ model GoodsReceiptNote {
   receivedBy    User               @relation("GrnReceivedBy", fields: [receivedById], references: [id])
   lines         GoodsReceiptLine[]
   qualityChecks QualityCheck[]
+  supplierInvoices SupplierInvoice[]
 
   @@index([supplierId])
   @@index([purchaseOrderId])
@@ -2684,6 +2697,7 @@ model ProductionOrder {
   components           ProductionOrderComponent[]
   consumption          ProductionOrderConsumption[]
   materialRequisitions MaterialRequisition[]
+  operations ProductionOrderOperation[]
 
   @@index([status])
   @@index([productId])
@@ -3025,4 +3039,280 @@ enum ProductionOrderStatus {
   COMPLETED
   CLOSED
   CANCELLED
+}
+
+// ---------------------------------------------------------------------------
+// Finance management
+//
+// The application already knows what a purchase order and a sales order are
+// worth; what it could not answer was "what do we owe, what are we owed, and
+// what has actually been paid". These models settle that, and they hang off
+// the existing documents rather than duplicating them: a supplier invoice
+// points at the purchase order and goods receipt it bills for, and a customer
+// invoice points at the sales order it bills.
+//
+// Money is Decimal(18,2) throughout — never Float. Amounts are stored in the
+// document's own currency, with the code alongside, because an invoice raised
+// in EUR stays a EUR liability regardless of the display currency.
+// ---------------------------------------------------------------------------
+
+enum InvoiceStatus {
+  DRAFT
+  AWAITING_APPROVAL
+  APPROVED
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+  WRITTEN_OFF
+}
+
+enum PaymentDirection {
+  /// Money leaving the business — paying a supplier.
+  OUTGOING
+  /// Money arriving — a customer settling an invoice.
+  INCOMING
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  CHEQUE
+  CASH
+  UPI
+  CARD
+  CREDIT_NOTE
+}
+
+/// What we owe a supplier. Raised against a purchase order, and usually
+/// against a specific goods receipt so three-way matching is possible.
+model SupplierInvoice {
+  id             Int           @id @default(autoincrement())
+  invoiceNumber  String        @unique @map("invoice_number")
+  /// The supplier's own reference from their paperwork.
+  supplierRef    String?       @map("supplier_ref")
+  supplierId     Int           @map("supplier_id")
+  purchaseOrderId Int?         @map("purchase_order_id")
+  grnId          Int?          @map("grn_id")
+  status         InvoiceStatus @default(DRAFT)
+  invoiceDate    DateTime      @map("invoice_date")
+  dueDate        DateTime      @map("due_date")
+  currencyCode   String        @default("INR") @map("currency_code")
+  subtotal       Decimal       @default(0) @db.Decimal(18, 2)
+  taxAmount      Decimal       @default(0) @map("tax_amount") @db.Decimal(18, 2)
+  totalAmount    Decimal       @default(0) @map("total_amount") @db.Decimal(18, 2)
+  /// Kept in step by the payment service; never written by hand.
+  amountPaid     Decimal       @default(0) @map("amount_paid") @db.Decimal(18, 2)
+  notes          String?
+  createdById    Int           @map("created_by_id")
+  approvedById   Int?          @map("approved_by_id")
+  approvedAt     DateTime?     @map("approved_at")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  supplier      Supplier            @relation(fields: [supplierId], references: [id])
+  purchaseOrder PurchaseOrder?      @relation(fields: [purchaseOrderId], references: [id])
+  grn           GoodsReceiptNote?   @relation(fields: [grnId], references: [id])
+  createdBy     User                @relation("SupplierInvoiceCreatedBy", fields: [createdById], references: [id])
+  approvedBy    User?               @relation("SupplierInvoiceApprovedBy", fields: [approvedById], references: [id])
+  allocations   PaymentAllocation[]
+
+  @@index([supplierId])
+  @@index([status, dueDate])
+  @@map("supplier_invoices")
+}
+
+/// What a customer owes us. Raised against a sales order.
+model CustomerInvoice {
+  id            Int           @id @default(autoincrement())
+  invoiceNumber String        @unique @map("invoice_number")
+  accountId     Int           @map("account_id")
+  salesOrderId  Int?          @map("sales_order_id")
+  status        InvoiceStatus @default(DRAFT)
+  invoiceDate   DateTime      @map("invoice_date")
+  dueDate       DateTime      @map("due_date")
+  currencyCode  String        @default("INR") @map("currency_code")
+  subtotal      Decimal       @default(0) @db.Decimal(18, 2)
+  taxAmount     Decimal       @default(0) @map("tax_amount") @db.Decimal(18, 2)
+  totalAmount   Decimal       @default(0) @map("total_amount") @db.Decimal(18, 2)
+  amountPaid    Decimal       @default(0) @map("amount_paid") @db.Decimal(18, 2)
+  notes         String?
+  createdById   Int           @map("created_by_id")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  account     Account             @relation(fields: [accountId], references: [id])
+  salesOrder  SalesOrder?         @relation(fields: [salesOrderId], references: [id])
+  createdBy   User                @relation("CustomerInvoiceCreatedBy", fields: [createdById], references: [id])
+  allocations PaymentAllocation[]
+
+  @@index([accountId])
+  @@index([status, dueDate])
+  @@map("customer_invoices")
+}
+
+/// One movement of money. A payment can settle several invoices, which is why
+/// the amounts live in PaymentAllocation rather than on a single invoice FK.
+model Payment {
+  id            Int              @id @default(autoincrement())
+  paymentNumber String           @unique @map("payment_number")
+  direction     PaymentDirection
+  method        PaymentMethod    @default(BANK_TRANSFER)
+  /// Cheque number, UTR, transaction id — whatever the bank shows.
+  reference     String?
+  paymentDate   DateTime         @map("payment_date")
+  currencyCode  String           @default("INR") @map("currency_code")
+  amount        Decimal          @db.Decimal(18, 2)
+  /// Amount not yet applied to an invoice — an advance sits here.
+  unallocated   Decimal          @default(0) @db.Decimal(18, 2)
+  supplierId    Int?             @map("supplier_id")
+  accountId     Int?             @map("account_id")
+  notes         String?
+  recordedById  Int              @map("recorded_by_id")
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+
+  supplier    Supplier?           @relation(fields: [supplierId], references: [id])
+  account     Account?            @relation(fields: [accountId], references: [id])
+  recordedBy  User                @relation("PaymentRecordedBy", fields: [recordedById], references: [id])
+  allocations PaymentAllocation[]
+
+  @@index([direction, paymentDate])
+  @@map("payments")
+}
+
+/// Applies part of a payment to one invoice. Splitting it this way lets a
+/// single bank transfer clear four invoices, and lets one invoice be settled
+/// by instalments, without either side losing its audit trail.
+model PaymentAllocation {
+  id                Int      @id @default(autoincrement())
+  paymentId         Int      @map("payment_id")
+  supplierInvoiceId Int?     @map("supplier_invoice_id")
+  customerInvoiceId Int?     @map("customer_invoice_id")
+  amount            Decimal  @db.Decimal(18, 2)
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  payment         Payment          @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  supplierInvoice SupplierInvoice? @relation(fields: [supplierInvoiceId], references: [id])
+  customerInvoice CustomerInvoice? @relation(fields: [customerInvoiceId], references: [id])
+
+  @@index([paymentId])
+  @@index([supplierInvoiceId])
+  @@index([customerInvoiceId])
+  @@map("payment_allocations")
+}
+
+// ---------------------------------------------------------------------------
+// Production planning
+//
+// The application could already record *that* something was built. What it
+// could not answer was "can we build it, on the equipment we have, by the date
+// we promised". These three models add that:
+//
+//   WorkCenter               where work physically happens, and how much of it
+//                            fits in a day
+//   BomOperation             the routing — which work centre does what, in what
+//                            order, and how long it takes
+//   ProductionOrderOperation the scheduled instance of one routing step
+//
+// Times are minutes (Int) rather than durations: shop-floor standards are
+// quoted in minutes, and integer minutes avoid the rounding drift that decimal
+// hours introduce when multiplied across a batch.
+// ---------------------------------------------------------------------------
+
+enum WorkCenterType {
+  MACHINE
+  ASSEMBLY_LINE
+  WORKSTATION
+  INSPECTION
+  PACKING
+}
+
+enum OperationStatus {
+  PENDING
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+/// A machine, line, or bench that work is scheduled onto.
+model WorkCenter {
+  id          Int            @id @default(autoincrement())
+  code        String         @unique
+  name        String
+  warehouseId Int            @map("warehouse_id")
+  type        WorkCenterType @default(MACHINE)
+  description String?
+  /// Minutes of productive time available per working day at 100% efficiency.
+  capacityMinutesPerDay Int  @default(480) @map("capacity_minutes_per_day")
+  /// Realistic throughput as a percentage of capacity — accounts for
+  /// changeovers, breaks and the fact that no line runs at nameplate all day.
+  efficiencyPercent     Decimal @default(85) @map("efficiency_percent") @db.Decimal(5, 2)
+  /// Used to cost an operation: minutes x rate.
+  costPerHour           Decimal @default(0) @map("cost_per_hour") @db.Decimal(18, 2)
+  /// How many jobs can run side by side here.
+  parallelCapacity      Int     @default(1) @map("parallel_capacity")
+  isActive              Boolean @default(true) @map("is_active")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  warehouse  Warehouse                  @relation(fields: [warehouseId], references: [id])
+  operations BomOperation[]
+  scheduled  ProductionOrderOperation[]
+
+  @@index([warehouseId])
+  @@map("work_centers")
+}
+
+/// One step of a bill of materials' routing.
+model BomOperation {
+  id           Int    @id @default(autoincrement())
+  bomId        Int    @map("bom_id")
+  workCenterId Int    @map("work_center_id")
+  sequence     Int
+  name         String
+  description  String?
+  /// Fixed time to prepare the work centre, regardless of batch size.
+  setupMinutes      Int     @default(0) @map("setup_minutes")
+  /// Time per unit produced. Batch time = setup + run x quantity.
+  runMinutesPerUnit Decimal @default(0) @map("run_minutes_per_unit") @db.Decimal(10, 4)
+  /// Blocks the next operation from starting until this one finishes.
+  isBlocking        Boolean @default(true) @map("is_blocking")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  bom        BillOfMaterials @relation(fields: [bomId], references: [id], onDelete: Cascade)
+  workCenter WorkCenter      @relation(fields: [workCenterId], references: [id])
+
+  @@unique([bomId, sequence])
+  @@index([workCenterId])
+  @@map("bom_operations")
+}
+
+/// A routing step scheduled against a real production order. Created when the
+/// order is scheduled, so the plan is a record rather than a recomputation.
+model ProductionOrderOperation {
+  id                Int             @id @default(autoincrement())
+  productionOrderId Int             @map("production_order_id")
+  workCenterId      Int             @map("work_center_id")
+  sequence          Int
+  name              String
+  status            OperationStatus @default(PENDING)
+  /// Minutes this step needs for this order's quantity, frozen at scheduling.
+  plannedMinutes    Int             @default(0) @map("planned_minutes")
+  actualMinutes     Int?            @map("actual_minutes")
+  scheduledStart    DateTime?       @map("scheduled_start")
+  scheduledEnd      DateTime?       @map("scheduled_end")
+  actualStart       DateTime?       @map("actual_start")
+  actualEnd         DateTime?       @map("actual_end")
+  completedQuantity Decimal         @default(0) @map("completed_quantity") @db.Decimal(18, 4)
+  notes             String?
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  productionOrder ProductionOrder @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
+  workCenter      WorkCenter      @relation(fields: [workCenterId], references: [id])
+
+  @@unique([productionOrderId, sequence])
+  @@index([workCenterId, scheduledStart])
+  @@map("production_order_operations")
 }

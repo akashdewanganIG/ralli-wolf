@@ -28,6 +28,7 @@ import type { StockAlertType } from "@/lib/api/types/supplyChain";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { DashboardToolbar } from "@repo/ui/components/ui/dashboard-toolbar";
 import { Tag } from "@repo/ui/components/ui/tag";
+import { DataTransfer } from "@/components/data-transfer/DataTransfer";
 
 const ALERT_TYPES: StockAlertType[] = [
   "STOCKOUT",
@@ -65,14 +66,17 @@ export default function StockAlertsPage() {
           title="Stock alerts"
           subtitle="Warnings about stock running low or about to expire."
           actions={
-            <Button
-              type="button"
-              onClick={() => evaluateAlerts.mutate({ warehouseId })}
-              disabled={evaluateAlerts.isPending}
-              className="px-3 whitespace-nowrap"
-            >
-              {evaluateAlerts.isPending ? "Evaluating…" : "Re-evaluate now"}
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                onClick={() => evaluateAlerts.mutate({ warehouseId })}
+                disabled={evaluateAlerts.isPending}
+                className="px-3 whitespace-nowrap"
+              >
+                {evaluateAlerts.isPending ? "Evaluating…" : "Re-evaluate now"}
+              </Button>
+              <DataTransfer entity="stock-alerts" />
+            </div>
           }
         />
 

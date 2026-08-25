@@ -13,6 +13,7 @@ import {
   Field,
   PageHeader,
   Panel,
+  PanelInset,
   SimpleTable,
   StatCard,
   StatusBadge,
@@ -300,7 +301,11 @@ export default function ProductionOrderDetailPage() {
           value={tab}
           onValueChange={setTab}
           items={[
-            { value: "components", label: "Components", count: components.length },
+            {
+              value: "components",
+              label: "Components",
+              count: components.length,
+            },
             { value: "availability", label: "Material availability" },
             {
               value: "consumption",
@@ -354,19 +359,17 @@ export default function ProductionOrderDetailPage() {
             }
           >
             {createRequisition.isSuccess && (
-              <Alert
-                tone="success"
-                title="Requisition created"
-                className="mb-4"
-              >
-                <Link
-                  href={`/materials/requisitions/${(createRequisition.data?.data as { id: number } | undefined)?.id ?? ""}`}
-                  className="font-medium text-primary transition-colors hover:text-info"
-                >
-                  Open it to issue material
-                </Link>
-                .
-              </Alert>
+              <PanelInset className="pb-4">
+                <Alert tone="success" title="Requisition created">
+                  <Link
+                    href={`/materials/requisitions/${(createRequisition.data?.data as { id: number } | undefined)?.id ?? ""}`}
+                    className="font-medium text-primary transition-colors hover:text-info"
+                  >
+                    Open it to issue material
+                  </Link>
+                  .
+                </Alert>
+              </PanelInset>
             )}
             <SimpleTable
               isLoading={isLoading}
@@ -453,25 +456,27 @@ export default function ProductionOrderDetailPage() {
             description="Whether the parts for this job are actually in stock right now."
           >
             {availabilityData && (
-              <div className="mb-4 grid gap-4 sm:grid-cols-3">
-                <StatCard
-                  label="Can this build run?"
-                  value={availabilityData.data.canBuild ? "Yes" : "No"}
-                  tone={
-                    availabilityData.data.canBuild ? "positive" : "critical"
-                  }
-                />
-                <StatCard
-                  label="Buildable from stock"
-                  value={formatQuantity(
-                    availabilityData.data.buildableQuantity
-                  )}
-                />
-                <StatCard
-                  label="Material cost"
-                  value={formatMoney(availabilityData.data.totalMaterialCost)}
-                />
-              </div>
+              <PanelInset className="pb-4">
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <StatCard
+                    label="Can this build run?"
+                    value={availabilityData.data.canBuild ? "Yes" : "No"}
+                    tone={
+                      availabilityData.data.canBuild ? "positive" : "critical"
+                    }
+                  />
+                  <StatCard
+                    label="Buildable from stock"
+                    value={formatQuantity(
+                      availabilityData.data.buildableQuantity
+                    )}
+                  />
+                  <StatCard
+                    label="Material cost"
+                    value={formatMoney(availabilityData.data.totalMaterialCost)}
+                  />
+                </div>
+              </PanelInset>
             )}
             <SimpleTable
               isLoading={availabilityLoading}
@@ -603,30 +608,32 @@ export default function ProductionOrderDetailPage() {
             description="How much material the job really used compared with what was planned."
           >
             {varianceData && (
-              <div className="mb-4 grid gap-4 sm:grid-cols-3">
-                <StatCard
-                  label="Planned material cost"
-                  value={formatMoney(varianceData.data.plannedMaterialCost)}
-                />
-                <StatCard
-                  label="Actual material cost"
-                  value={formatMoney(varianceData.data.actualMaterialCost)}
-                />
-                <StatCard
-                  label="Cost variance"
-                  value={formatMoney(varianceData.data.costVariance)}
-                  tone={
-                    Number(varianceData.data.costVariance) > 0
-                      ? "critical"
-                      : "positive"
-                  }
-                  hint={
-                    Number(varianceData.data.costVariance) > 0
-                      ? "Over plan"
-                      : "At or under plan"
-                  }
-                />
-              </div>
+              <PanelInset className="pb-4">
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <StatCard
+                    label="Planned material cost"
+                    value={formatMoney(varianceData.data.plannedMaterialCost)}
+                  />
+                  <StatCard
+                    label="Actual material cost"
+                    value={formatMoney(varianceData.data.actualMaterialCost)}
+                  />
+                  <StatCard
+                    label="Cost variance"
+                    value={formatMoney(varianceData.data.costVariance)}
+                    tone={
+                      Number(varianceData.data.costVariance) > 0
+                        ? "critical"
+                        : "positive"
+                    }
+                    hint={
+                      Number(varianceData.data.costVariance) > 0
+                        ? "Over plan"
+                        : "At or under plan"
+                    }
+                  />
+                </div>
+              </PanelInset>
             )}
             <SimpleTable
               isLoading={varianceLoading}

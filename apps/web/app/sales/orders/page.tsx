@@ -10,6 +10,7 @@ import { PageHeader } from "@repo/ui/components/ui/page-header";
 import { TablePageSkeleton } from "@/components/skeletons";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { DEFAULT_PAGE_SIZE } from "@/components/data-table";
+import { DataTransfer } from "@/components/data-transfer/DataTransfer";
 
 function formatDate(iso: string) {
   if (!iso) return "—";
@@ -84,6 +85,7 @@ export default function OrdersPage() {
         <PageHeader
           title="Sales orders"
           description={`Confirmed orders from customers who accepted a quote. ${pagination?.totalItems ?? orders.length} so far.`}
+          actions={<DataTransfer entity="sales-orders" />}
         />
 
         <DataTable<SalesOrderListItem>

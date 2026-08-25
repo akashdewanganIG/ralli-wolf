@@ -71,6 +71,7 @@ import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { DEFAULT_PAGE_SIZE } from "@/components/data-table";
 import { Tag } from "@repo/ui/components/ui/tag";
 import { roleTone } from "@repo/ui/components/ui/status-badge";
+import { DataTransfer } from "@/components/data-transfer/DataTransfer";
 
 type User = {
   id: string;
@@ -904,6 +905,10 @@ export default function UserManagementPage() {
                 <Button onClick={() => setIsCreateModalOpen(true)}>
                   Create user
                 </Button>
+                {/* Users already have a bespoke importer above, so this
+                    contributes the export half only — the shared component
+                    hides Import for datasets the registry does not accept. */}
+                <DataTransfer entity="users" size="default" />
               </>
             }
           />

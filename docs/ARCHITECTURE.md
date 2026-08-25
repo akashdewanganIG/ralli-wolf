@@ -19,8 +19,10 @@ application, see [USER_FLOWS.md](./USER_FLOWS.md).
 5. [Module map](#module-map)
 6. [Data model dependencies](#data-model-dependencies)
 7. [The supply-chain spine](#the-supply-chain-spine)
-8. [Background work](#background-work)
-9. [External services](#external-services)
+8. [The money spine](#the-money-spine)
+9. [The planning spine](#the-planning-spine)
+10. [Background work](#background-work)
+11. [External services](#external-services)
 
 ---
 
@@ -214,6 +216,19 @@ flowchart TD
         CAMP["Campaigns"]
     end
 
+    subgraph Plan["Planning"]
+        WC["Work centres"]
+        ROUTE["BOM routing"]
+        SCHED["Order scheduling"]
+        CAP["Capacity load"]
+    end
+
+    subgraph Fin["Finance"]
+        AP["Accounts payable"]
+        AR["Accounts receivable"]
+        PAYM["Payments"]
+    end
+
     CAT --> PROD
     UOM --> PROD
     PROD --> BOM
@@ -238,6 +253,21 @@ flowchart TD
     PROD --> QUOTE
     CUR --> QUOTE
     ACC --> CAMP
+
+    WH --> WC
+    WC --> ROUTE
+    BOM --> ROUTE
+    ROUTE --> SCHED
+    PRODN --> SCHED
+    SCHED --> CAP
+    WC --> CAP
+
+    PUR --> AP
+    SUP --> AP
+    SO --> AR
+    ACC --> AR
+    AP --> PAYM
+    AR --> PAYM
 
     style Foundation fill:#fafafa,stroke:#d4d4d4
     style Master fill:#fef2f2,stroke:#fecaca
@@ -382,6 +412,144 @@ flowchart LR
 
 `StockMovement` is append-only and is the audit trail. Every quantity shown
 anywhere in Inventory can be reconciled back to it.
+
+---
+
+## The money spine
+
+Two mirrored halves. Buying creates an obligation to pay; selling creates a
+right to collect. Both are settled the same way — by a `Payment` that is split
+across one or more invoices through `PaymentAllocation`.
+
+```mermaid
+flowchart LR
+    subgraph Out["Money out"]
+        PO["Purchase<br/>order"] --> GRN["Goods<br/>receipt"]
+        GRN --> SINV["Supplier<br/>invoice"]
+        SINV --> APPR["Approved<br/>for payment"]
+        APPR --> POUT["Payment<br/>OUTGOING"]
+    end
+
+    subgraph In["Money in"]
+        SO["Sales<br/>order"] --> SHIP["Shipped"]
+        SHIP --> CINV["Customer<br/>invoice"]
+        CINV --> PIN["Payment<br/>INCOMING"]
+    end
+
+    POUT --> ALLOC["PaymentAllocation"]
+    PIN --> ALLOC
+    ALLOC -.->|"sum of allocations<br/>defines amountPaid"| BAL["Invoice balance<br/>and status"]
+
+    style ALLOC fill:#f5f5f5,stroke:#737373
+    style BAL fill:#fef2f2,stroke:#c5101b
+```
+
+**The one rule that holds it together:** `amountPaid` is never written
+directly. It is recomputed from the sum of that invoice's allocations, and the
+status follows from the numbers — nothing paid is `APPROVED`, part is
+`PARTIALLY_PAID`, all of it is `PAID`. This is why an invoice can never show a
+balance its payments do not justify.
+
+Three things the API refuses, each with a plain-language message:
+
+| Attempt | Response |
+|---|---|
+| Allocating more than an invoice's outstanding balance | `400` — *"SINV-… has 62619.20 outstanding; cannot apply 99999.00."* |
+| Settling a supplier invoice with an `INCOMING` payment | `400` — *"A supplier invoice can only be settled by an outgoing payment."* |
+| Paying an invoice in a different currency | `400` — the currencies must match |
+
+### Two payments, one balance
+
+Checking an invoice's outstanding balance and then writing an allocation is a
+read-modify-write, and it is not safe on its own. Two payments arriving at once
+can both read 10,000 outstanding, both decide they fit, and both commit — and
+the supplier has been paid twice.
+
+Every invoice a payment touches is therefore locked with
+`pg_advisory_xact_lock` **before any balance is read**, the same mechanism the
+stock service uses for `stock_balances`. Locks are taken in a fixed order, so
+two payments spanning the same pair of invoices cannot deadlock against each
+other. Six concurrent full payments against one invoice resolve to exactly one
+acceptance and five refusals.
+
+### Money in different currencies is never added together
+
+Adding 1000 USD to 1000 INR and calling the result 2000 is not a rounding
+problem, it is a wrong number. So every total on the dashboard belongs to
+exactly one currency:
+
+- `payables` / `receivables` carry a `currencyCode` naming what their figures
+  are in — the currency holding the most open invoices.
+- `byCurrency` holds the same shape for every other currency on the book.
+- `currencies` lists them all, so a mixed book can never be silently hidden.
+- `netPosition` is `null` when the two sides are in different currencies,
+  because there is nothing meaningful to subtract.
+
+The UI states which currency a headline is in and names the others rather than
+folding them in.
+
+Ageing is computed from `dueDate` against today into five buckets — not due,
+1–30, 31–60, 61–90, over 90 — per currency, and the dashboard shows both sides
+together with the net position between them.
+
+### Who can see it
+
+Finance and planning are back-office functions, guarded exactly as the rest of
+the supply chain is: `requireAuth` **and** `requireRole([ADMIN])`. What the
+business owes, is owed, and is building is not readable by every account that
+happens to be logged in — a `SALES` token gets `403` on every endpoint in both
+modules.
+
+---
+
+## The planning spine
+
+A bill of materials says *what* a product is made of. A routing says *how* it
+gets made, and where. Scheduling turns that routing into dated work sitting on
+real machines.
+
+```mermaid
+flowchart LR
+    WH["Warehouse<br/>(the plant)"] --> WC["Work centre<br/>machine · line · bench"]
+    BOM["Bill of<br/>materials"] --> OP["BomOperation<br/>(one routing step)"]
+    WC --> OP
+    OP --> PO["Production<br/>order"]
+    PO -->|"schedule"| POO["ProductionOrderOperation<br/>with real dates"]
+    POO --> CAP["Capacity load<br/>per centre, per day"]
+
+    style POO fill:#fef2f2,stroke:#c5101b
+    style CAP fill:#f5f5f5,stroke:#737373
+```
+
+Two calculations carry the whole module.
+
+**Effective capacity** — what a centre really gives you in a day:
+
+```
+capacityMinutesPerDay x (efficiencyPercent / 100) x parallelCapacity
+```
+
+A line rated 480 minutes, running at 90%, with four stations working side by
+side, yields 1728 minutes — 28.8 hours a day.
+
+**Operation duration** — what one step costs for a given batch:
+
+```
+setupMinutes + runMinutesPerUnit x quantity
+```
+
+Setup is paid once per run; the rest scales with the batch. Scheduling walks
+the routing in sequence order, laying each step after the one before it. A step
+marked `isBlocking` pushes the next one out; a non-blocking step does not, so
+work that genuinely runs in parallel is modelled as such.
+
+Rescheduling **replaces** an order's operations rather than appending to them,
+and writes the order's own `plannedStartDate` / `plannedEndDate` back from the
+first and last operation — so the board's dates can never contradict the plan
+underneath them.
+
+An order can only be scheduled if its BOM has a routing. The board says so
+explicitly rather than failing silently.
 
 ---
 
