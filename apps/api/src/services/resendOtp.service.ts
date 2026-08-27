@@ -43,9 +43,12 @@ function buildLoginOtpEmail({
   return { html, text };
 }
 
-export async function sendLoginOtpEmail(input: LoginOtpEmailInput) {
+/** Returns Resend's message id so the caller can log it against the OTP row. */
+export async function sendLoginOtpEmail(
+  input: LoginOtpEmailInput
+): Promise<{ id: string }> {
   const content = buildLoginOtpEmail(input);
-  await sendResendEmail({
+  return sendResendEmail({
     to: input.to,
     subject: `${input.otp} is your Ralli Wolf sign-in code`,
     html: content.html,

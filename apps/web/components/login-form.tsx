@@ -18,7 +18,14 @@ import LoginProviders from "./LoginProviders";
 import LoginFaq from "./LoginFaq";
 import LoginFooter from "./LoginFooter";
 
-/** Sign-in is two steps: password, then whichever second factor is enrolled. */
+/**
+ * Sign-in is two steps: whatever begins it, then whatever confirms it.
+ *
+ * For most accounts that is a password followed by a code. An account that has
+ * turned its password off starts at the code instead, which is why the
+ * password field is optional here — the server decides whether one is needed,
+ * because only it knows which methods the account kept.
+ */
 type Step = "credentials" | "code";
 type Factor = "totp" | "email";
 
@@ -301,7 +308,7 @@ export function LoginForm({
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (step === "credentials") {
-      if (!email || emailError || !password) return;
+      if (!email || emailError) return;
       await submitCredentials();
       return;
     }
@@ -318,7 +325,7 @@ export function LoginForm({
   const submitDisabled =
     isSubmitting ||
     (step === "credentials"
-      ? !!emailError || !email || !password
+      ? !!emailError || !email
       : otp.length !== 6);
 
   const canFallBackToEmail =
@@ -440,7 +447,6 @@ export function LoginForm({
                           placeholder="Enter your password"
                           value={password}
                           onChange={event => setPassword(event.target.value)}
-                          required
                           className="h-9 rounded-md pr-10 text-sm"
                         />
                         <button

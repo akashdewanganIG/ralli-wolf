@@ -15,7 +15,10 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "test": "echo \"Error: no test specified\" && exit 1",
     "verify:crm": "dotenv -e ../../.env -- tsx scripts/verify-crm-workflows.ts",
-    "backfill:converted-leads": "tsx scripts/backfill-converted-leads.ts"
+    "backfill:converted-leads": "tsx scripts/backfill-converted-leads.ts",
+    "verify:auth": "dotenv -e ../../.env -- tsx scripts/verify-auth-flows.ts",
+    "verify:auth-methods": "dotenv -e ../../.env -- tsx scripts/verify-auth-methods.ts",
+    "verify:emails": "dotenv -e ../../.env -- tsx scripts/verify-emails.ts"
   },
   "devDependencies": {
     "@repo/typescript-config": "*",

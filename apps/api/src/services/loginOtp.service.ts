@@ -36,12 +36,20 @@ export async function issueLoginOtp(user: {
   });
 
   try {
-    await sendLoginOtpEmail({
+    const { id: messageId } = await sendLoginOtpEmail({
       to: user.email,
       firstName: user.firstName,
       otp,
       expiresInMinutes: OTP_EXPIRES_MINUTES,
       requestId: record.id,
+    });
+    // The only handle that ties this row to a message in Resend. Without it,
+    // "my code never arrived" cannot be traced past our own database. The
+    // address and the code itself stay out of the log.
+    console.info("Login OTP dispatched", {
+      requestId: record.id,
+      userId: user.id,
+      messageId,
     });
   } catch (emailError) {
     await prisma.loginOtp.updateMany({

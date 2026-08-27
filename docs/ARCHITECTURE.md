@@ -47,7 +47,7 @@ flowchart LR
     end
 
     subgraph External
-        PLUNK["Plunk<br/>transactional email"]
+        RESEND["Resend<br/>transactional email"]
         BREVO["Brevo<br/>email campaigns"]
         MSG91["MSG91<br/>WhatsApp"]
         S3["AWS S3<br/>media"]
@@ -56,7 +56,7 @@ flowchart LR
     WEB -->|"REST + JWT cookie"| API
     API -->|"Prisma"| PG
     JOBS --> PG
-    API --> PLUNK
+    API --> RESEND
     API --> BREVO
     API --> MSG91
     API --> S3
@@ -581,7 +581,7 @@ Intervals are overridable with `INVENTORY_ALERT_INTERVAL_MS` and
 
 | Service | Used for | Required env | Behaviour when absent |
 |---|---|---|---|
-| Plunk | Transactional email — password reset, account creation, approvals, notifications | `PLUNK_API_KEY`, `PLUNK_FROM_EMAIL` | Sends are skipped and logged; the app keeps working |
+| Resend | **All** transactional email — sign-in codes, security alerts, account creation, password reset, approvals, notifications, quotes | `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | Sign-in codes fail closed (login returns 503); every other send is logged and skipped |
 | Brevo | Email **campaigns** (`/campaigns/email`) | Brevo API key | **The page cannot load.** It reads campaigns from Brevo, not from the local database |
 | MSG91 | WhatsApp templates and sending | Per-number credentials, stored AES-GCM encrypted | Templates cannot sync or send |
 | AWS S3 | Campaign media and warehouse photos | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | Uploads fail |

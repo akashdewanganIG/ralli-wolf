@@ -237,11 +237,14 @@ MSG91_BASE_URL="https://control.msg91.com/api/v5"
 MSG91_AUTH_KEY="your-msg91-auth-key"
 ```
 
-**Email (Plunk):**
+**Email (Resend)** — the single transport for all transactional mail: sign-in
+codes, security alerts, account credentials, password resets, approvals,
+notifications and quotes. The sender must be on a domain verified in Resend.
 
 ```bash
-PLUNK_API_KEY="your-plunk-api-key"
-PLUNK_FROM_EMAIL="no-reply@yourdomain.com"
+RESEND_API_KEY="re_your-resend-api-key"
+RESEND_FROM_EMAIL="Ralli Wolf <no-reply@yourdomain.com>"
+RESEND_REPLY_TO=""   # optional
 ```
 
 **Developer Access:**

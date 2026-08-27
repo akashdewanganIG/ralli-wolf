@@ -119,7 +119,7 @@ async function resolveMfaSession(req: Request, res: Response, context: string) {
     return null;
   }
 
-  return { user, otpId: payload.otpId };
+  return { user };
 }
 
 /**

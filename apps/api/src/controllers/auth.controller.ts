@@ -39,9 +39,14 @@ import {
 import {
   clearFailedAttempts,
   describeRequest,
+  notifyPasswordChanged,
+  notifySuccessfulLogin,
   recordFailedAttempt,
 } from "../services/loginSecurity.service.js";
-import { secondFactorFor } from "../services/authMethods.service.js";
+import {
+  secondFactorFor,
+  signInEntry,
+} from "../services/authMethods.service.js";
 
 const developerEmailConfigured = process.env.DEVELOPER_LOGIN_EMAIL?.trim();
 const developerEmailNormalized = developerEmailConfigured
@@ -50,6 +55,24 @@ const developerEmailNormalized = developerEmailConfigured
 const developerPasswordConfigured = process.env.DEVELOPER_LOGIN_PASSWORD;
 const developerNameConfigured =
   process.env.DEVELOPER_LOGIN_NAME || "Developer Access";
+
+/**
+ * Resolves an account from a typed-in email address.
+ *
+ * Addresses are stored normalised, but the same address can be typed with
+ * capitals or stray whitespace, so every route that accepts one from a human
+ * must normalise before looking it up. Routes that did this inconsistently
+ * produced the worst possible failure: `/forgot-password` found the account
+ * and mailed a code, and `/forgot-password/verify` then did not find the same
+ * account and rejected it. The fallback to the raw address covers rows written
+ * before normalisation was enforced on insert.
+ */
+async function findUserByEmail(email: string) {
+  const normalized = email.trim().toLowerCase();
+  const user = await prisma.user.findUnique({ where: { email: normalized } });
+  if (user || email.trim() === normalized) return user;
+  return prisma.user.findUnique({ where: { email: email.trim() } });
+}
 
 export class AuthController {
   /**
@@ -64,26 +87,14 @@ export class AuthController {
     try {
       const { email, password } = req.body;
 
-      if (
-        !validateRequiredFields(req.body, ["email", "password"], res, "Login")
-      ) {
+      // Only the address is universally required. Whether a password is
+      // needed depends on the account, and is enforced once it is resolved.
+      if (!validateRequiredFields(req.body, ["email"], res, "Login")) {
         return;
       }
 
       // Normalize email: trim whitespace and convert to lowercase for consistent matching
-      const normalizedEmail = email.trim().toLowerCase();
-
-      // Find user by email - try normalized email first, then original if different
-      let user = await prisma.user.findUnique({
-        where: { email: normalizedEmail },
-      });
-
-      // If not found with normalized email, try original email (in case it was stored differently)
-      if (!user && email.trim() !== normalizedEmail) {
-        user = await prisma.user.findUnique({
-          where: { email: email.trim() },
-        });
-      }
+      const user = await findUserByEmail(email);
 
       // One shape for every credential failure: revealing which half was
       // wrong would turn this route into an account-existence oracle.
@@ -126,31 +137,80 @@ export class AuthController {
         );
       }
 
-      if (!user.passwordHash) {
+      // What begins a sign-in for this account. An account keeping a password
+      // starts there; one that has turned its password off starts with the
+      // method it kept instead.
+      const entry = signInEntry(user);
+      if (!entry) {
+        // No verified method at all. Unreachable while `canDisable` holds, and
+        // reported as a credential failure rather than explaining the state of
+        // someone else's account.
         return rejectCredentials();
       }
 
-      const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+      if (entry === "password") {
+        if (!user.passwordHash || !password) {
+          return rejectCredentials();
+        }
 
-      if (!isPasswordValid) {
-        // The address is real, so its owner is the one who should hear about
-        // a run of failures.
-        recordFailedAttempt(user, "password", describeRequest(req));
-        return rejectCredentials();
+        const isPasswordValid = await bcrypt.compare(
+          password,
+          user.passwordHash
+        );
+
+        if (!isPasswordValid) {
+          // The address is real, so its owner is the one who should hear about
+          // a run of failures.
+          recordFailedAttempt(user, "password", describeRequest(req));
+          return rejectCredentials();
+        }
+
+        clearFailedAttempts(user.id);
       }
 
-      clearFailedAttempts(user.id);
-
-      // Password checked out. Everything past this point is the second
-      // factor, so a session token is only minted by /login/otp/verify.
       const factor = secondFactorFor(user);
 
-      // An enrolled authenticator needs no email round-trip; only fall back
-      // to a mailed code when that is what the account actually has.
-      let otpId = 0;
-      if (factor.preferred === "email") {
+      // An account whose only method is its password has nothing further to
+      // prove, so the session is issued here. That is single-factor sign-in,
+      // and it is a deliberate consequence of allowing one method: the second
+      // factor is what the account chose not to keep.
+      if (entry === "password" && factor.available.length === 0) {
+        const token = generateToken(user.id, user.email);
+        notifySuccessfulLogin(user, describeRequest(req));
+        await recordAuditLog({
+          action: "LOGIN_WITH_PASSWORD_ONLY",
+          changedBy: user.id,
+          entityType: "USER_AUTH",
+          entityId: user.id,
+          oldValues: null,
+          newValues: null,
+        });
+        return res.json({
+          token,
+          user: {
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            createdAt: user.createdAt,
+            role: user.role,
+            mustChangePassword: user.mustChangePassword,
+          },
+          isDeveloper: false,
+        });
+      }
+
+      // Otherwise a challenge follows. For an account that kept its password
+      // this is the second factor; for one that did not, it is the only factor
+      // and the entry method itself. An authenticator needs no mail round-trip.
+      const challenge: "totp" | "email" =
+        (entry === "password" ? factor.preferred : entry) === "totp"
+          ? "totp"
+          : "email";
+
+      if (challenge === "email") {
         try {
-          ({ otpId } = await issueLoginOtp(user));
+          await issueLoginOtp(user);
         } catch (otpError) {
           if (otpError instanceof OtpDeliveryError) {
             return res.status(503).json({
@@ -164,7 +224,10 @@ export class AuthController {
       }
 
       await recordAuditLog({
-        action: "LOGIN_PASSWORD_VERIFIED",
+        action:
+          entry === "password"
+            ? "LOGIN_PASSWORD_VERIFIED"
+            : "LOGIN_CHALLENGE_ISSUED",
         changedBy: user.id,
         entityType: "USER_AUTH",
         entityId: user.id,
@@ -174,12 +237,17 @@ export class AuthController {
 
       return res.json({
         mfaRequired: true,
-        mfaToken: generateMfaToken(user.id, otpId),
+        mfaToken: generateMfaToken(user.id),
         maskedEmail: maskEmail(user.email),
         expiresIn: OTP_EXPIRES_MS / 1000,
         /** Which challenge the client should show, and what it may switch to. */
-        factor: factor.preferred ?? "email",
-        availableFactors: factor.available,
+        factor: challenge,
+        // Never advertise a factor the client cannot actually complete, and
+        // never advertise an empty set: the challenge just issued is always
+        // available by definition.
+        availableFactors: factor.available.length
+          ? factor.available
+          : [challenge],
       });
     } catch (error) {
       handleError(error, res, "Login");
@@ -443,8 +511,8 @@ export class AuthController {
         );
       }
 
-      const user = await prisma.user.findUnique({ where: { email } });
-      if (!user) {
+      const user = await findUserByEmail(email);
+      if (!user || user.deletedAt) {
         // Do not reveal existence; respond success
         return res.json({ success: true });
       }
@@ -465,17 +533,30 @@ export class AuthController {
         },
       });
 
-      const masked = email.replace(/(^.).*(@.*$)/, (_m, a, b) => `${a}***${b}`);
       const userName =
         `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email;
-      const subject = "Your password reset code";
-      const body = `Hi ${userName},\n\nYour password reset code is: ${otp}\nThis code expires in 10 minutes. If you did not request this, you can ignore this email.\n\nRequested for: ${masked}`;
-      await emailService.sendEmail({
-        to: email,
-        subject,
-        body,
-        name: userName,
-      });
+
+      // Uses the shared template rather than a hand-built body: the previous
+      // one was newline-separated plain text sent as HTML, so it arrived as a
+      // single unbroken line.
+      const delivered = await emailService.sendPasswordResetOtpEmail(
+        user.email,
+        userName,
+        otp
+      );
+
+      if (!delivered) {
+        // Burn the code rather than leave one live that nobody received, and
+        // say so in the log — the response cannot carry this without turning
+        // the endpoint into an account-existence oracle.
+        await prisma.passwordReset.updateMany({
+          where: { userId: user.id, usedAt: null },
+          data: { usedAt: new Date() },
+        });
+        console.error("Password reset code could not be delivered", {
+          userId: user.id,
+        });
+      }
 
       return res.json({ success: true });
     } catch (error) {
@@ -499,8 +580,8 @@ export class AuthController {
         );
       }
 
-      const user = await prisma.user.findUnique({ where: { email } });
-      if (!user) {
+      const user = await findUserByEmail(email);
+      if (!user || user.deletedAt) {
         return handleUnauthorizedError(res, "Invalid code", "Verify OTP");
       }
 
@@ -589,10 +670,11 @@ export class AuthController {
 
       const hash = await bcrypt.hash(newPassword, 10);
 
-      await prisma.$transaction([
+      const [changed] = await prisma.$transaction([
         prisma.user.update({
           where: { id: decoded.userId },
           data: { passwordHash: hash, mustChangePassword: false },
+          select: { id: true, email: true, firstName: true },
         }),
         // Invalidate all outstanding reset requests for user
         prisma.passwordReset.updateMany({
@@ -600,6 +682,10 @@ export class AuthController {
           data: { usedAt: new Date() },
         }),
       ]);
+
+      // A reset is exactly the event someone needs to hear about when it was
+      // not them who performed it.
+      notifyPasswordChanged(changed, "reset", describeRequest(req));
 
       return res.json({ success: true });
     } catch (error) {
@@ -670,6 +756,8 @@ export class AuthController {
         where: { id: user.id },
         data: { passwordHash: hash, mustChangePassword: false },
       });
+
+      notifyPasswordChanged(user, "changed", describeRequest(req));
 
       return res.json({ success: true });
     } catch (error) {

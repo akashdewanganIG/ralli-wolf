@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { handleError, handleValidationError } from "../utils/errorHandler.js";
 import { prisma } from "@repo/db";
 import { BrevoService } from "../services/brevo.service.js";
+import { normalizeEmail } from "../utils/validators.js";
 import {
   SyncLeadsRequest,
   SyncLeadsResponse,
@@ -396,11 +397,18 @@ export class BrevoController {
       const successful: SendCampaignResponse["successful"] = [];
       const failed: SendCampaignResponse["failed"] = [];
 
-      // Get leads with Brevo contact IDs
+      // Get leads with Brevo contact IDs.
+      //
+      // Filtered on more than the Brevo id: this route sends marketing content
+      // through Brevo's *transactional* endpoint, which does not consult the
+      // unsubscribe list a campaign send would honour. Nothing else would stop
+      // an opted-out or deleted lead being mailed, so it is enforced here.
       const leads = await prisma.lead.findMany({
         where: {
           id: { in: leadIds },
           brevoContactId: { not: null },
+          emailOptOut: false,
+          deletedAt: null,
         },
       });
 
@@ -415,13 +423,33 @@ export class BrevoController {
         id => !leadsWithBrevoIds.some(lead => lead.leadId === id)
       );
 
-      // Add failed entries for leads without Brevo contact IDs
+      // Add failed entries for leads that were filtered out above. The reason
+      // is deliberately vague between the three causes because the caller
+      // supplied the ids and can look up which applies.
       for (const leadId of leadsWithoutBrevoIds) {
         failed.push({
           leadId,
           email: "unknown",
-          error: "Lead not synced to Brevo. Please sync the lead first.",
+          error:
+            "Lead is not eligible: it is not synced to Brevo, has opted out of email, or has been deleted.",
         });
+      }
+
+      // Fetched once rather than per recipient: it is the same campaign every
+      // time, and this is a call to an external API inside the send loop.
+      const campaign = await this.brevoService.getCampaignById(campaignId);
+
+      // Brevo's transactional endpoint requires a body — htmlContent,
+      // textContent or a templateId. This request previously carried none of
+      // them, so every send was rejected. Fail here with something the caller
+      // can act on rather than once per recipient with Brevo's 400.
+      if (!campaign.htmlContent) {
+        return handleValidationError(
+          res,
+          `Campaign ${campaignId} has no HTML content to send. Campaigns built in Brevo's drag-and-drop editor must be saved with content before they can be sent from here.`,
+          "campaignId",
+          "Brevo send campaign"
+        );
       }
 
       // Send campaign to leads with Brevo contact IDs
@@ -431,16 +459,14 @@ export class BrevoController {
             `Sending campaign to lead ${lead.leadId} (${lead.email})`
           );
 
-          // Get campaign details
-          const campaign = await this.brevoService.getCampaignById(campaignId);
-
-          // Send transactional email (Brevo limitation)
           const emailRequest = {
             to: [{ email: lead.email }],
             subject: campaign.subject || "Campaign Email",
             sender: campaign.sender,
-            // Note: This is a simplified implementation
-            // In a real scenario, you'd need to handle campaign content properly
+            htmlContent: campaign.htmlContent,
+            ...(campaign.replyTo
+              ? { replyTo: { email: campaign.replyTo } }
+              : {}),
           };
 
           const result =
@@ -726,9 +752,10 @@ export class BrevoController {
         `Processing webhook event: ${event.event} for ${event.email}`
       );
 
-      // Find lead by email
+      // Find lead by email. Normalised to match how lead emails are stored;
+      // an event whose address differs only in case belongs to the same lead.
       const lead = await prisma.lead.findFirst({
-        where: { email: event.email },
+        where: { email: normalizeEmail(event.email) ?? event.email },
       });
 
       if (!lead) {

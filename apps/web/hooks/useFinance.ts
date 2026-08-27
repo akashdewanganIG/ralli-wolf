@@ -23,6 +23,8 @@ export const planningKeys = {
     ["planning", "capacity", params ?? {}] as const,
   workCenters: (params?: unknown) =>
     ["planning", "work-centers", params ?? {}] as const,
+  bomOperations: (bomId: number) =>
+    ["planning", "bom-operations", bomId] as const,
 };
 
 /** Everything a payment touches, so nothing on screen is left stale. */
@@ -178,4 +180,67 @@ export function usePlanningMutations() {
   });
 
   return { scheduleOrder, createWorkCenter };
+}
+
+/** The routing on one BOM: the steps a build goes through, in order. */
+export function useBomOperations(bomId: number, enabled = true) {
+  return useQuery({
+    queryKey: planningKeys.bomOperations(bomId),
+    queryFn: () => planningService.bomOperations(bomId),
+    enabled: enabled && Number.isFinite(bomId) && bomId > 0,
+  });
+}
+
+export function useBomRoutingMutations(bomId: number) {
+  const qc = useQueryClient();
+
+  // Routing changes decide whether an order can be scheduled at all, so the
+  // planning board and the BOM itself both go stale with it.
+  const settle = () => {
+    qc.invalidateQueries({ queryKey: planningKeys.bomOperations(bomId) });
+    qc.invalidateQueries({ queryKey: planningKeys.board });
+    qc.invalidateQueries({ queryKey: ["supply-chain", "boms"] });
+  };
+
+  const fail =
+    (fallback: string) => (e: { response?: { data?: { error?: string } } }) =>
+      toast.error(e?.response?.data?.error ?? fallback);
+
+  const addOperation = useMutation({
+    mutationFn: (
+      payload: Parameters<typeof planningService.addBomOperation>[1]
+    ) => planningService.addBomOperation(bomId, payload),
+    onSuccess: res => {
+      settle();
+      toast.success(`Step ${res.data.sequence} — ${res.data.name} added`);
+    },
+    onError: fail("Could not add the step"),
+  });
+
+  const updateOperation = useMutation({
+    mutationFn: ({
+      operationId,
+      payload,
+    }: {
+      operationId: number;
+      payload: Parameters<typeof planningService.updateBomOperation>[2];
+    }) => planningService.updateBomOperation(bomId, operationId, payload),
+    onSuccess: res => {
+      settle();
+      toast.success(`${res.data.name} updated`);
+    },
+    onError: fail("Could not update the step"),
+  });
+
+  const removeOperation = useMutation({
+    mutationFn: (operationId: number) =>
+      planningService.deleteBomOperation(bomId, operationId),
+    onSuccess: res => {
+      settle();
+      toast.success(`${res.data.name} removed`);
+    },
+    onError: fail("Could not remove the step"),
+  });
+
+  return { addOperation, updateOperation, removeOperation };
 }

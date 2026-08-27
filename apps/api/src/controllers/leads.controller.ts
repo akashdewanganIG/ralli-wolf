@@ -17,6 +17,7 @@ import {
   isValidPhone,
   isValidName,
   isValidPincode,
+  normalizeEmail,
   validateFieldLength,
 } from "../utils/validators.js";
 import { buildFullName, splitFullName } from "../utils/nameHelpers.js";
@@ -379,7 +380,9 @@ export class LeadController {
         data: {
           firstName,
           lastName: lastName || null,
-          email,
+          // Stored canonical so dedup on the import and webhook paths can
+          // match on plain equality.
+          email: normalizeEmail(email) ?? email,
           phone: localPhone,
           countryCode,
           companyName,
@@ -608,6 +611,11 @@ export class LeadController {
       }
       if ("name" in updateData) {
         delete updateData.name;
+      }
+      // Only when the caller actually sent one: assigning unconditionally
+      // would blank a stored address on any unrelated field update.
+      if (typeof updateData.email === "string") {
+        updateData.email = normalizeEmail(updateData.email) ?? updateData.email;
       }
       // Normalize ownerId: allow unassignment and ensure numeric type
       if (Object.prototype.hasOwnProperty.call(updateData, "ownerId")) {

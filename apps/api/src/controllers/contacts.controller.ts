@@ -10,6 +10,7 @@ import {
   isValidEmail,
   isValidPhone,
   isValidName,
+  normalizeEmail,
   validateFieldLength,
 } from "../utils/validators.js";
 import { buildFullName } from "../utils/nameHelpers.js";
@@ -120,7 +121,11 @@ export class ContactController {
       const contact = await prisma.contact.create({
         data: {
           name,
-          email,
+          // `email` is unique and non-null on this table, so the stored form
+          // has to be the canonical one or the same person can be inserted
+          // twice. Falls through unchanged when absent, leaving the missing
+          // required field to fail where it did before.
+          email: normalizeEmail(email) ?? email,
           phone: localPhone,
           countryCode,
           position,
@@ -239,6 +244,12 @@ export class ContactController {
           updateData.phone = parsedPhone.localNumber;
           updateData.countryCode = parsedPhone.countryCode;
         }
+      }
+
+      // Only when the caller actually sent an email: assigning here on an
+      // absent field would null out a stored address.
+      if (updateData.email !== undefined) {
+        updateData.email = normalizeEmail(updateData.email);
       }
 
       const contact = await prisma.contact.update({

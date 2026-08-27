@@ -14,6 +14,7 @@ import type {
 } from "@/lib/api/types";
 import { toast } from "@/lib/toast";
 import { AuthMethodSetupModal } from "@/components/auth-method-setup-modal";
+import { SetPasswordDialog } from "@/components/set-password-dialog";
 
 const METHOD_COPY: Record<
   AuthMethodName,
@@ -21,7 +22,7 @@ const METHOD_COPY: Record<
 > = {
   password: {
     title: "Password",
-    description: "The first step of every sign-in. Always required.",
+    description: "A password you enter to begin signing in.",
     Icon: LockKeyhole,
   },
   email: {
@@ -181,6 +182,7 @@ export function AuthenticationMethods() {
   }, [summary]);
 
   const atMinimum = !!summary && summary.activeCount <= summary.minimumRequired;
+  const [passwordOpen, setPasswordOpen] = useState(false);
 
   // ------------------------------------------------------------ actions --
   const closeSetup = () => {
@@ -251,13 +253,28 @@ export function AuthenticationMethods() {
     }
   };
 
+  const setPassword = async (newPassword: string) => {
+    setBusyMethod("password");
+    try {
+      setSummary(await authService.setAuthPassword(newPassword));
+      setPasswordOpen(false);
+      toast.success("Password sign-in turned on", {
+        description: "Your next sign-in will start with this password.",
+      });
+    } catch (error) {
+      reportFailure(error, "Could not turn password sign-in on");
+    } finally {
+      setBusyMethod(null);
+    }
+  };
+
   const disable = async (method: AuthMethodName) => {
     // The server refuses this too, but it is a rule the user can be told about
     // before spending a round-trip on it. The banner that used to state it
     // standing is gone: a warning that is always on screen stops being read.
     if (atMinimum) {
-      toast.warning("Keep at least two ways to sign in", {
-        description: `Turning off ${METHOD_COPY[method].title.toLowerCase()} would leave you with ${summary ? summary.minimumRequired - 1 : 1}. Set another method up first, then turn this one off.`,
+      toast.warning("Keep at least one way to sign in", {
+        description: `${METHOD_COPY[method].title} is the only method left on your account. Set another one up first, then turn this one off.`,
       });
       return;
     }
@@ -338,16 +355,7 @@ export function AuthenticationMethods() {
       {password ? (
         <MethodRow
           status={password}
-          actions={
-            <span
-              className={cn(
-                ACTION_WIDTH,
-                "text-center text-xs text-muted-foreground"
-              )}
-            >
-              Always on
-            </span>
-          }
+          actions={methodAction(password, () => setPasswordOpen(true))}
         />
       ) : null}
 
@@ -364,6 +372,13 @@ export function AuthenticationMethods() {
           actions={methodAction(totp, () => void startTotp())}
         />
       ) : null}
+
+      <SetPasswordDialog
+        open={passwordOpen}
+        busy={busyMethod === "password"}
+        onCancel={() => setPasswordOpen(false)}
+        onSubmit={pw => void setPassword(pw)}
+      />
 
       <AuthMethodSetupModal
         method={setupMethod}

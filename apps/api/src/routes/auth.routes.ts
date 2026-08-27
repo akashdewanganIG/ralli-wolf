@@ -118,6 +118,10 @@ router.post(
   }),
   (req, res) => authMethodsController.sendEmailCode(req, res)
 );
+// Sets a password and turns password sign-in back on.
+router.post("/methods/password", requireAuth, (req, res) =>
+  authMethodsController.setPassword(req, res)
+);
 router.post("/methods/email/verify", requireAuth, (req, res) =>
   authMethodsController.verifyEmailCode(req, res)
 );

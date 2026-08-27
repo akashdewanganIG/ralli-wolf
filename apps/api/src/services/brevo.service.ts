@@ -461,13 +461,18 @@ export class BrevoService {
       // We'll need to send transactional emails with campaign content
       const campaign = await this.getCampaignById(campaignId);
 
+      if (!campaign.htmlContent) {
+        throw new Error(
+          `Campaign ${campaignId} has no HTML content; Brevo rejects a transactional send with no body.`
+        );
+      }
+
       for (const email of contactEmails) {
         const emailRequest: BrevoSendEmailRequest = {
           to: [{ email }],
           subject: campaign.subject || "Campaign Email",
           sender: campaign.sender,
-          // Note: We can't easily replicate campaign content without template access
-          // This is a limitation of the Brevo API
+          htmlContent: campaign.htmlContent,
         };
 
         const result = await this.sendTransactionalEmail(emailRequest);

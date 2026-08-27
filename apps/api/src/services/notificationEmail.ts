@@ -1,6 +1,6 @@
 import { NotificationType } from "@prisma/client";
 
-import { appUrl, escapeHtml, renderEmail } from "./emailTemplate.js";
+import { renderEmail } from "./emailTemplate.js";
 
 /**
  * The email body for each notification we send.
@@ -21,20 +21,9 @@ export type NotificationEmailInput = {
   recipientName: string;
   title: string;
   message: string;
-  /** App-relative path from the notification, e.g. "/purchasing/orders/12". */
-  link?: string | null;
 };
 
 export type NotificationEmail = { subject: string; html: string };
-
-/** Turns a stored relative link into an absolute one for the inbox. */
-function absolute(link?: string | null): string {
-  const base = appUrl();
-  if (!link) return base;
-  return link.startsWith("http")
-    ? link
-    : `${base}${link.startsWith("/") ? "" : "/"}${link}`;
-}
 
 function greeting(name: string): string {
   const trimmed = name.trim();
@@ -46,12 +35,8 @@ type Shape = {
   eyebrow: string;
   /** Subject line, given the notification title. */
   subject: (title: string) => string;
-  /** Label on the call-to-action button. */
-  action: string;
   /** Fine print under the action, explaining why this arrived. */
   footer: string;
-  /** Fallback destination when the notification carries no link. */
-  fallbackPath: string;
 };
 
 /**
@@ -63,42 +48,59 @@ const SHAPES: Record<NotificationType, Shape> = {
   APPROVAL_REQUESTED: {
     eyebrow: "Action required",
     subject: title => `Action required: ${title}`,
-    action: "Review the request",
     footer:
       "You receive this because an approval was assigned to you. Nothing proceeds until you decide.",
-    fallbackPath: "/sales/approvals",
   },
   PURCHASE_ORDER_APPROVED: {
     eyebrow: "Approved",
     subject: title => title,
-    action: "Open the order",
     footer:
       "You receive this because you raised this purchase order. It can now be sent to the supplier.",
-    fallbackPath: "/purchasing/orders",
   },
   PURCHASE_ORDER_REJECTED: {
     eyebrow: "Rejected",
     subject: title => title,
-    action: "Open the order",
     footer:
       "You receive this because you raised this purchase order. It will not proceed until it is revised and resubmitted.",
-    fallbackPath: "/purchasing/orders",
   },
   QC_FAILED: {
     eyebrow: "Quality check",
     subject: title => title,
-    action: "Open the goods receipt",
     footer:
       "You receive this because you administer goods receipts. Rejected stock is held until it is dispositioned.",
-    fallbackPath: "/purchasing/quality",
   },
   STOCK_ALERT: {
     eyebrow: "Inventory",
     subject: title => `Inventory alerts need attention`,
-    action: "Review the alerts",
     footer:
       "You receive this because stock fell below its reorder point. Raising a requisition clears the alert.",
-    fallbackPath: "/inventory/alerts",
+  },
+
+  PURCHASE_ORDER_SENT: {
+    eyebrow: "Sent",
+    subject: title => title,
+    footer:
+      "You receive this because you raised this purchase order. The supplier now has it.",
+  },
+  INVOICE_OVERDUE: {
+    eyebrow: "Finance",
+    subject: title => title,
+    footer:
+      "You receive this because an invoice passed its due date while still unpaid.",
+  },
+  ROLE_CHANGED: {
+    eyebrow: "Your account",
+    subject: title => title,
+    footer:
+      "You receive this because an administrator changed what your account can reach. If you did not expect this, contact them.",
+  },
+  ACCOUNT_DEACTIVATED: {
+    eyebrow: "Your account",
+    subject: title => title,
+    // Nothing behind the door for a deactivated account, so the button points
+    // at the sign-in page rather than somewhere that will bounce them.
+    footer:
+      "You receive this because your access was switched off. Contact your administrator if you believe this is a mistake.",
   },
 
   // Defined in the schema but not emitted anywhere yet. They are given a
@@ -108,65 +110,47 @@ const SHAPES: Record<NotificationType, Shape> = {
   LEAD_ASSIGNED: {
     eyebrow: "Leads",
     subject: title => title,
-    action: "Open the lead",
     footer: "You receive this because a lead was assigned to you.",
-    fallbackPath: "/leads/assigned",
   },
   LEAD_UPDATED: {
     eyebrow: "Leads",
     subject: title => title,
-    action: "Open the lead",
     footer: "You receive this because a lead you own changed.",
-    fallbackPath: "/leads/lead-master",
   },
   APPROVAL_APPROVED: {
     eyebrow: "Approved",
     subject: title => title,
-    action: "Open the record",
     footer: "You receive this because you raised this request.",
-    fallbackPath: "/sales/approvals",
   },
   APPROVAL_REJECTED: {
     eyebrow: "Rejected",
     subject: title => title,
-    action: "Open the record",
     footer: "You receive this because you raised this request.",
-    fallbackPath: "/sales/approvals",
   },
   QUOTE_ACCEPTED: {
     eyebrow: "Quotes",
     subject: title => title,
-    action: "Open the quote",
     footer: "You receive this because you own this quote.",
-    fallbackPath: "/sales/quotes",
   },
   ORDER_CREATED: {
     eyebrow: "Orders",
     subject: title => title,
-    action: "Open the order",
     footer: "You receive this because you own this order.",
-    fallbackPath: "/sales/orders",
   },
   GOODS_RECEIVED: {
     eyebrow: "Purchasing",
     subject: title => title,
-    action: "Open the goods receipt",
     footer: "You receive this because goods arrived against your order.",
-    fallbackPath: "/purchasing/goods-receipts",
   },
   MATERIAL_SHORTAGE: {
     eyebrow: "Materials",
     subject: title => title,
-    action: "Review the shortage",
     footer: "You receive this because a production order is short of material.",
-    fallbackPath: "/materials/shortages",
   },
   GENERAL: {
     eyebrow: "Notification",
     subject: title => title,
-    action: "Open Ralli Wolf Operations",
     footer: "You receive this because it concerns your account.",
-    fallbackPath: "/",
   },
 };
 
@@ -181,20 +165,19 @@ export function buildNotificationEmail(
   input: NotificationEmailInput
 ): NotificationEmail {
   const shape = SHAPES[input.type] ?? SHAPES.GENERAL;
-  const href = input.link
-    ? absolute(input.link)
-    : `${appUrl()}${shape.fallbackPath}`;
 
   // Deliberately no metadata rows: the only structured value available is the
   // title, and the shell already sets that as the heading. A "Details" block
   // repeating it verbatim reads as filler.
+  //
+  // Deliberately no link either. These emails say what happened; the reader
+  // opens the app themselves. A notification that carries a clickable link
+  // into the system is also a template for a convincing phishing mail.
   const html = renderEmail({
     preview: input.message,
     eyebrow: shape.eyebrow,
     heading: input.title,
     paragraphs: [greeting(input.recipientName), input.message],
-    button: { label: shape.action, href },
-    note: "If the button does not work, copy this link into your browser: " + escapeHtml(href),
     footer: `${shape.footer} You can change which notifications reach you in Settings → Notifications.`,
   });
 

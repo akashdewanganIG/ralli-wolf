@@ -11,6 +11,13 @@ const parseId = (value: unknown) => {
   return Number.isFinite(n) ? n : undefined;
 };
 
+/** Trim to a string, or null when the caller left the field empty. */
+const optionalText = (value: unknown) => {
+  if (value === undefined || value === null) return null;
+  const trimmed = String(value).trim();
+  return trimmed === "" ? null : trimmed;
+};
+
 /** Effective minutes a work centre can actually deliver in a day. */
 function effectiveCapacity(wc: {
   capacityMinutesPerDay: number;
@@ -37,6 +44,47 @@ function operationMinutes(
 }
 
 const dayKey = (d: Date) => d.toISOString().slice(0, 10);
+
+/**
+ * Routing is part of what an active BOM freezes: an order already scheduled
+ * against it has to stay reproducible. Same rule the components follow.
+ */
+async function assertRoutingEditable(bomId: number) {
+  const bom = await prisma.billOfMaterials.findUnique({
+    where: { id: bomId },
+    select: { id: true, status: true, bomNumber: true },
+  });
+  if (!bom) throw new NotFoundError("Bill of materials");
+  if (bom.status === "ACTIVE" || bom.status === "OBSOLETE") {
+    throw new DomainError(
+      `${bom.bomNumber} is ${bom.status.toLowerCase()} and frozen. Create a revision to change its routing.`,
+      { code: "BOM_FROZEN" }
+    );
+  }
+  return bom;
+}
+
+/** Sequence numbers are unique per BOM; say so in words rather than P2002. */
+async function assertSequenceFree(
+  bomId: number,
+  sequence: number,
+  exceptId?: number
+) {
+  const clash = await prisma.bomOperation.findFirst({
+    where: {
+      bomId,
+      sequence,
+      ...(exceptId ? { id: { not: exceptId } } : {}),
+    },
+    select: { name: true },
+  });
+  if (clash) {
+    throw new DomainError(
+      `Step ${sequence} is already taken by "${clash.name}". Give this one a different number.`,
+      { code: "SEQUENCE_TAKEN" }
+    );
+  }
+}
 
 export class PlanningController {
   /** Work centres, with their effective daily capacity resolved. */
@@ -145,29 +193,21 @@ export class PlanningController {
       const {
         workCenterId,
         name,
+        description,
         sequence,
         setupMinutes,
         runMinutesPerUnit,
         isBlocking,
       } = req.body ?? {};
 
-      const bom = await prisma.billOfMaterials.findUnique({
-        where: { id: bomId },
-        select: { id: true, status: true, bomNumber: true },
-      });
-      if (!bom) throw new NotFoundError("Bill of materials");
-      // An active BOM is frozen so past jobs stay reproducible; its routing is
-      // part of that promise.
-      if (bom.status === "ACTIVE") {
-        throw new DomainError(
-          `${bom.bomNumber} is active and frozen. Create a revision to change its routing.`
-        );
-      }
+      await assertRoutingEditable(bomId);
 
       const wc = parseId(workCenterId);
       if (!wc) throw new DomainError("A work centre is required.");
       if (!name) throw new DomainError("An operation name is required.");
 
+      // Steps are numbered in tens so one can be slotted between two others
+      // later without renumbering the whole routing.
       const next =
         parseId(sequence) ??
         ((
@@ -176,6 +216,7 @@ export class PlanningController {
             _max: { sequence: true },
           })
         )._max.sequence ?? 0) + 10;
+      await assertSequenceFree(bomId, next);
 
       const created = await prisma.bomOperation.create({
         data: {
@@ -183,13 +224,110 @@ export class PlanningController {
           workCenterId: wc,
           sequence: next,
           name: String(name).trim(),
+          description: optionalText(description),
           setupMinutes: Number(setupMinutes) || 0,
           runMinutesPerUnit: runMinutesPerUnit ?? 0,
           isBlocking: isBlocking !== false,
         },
-        include: { workCenter: { select: { code: true, name: true } } },
+        include: {
+          workCenter: {
+            select: { id: true, code: true, name: true, costPerHour: true },
+          },
+        },
       });
       res.status(201).json({ data: created });
+    } catch (error) {
+      handleSupplyChainError(error, res, operation);
+    }
+  }
+
+  /** Change one routing step, while its BOM is still a draft. */
+  async updateBomOperation(req: Request, res: Response) {
+    const operation = "Update BOM operation";
+    try {
+      const bomId = parseId(req.params.bomId);
+      const operationId = parseId(req.params.operationId);
+      if (!bomId || !operationId)
+        throw new DomainError("Invalid BOM or operation id.");
+      await assertRoutingEditable(bomId);
+
+      const existing = await prisma.bomOperation.findUnique({
+        where: { id: operationId },
+        select: { id: true, bomId: true },
+      });
+      // Checking the parent matches stops an id from one BOM being edited
+      // through another BOM's frozen-status check.
+      if (!existing || existing.bomId !== bomId)
+        throw new NotFoundError("Routing operation");
+
+      const {
+        workCenterId,
+        name,
+        description,
+        sequence,
+        setupMinutes,
+        runMinutesPerUnit,
+        isBlocking,
+      } = req.body ?? {};
+
+      const nextSequence = parseId(sequence);
+      if (nextSequence !== undefined) {
+        await assertSequenceFree(bomId, nextSequence, operationId);
+      }
+      const wc = workCenterId === undefined ? undefined : parseId(workCenterId);
+      if (workCenterId !== undefined && !wc)
+        throw new DomainError("A work centre is required.");
+
+      const updated = await prisma.bomOperation.update({
+        where: { id: operationId },
+        data: {
+          ...(wc ? { workCenterId: wc } : {}),
+          ...(name !== undefined ? { name: String(name).trim() } : {}),
+          ...(description !== undefined
+            ? { description: optionalText(description) }
+            : {}),
+          ...(nextSequence !== undefined ? { sequence: nextSequence } : {}),
+          ...(setupMinutes !== undefined
+            ? { setupMinutes: Number(setupMinutes) || 0 }
+            : {}),
+          ...(runMinutesPerUnit !== undefined
+            ? { runMinutesPerUnit: runMinutesPerUnit ?? 0 }
+            : {}),
+          ...(isBlocking !== undefined
+            ? { isBlocking: Boolean(isBlocking) }
+            : {}),
+        },
+        include: {
+          workCenter: {
+            select: { id: true, code: true, name: true, costPerHour: true },
+          },
+        },
+      });
+      res.json({ data: updated });
+    } catch (error) {
+      handleSupplyChainError(error, res, operation);
+    }
+  }
+
+  /** Drop a routing step from a draft BOM. */
+  async deleteBomOperation(req: Request, res: Response) {
+    const operation = "Remove BOM operation";
+    try {
+      const bomId = parseId(req.params.bomId);
+      const operationId = parseId(req.params.operationId);
+      if (!bomId || !operationId)
+        throw new DomainError("Invalid BOM or operation id.");
+      await assertRoutingEditable(bomId);
+
+      const existing = await prisma.bomOperation.findUnique({
+        where: { id: operationId },
+        select: { id: true, bomId: true, name: true },
+      });
+      if (!existing || existing.bomId !== bomId)
+        throw new NotFoundError("Routing operation");
+
+      await prisma.bomOperation.delete({ where: { id: operationId } });
+      res.json({ data: { id: operationId, name: existing.name } });
     } catch (error) {
       handleSupplyChainError(error, res, operation);
     }

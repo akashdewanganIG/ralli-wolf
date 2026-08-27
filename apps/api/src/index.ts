@@ -1,8 +1,14 @@
+import { assertRequiredEnvironment } from "./config/environment.js";
 import { createApp } from "./app.js";
 import { setupRoutes } from "./routes/index.js";
 import { prisma } from "@repo/db";
 import { processScheduledWhatsappCampaigns } from "./jobs/whatsappScheduler.js";
 import { startInventorySchedulers } from "./jobs/inventoryScheduler.js";
+import { startFinanceSchedulers } from "./jobs/financeScheduler.js";
+
+// Before anything binds a port or opens a connection: a service that cannot
+// sign a token or deliver a sign-in code should fail the deploy, not the user.
+assertRequiredEnvironment();
 
 const app = createApp();
 const PORT = process.env.PORT || 4000;
@@ -42,6 +48,9 @@ app.listen(PORT, () => {
 
   // Supply-chain schedulers: reorder alert sweep and reservation expiry.
   startInventorySchedulers();
+
+  // Ledger sweep: one digest a day of everything past its due date.
+  startFinanceSchedulers();
 });
 
 // Graceful shutdown

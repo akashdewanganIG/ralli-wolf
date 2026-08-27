@@ -1,7 +1,30 @@
 import jwt, { SignOptions } from "jsonwebtoken";
 
-const JWT_SECRET =
-  process.env.JWT_SECRET || "fallback-secret-key-change-in-production";
+/**
+ * The signing key for every token this service issues.
+ *
+ * There used to be a hard-coded fallback here. That string is in the repository,
+ * so any deployment that forgot to set `JWT_SECRET` was signing sessions with a
+ * value the whole world can read — and forging an admin token needs nothing more
+ * than that. The fallback now exists only outside production, and only loudly.
+ */
+function resolveJwtSecret(): string {
+  const configured = process.env.JWT_SECRET?.trim();
+  if (configured) return configured;
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "JWT_SECRET is not set. Refusing to sign tokens with a known fallback key."
+    );
+  }
+
+  console.warn(
+    "⚠️  JWT_SECRET is not set; using a development-only fallback. Tokens signed with it are forgeable by anyone with the source."
+  );
+  return "fallback-secret-key-change-in-production";
+}
+
+const JWT_SECRET = resolveJwtSecret();
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "24h";
 
 export interface JWTPayload {
@@ -140,20 +163,21 @@ export function verifySubdealerToken(token: string): SubdealerJWTPayload {
 export interface MfaTokenPayload {
   userId: number;
   purpose: "mfa";
-  otpId: number;
   iat?: number;
   exp?: number;
 }
 
 export function generateMfaToken(
   userId: number,
-  otpId: number,
   expiresIn: string = "10m"
 ): string {
+  // Deliberately identifies the account only. It used to also carry the id of
+  // the code it was issued alongside, which nothing ever read: verification
+  // redeems whichever code is currently outstanding for the user, so naming
+  // one in the token implied a binding that did not exist.
   const payload: Omit<MfaTokenPayload, "iat" | "exp"> = {
     userId,
     purpose: "mfa",
-    otpId,
   };
   return jwt.sign(payload, JWT_SECRET, { expiresIn } as SignOptions);
 }

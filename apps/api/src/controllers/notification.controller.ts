@@ -300,7 +300,6 @@ async function sendNotificationEmail(params: {
     recipientName,
     title: params.title,
     message: params.message,
-    link: params.link,
   });
 
   await emailService.sendEmail({

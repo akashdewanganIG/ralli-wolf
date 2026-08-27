@@ -42,7 +42,12 @@ model User {
   totpSecret              String?                  @map("totp_secret")
   totpVerifiedAt          DateTime?                @map("totp_verified_at")
   /// Set once the user has completed an emailed-code challenge.
-  emailOtpVerifiedAt      DateTime?                @map("email_otp_verified_at")
+  ///
+  /// Defaulted on insert because an emailed code is the second factor every
+  /// account starts with: leaving it null gives an account no second factor
+  /// at all, and `/login` then reports a challenge it never issued. Turning
+  /// the method off is an UPDATE, which this default does not touch.
+  emailOtpVerifiedAt      DateTime?                @default(now()) @map("email_otp_verified_at")
   auditLogs               AuditLog[]               @relation("AuditLogUser")
   botSessions             BotSession[]
   campaigns               Campaign[]               @relation("CampaignCreator")
@@ -1474,6 +1479,14 @@ enum NotificationType {
   GOODS_RECEIVED
   QC_FAILED
   MATERIAL_SHORTAGE
+  /// Sent to the person whose account was switched off.
+  ACCOUNT_DEACTIVATED
+  /// Sent to the person whose permissions changed.
+  ROLE_CHANGED
+  /// Sent to the raiser once the order actually reaches the supplier.
+  PURCHASE_ORDER_SENT
+  /// Sent to whoever watches the ledger when an invoice passes its due date.
+  INVOICE_OVERDUE
   GENERAL
 }
 

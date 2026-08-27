@@ -5,8 +5,13 @@ import { openSecret, sealSecret } from "../utils/secretBox.js";
 /** The methods an account can authenticate with. */
 export type AuthMethod = "password" | "email" | "totp";
 
-/** Accounts must keep at least this many methods enabled and verified. */
-export const MINIMUM_METHODS = 2;
+/**
+ * Accounts must keep at least this many methods enabled and verified.
+ *
+ * One is enough. What matters is not how many methods an account has but that
+ * at least one of them can actually start a sign-in — see {@link signInEntry}.
+ */
+export const MINIMUM_METHODS = 1;
 
 /** Standard 30-second step; every authenticator app assumes it. */
 const TOTP_PERIOD_SECONDS = 30;
@@ -82,13 +87,37 @@ export function canDisable(
   if (!active.includes(method)) {
     return { allowed: false, reason: `${label(method)} is not enabled.` };
   }
+  // Every method can begin a sign-in on its own — see `signInEntry` — so
+  // keeping one verified method is the whole rule. Nothing further needs
+  // checking: any account that still has a method after this can sign in.
   if (active.length - 1 < MINIMUM_METHODS) {
     return {
       allowed: false,
-      reason: `Your account must keep at least ${MINIMUM_METHODS} verified sign-in methods. Add another method before turning ${label(method)} off.`,
+      reason: `${label(method)} is the only sign-in method on this account. Set another one up before turning it off.`,
     };
   }
+
   return { allowed: true };
+}
+
+/**
+ * The method that begins a sign-in for this account.
+ *
+ * A password is the first step whenever the account keeps one. Without it the
+ * account signs in with whichever second factor it verified, which then stands
+ * alone — an authenticator in preference to an emailed code, because it does
+ * not depend on mail delivery.
+ *
+ * `null` means the account has no usable method and cannot sign in at all;
+ * `canDisable` exists to make that unreachable.
+ */
+export function signInEntry(
+  user: AuthMethodUser
+): "password" | "email" | "totp" | null {
+  if (user.passwordEnabled) return "password";
+  if (user.totpVerifiedAt) return "totp";
+  if (user.emailOtpVerifiedAt) return "email";
+  return null;
 }
 
 export function label(method: AuthMethod): string {

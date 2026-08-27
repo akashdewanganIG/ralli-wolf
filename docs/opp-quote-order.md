@@ -933,7 +933,7 @@ Description: Puts quote into IN_REVIEW + creates ApprovalProcess
 Method: POST
 Endpoint: /api/quotes/:id/send
 Auth: ADMIN+
-Description: Generates PDF → S3 → Plunk email with inline summary + download link
+Description: Generates PDF → S3 → Resend email with inline summary + download link
 ────────────────────────────────────────
 Method: GET
 Endpoint: /api/settings/global-settings
@@ -945,28 +945,35 @@ Endpoint: /api/settings/global-settings
 Auth: SYSTEM_ADMIN only
 Description: Update settings (e.g. OPPORTUNITY_DISCOUNT_THRESHOLD)
 
-Email notifications (Plunk, all fire-and-forget)
+Email notifications (Resend, all fire-and-forget)
 
 - Approver notified when a request is raised
 - Requester notified when approved or rejected (with comment)
 - Client receives quote email with inline line-item summary + S3 PDF download link (CC/BCC supported)
 
-# ❯ how do i setup the s3 and useplunk? in env vars ? also what should be the permission policy ? should I store it in a folder in an existing bucket or should I create a new one ?
+# ❯ how do i setup the s3 and email? in env vars ? also what should be the permission policy ? should I store it in a folder in an existing bucket or should I create a new one ?
 
-● Plunk Setup
+● Resend Setup
 
 1.  Get your API key
-    Go to https://useplunk.com → Settings → API Keys → copy the Secret key (starts with sk\_).
+    Go to https://resend.com → API Keys → create a key (starts with `re_`). A
+    send-only key is enough for the application.
 
-2.  Add to .env
-    PLUNK_API_KEY="sk_xxxxxxxxxxxxxxxxxxxxxxxx"
-    PLUNK_FROM_EMAIL="noreply@yourdomain.com"
-    PLUNK_FROM_NAME="Stanley Black & Decker"
-    PLUNK_USE_CUSTOM_FROM="true"
+2.  Verify your sending domain
+    Resend → Domains → add the domain your `RESEND_FROM_EMAIL` uses, then add
+    the DKIM and SPF records it gives you. Mail from an unverified domain is
+    rejected, and a domain missing SPF at its apex is far more likely to be
+    quarantined by the recipient.
 
-Note on PLUNK_USE_CUSTOM_FROM: Set to true only if you've verified a sending domain in Plunk (Settings → Domains). If you haven't verified
-a domain, set it to false — Plunk will send from their default address and your PLUNK_FROM_EMAIL is ignored. CC/BCC support depends on your
-Plunk plan — test it; if it errors, they may not support it on your tier.
+3.  Add to .env
+    RESEND_API_KEY="re_xxxxxxxxxxxxxxxxxxxxxxxx"
+    RESEND_FROM_EMAIL="Ralli Wolf <noreply@yourdomain.com>"
+    RESEND_REPLY_TO=""   # optional; omit to send with no reply address
+
+The sender in `RESEND_FROM_EMAIL` must be on the verified domain. CC and BCC
+are supported, as are attachments. Every send returns a message id, which the
+application logs — that id is how you find a specific message in the Resend
+dashboard when someone reports one never arriving.
 
 ---
 

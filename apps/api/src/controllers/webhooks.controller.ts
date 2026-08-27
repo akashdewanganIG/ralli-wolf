@@ -7,6 +7,7 @@ import {
   isValidPhone,
   isValidName,
   isValidPincode,
+  normalizeEmail,
   validateFieldLength,
 } from "../utils/validators.js";
 
@@ -365,8 +366,9 @@ export class WebhookController {
     leadData.firstName = formData.firstName?.trim() || null;
     leadData.lastName = formData.lastName?.trim() || null;
 
-    // Email (required)
-    leadData.email = formData.email?.trim() || null;
+    // Email (required). Normalised on the way in so the dedup lookup below
+    // matches regardless of how the form filled it in.
+    leadData.email = normalizeEmail(formData.email);
 
     // Phone (optional but normalized)
     if (formData.phone || formData.phone_number || formData.telephone) {
@@ -405,7 +407,7 @@ export class WebhookController {
     const extracted: any = {
       firstName: leadData.firstName?.trim() || null,
       lastName: leadData.lastName?.trim() || null,
-      email: leadData.email?.trim() || null,
+      email: normalizeEmail(leadData.email),
       phone: leadData.phone ? normalizePhone(leadData.phone) : null,
     };
 
@@ -422,7 +424,7 @@ export class WebhookController {
 
     leadData.firstName = webhookData.firstName?.trim() || null;
     leadData.lastName = webhookData.lastName?.trim() || null;
-    leadData.email = webhookData.email?.trim() || null;
+    leadData.email = normalizeEmail(webhookData.email);
 
     if (
       webhookData.phone ||
@@ -446,7 +448,7 @@ export class WebhookController {
     const leadData: any = {
       firstName: customFields.firstName?.trim() || null,
       lastName: customFields.lastName?.trim() || null,
-      email: customFields.email?.trim() || null,
+      email: normalizeEmail(customFields.email),
     };
 
     if (customFields.phone) {

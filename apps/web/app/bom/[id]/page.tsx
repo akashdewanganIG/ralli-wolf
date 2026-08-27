@@ -6,7 +6,7 @@ import { Button } from "@repo/ui/components/ui/button";
 import { Input } from "@repo/ui/components/ui/input";
 import Link from "next/link";
 import { Alert } from "@repo/ui/components/ui/alert";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import {
   DetailRow,
@@ -22,6 +22,7 @@ import {
   ProductPicker,
   type PickedProduct,
 } from "@/components/supply-chain/ProductPicker";
+import { BomRouting } from "@/components/supply-chain/BomRouting";
 import {
   useBom,
   useBomExplosion,
@@ -41,10 +42,14 @@ import { CategorySwitcher } from "@repo/ui/components/ui/category-switcher";
 
 export default function BomDetailPage() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const bomId = Number(params.id);
+  // The planning board links straight here when an order has no routing, so
+  // honour the tab it asks for rather than dropping the reader on Structure.
+  const requestedTab = searchParams.get("tab");
   const [tab, setTab] = useState<
-    "structure" | "explosion" | "costing" | "history"
-  >("structure");
+    "structure" | "routing" | "explosion" | "costing" | "history"
+  >(requestedTab === "routing" ? "routing" : "structure");
   const [explodeQuantity, setExplodeQuantity] = useState("1");
 
   const { data, isLoading, error } = useBom(bomId);
@@ -331,6 +336,7 @@ export default function BomDetailPage() {
               label: "Structure",
               count: components.length,
             },
+            { value: "routing", label: "Routing" },
             { value: "explosion", label: "Multi-level explosion" },
             { value: "costing", label: "Header & costing" },
             { value: "history", label: "Change history" },
@@ -687,6 +693,14 @@ export default function BomDetailPage() {
               )}
             </Panel>
           </>
+        )}
+
+        {tab === "routing" && (
+          <BomRouting
+            bomId={bomId}
+            isEditable={isEditable}
+            outputQuantity={bom?.outputQuantity}
+          />
         )}
 
         {tab === "explosion" && (

@@ -114,22 +114,42 @@ export class AakramanController {
       const otpHash = hashOtp(otp);
       const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
-      // Store OTP in database
-      await prisma.salesUserOTP.create({
-        data: {
-          userId: user.id,
-          phone,
-          otpHash,
-          expiresAt,
-        },
+      // Burn any code still outstanding for this user before minting another,
+      // so only the most recently sent one can be redeemed.
+      const record = await prisma.$transaction(async tx => {
+        await tx.salesUserOTP.updateMany({
+          where: { userId: user.id, usedAt: null },
+          data: { usedAt: new Date() },
+        });
+        return tx.salesUserOTP.create({
+          data: {
+            userId: user.id,
+            phone,
+            otpHash,
+            expiresAt,
+          },
+        });
       });
 
       // Send OTP via MSG91
       const sent = await msg91Service.sendOtp(phone, otp);
 
       if (!sent) {
-        // If MSG91 fails, we still have OTP in DB - could use for testing
-        console.warn("MSG91 failed to send OTP, but OTP stored in DB:", otp);
+        // Burn the code rather than leave a live one nobody received, and say
+        // so without printing the code: logs are not a place to keep a
+        // credential that is still valid.
+        await prisma.salesUserOTP.updateMany({
+          where: { id: record.id, usedAt: null },
+          data: { usedAt: new Date() },
+        });
+        console.error("Aakraman SMS OTP delivery failed", {
+          otpId: record.id,
+          userId: user.id,
+        });
+        res.status(503).json({
+          error: "We could not send your code. Please try again in a moment.",
+        });
+        return;
       }
 
       res.json({
@@ -146,7 +166,7 @@ export class AakramanController {
   }
 
   /**
-   * Send OTP via Email (Plunk)
+   * Send OTP via email
    * POST /api/aakraman/send-otp/email
    */
   async sendEmailOtp(req: Request, res: Response): Promise<void> {
@@ -177,30 +197,46 @@ export class AakramanController {
       const otpHash = hashOtp(otp);
       const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
-      // Store OTP in database
-      await prisma.salesUserOTP.create({
-        data: {
-          userId: user.id,
-          phone: user.phone || "",
-          otpHash,
-          expiresAt,
-        },
+      // Burn any code still outstanding for this user before minting another,
+      // so only the most recently sent one can be redeemed.
+      const record = await prisma.$transaction(async tx => {
+        await tx.salesUserOTP.updateMany({
+          where: { userId: user.id, usedAt: null },
+          data: { usedAt: new Date() },
+        });
+        return tx.salesUserOTP.create({
+          data: {
+            userId: user.id,
+            phone: user.phone || "",
+            otpHash,
+            expiresAt,
+          },
+        });
       });
 
-      // Send OTP via Plunk
+      // Send the OTP by email
       const userName =
         [user.firstName, user.lastName].filter(Boolean).join(" ") || "User";
       const sent = await emailService.sendAakramanOtpEmail(
-        email,
+        user.email,
         userName,
         otp
       );
 
       if (!sent) {
-        console.warn(
-          "Plunk failed to send OTP email, but OTP stored in DB:",
-          otp
-        );
+        // Same rule as the SMS path: burn the code, and never log its value.
+        await prisma.salesUserOTP.updateMany({
+          where: { id: record.id, usedAt: null },
+          data: { usedAt: new Date() },
+        });
+        console.error("Aakraman email OTP delivery failed", {
+          otpId: record.id,
+          userId: user.id,
+        });
+        res.status(503).json({
+          error: "We could not email your code. Please try again in a moment.",
+        });
+        return;
       }
 
       res.json({

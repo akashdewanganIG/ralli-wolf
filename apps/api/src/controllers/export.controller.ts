@@ -4,6 +4,7 @@ import { stringify } from "csv-stringify/sync";
 import { handleError, handleValidationError } from "../utils/errorHandler.js";
 import { ExcelService, ExportEntity } from "../services/excel.service.js";
 import { buildFullName } from "../utils/nameHelpers.js";
+import { renderEmail } from "../services/emailTemplate.js";
 
 const MAX_LIMIT = 100;
 const DEFAULT_LIMIT = 50;
@@ -281,10 +282,10 @@ export class ExportController {
           "Email selected leads"
         );
       }
-      if (!process.env.PLUNK_API_KEY || !process.env.PLUNK_FROM_EMAIL) {
+      if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) {
         return handleValidationError(
           res,
-          "Email service not configured. Please set PLUNK_API_KEY and PLUNK_FROM_EMAIL in the API environment.",
+          "Email service not configured. Please set RESEND_API_KEY and RESEND_FROM_EMAIL in the API environment.",
           "email",
           "Email selected leads"
         );
@@ -331,12 +332,31 @@ export class ExportController {
       const buffer = await workbook.xlsx.writeBuffer();
       const stamp = new Date().toISOString().slice(0, 10);
       const { emailService } = await import("../services/email.service.js");
+      const filename = `ralli-wolf-leads-${stamp}.xlsx`;
       const ok = await emailService.sendEmail({
         to,
         subject: `Leads Export (${items.length})`,
-        body: "Please find the selected CRM leads attached in Excel format.",
+        // `body` is the HTML part. This used to be a bare sentence, which
+        // arrived as one unstyled line with none of the shell every other
+        // message in the app carries.
+        body: renderEmail({
+          preview: `${items.length} leads attached as Excel.`,
+          eyebrow: "Data export",
+          heading: "Your leads export is attached",
+          paragraphs: [
+            `The ${items.length} lead${items.length === 1 ? "" : "s"} you selected are attached to this message as an Excel workbook.`,
+          ],
+          rowsLabel: "Export details",
+          rows: [
+            { label: "Records", value: String(items.length) },
+            { label: "File", value: filename },
+            { label: "Format", value: "Excel (.xlsx)" },
+          ],
+          footer:
+            "You receive this message when you export leads from the CRM.",
+        }),
         attachments: {
-          [`ralli-wolf-leads-${stamp}.xlsx`]: {
+          [filename]: {
             content: Buffer.from(buffer).toString("base64"),
             mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           },

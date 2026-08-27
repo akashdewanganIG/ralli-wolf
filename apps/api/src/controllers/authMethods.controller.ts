@@ -3,10 +3,12 @@ import { prisma } from "@repo/db";
 import { recordAuditLog } from "../utils/audit.utils.js";
 import {
   buildTotpEnrolment,
+  activeMethods,
   canDisable,
   describeMethods,
   formatManualKey,
   generateTotpSecret,
+  label,
   MINIMUM_METHODS,
   sealTotpSecret,
   verifyTotp,
@@ -19,9 +21,13 @@ import {
 } from "../services/loginOtp.service.js";
 import bcrypt from "bcryptjs";
 import {
+  describeRequest,
+  notifyAuthMethodChanged,
+  notifyPasswordChanged,
+} from "../services/loginSecurity.service.js";
+import {
   ErrorCode,
   handleError,
-  handleForbiddenError,
   handleUnauthorizedError,
   handleValidationError,
 } from "../utils/errorHandler.js";
@@ -152,6 +158,14 @@ export class AuthMethodsController {
         select: METHOD_FIELDS,
       });
 
+      notifyAuthMethodChanged(
+        updated,
+        label("totp"),
+        "enabled",
+        activeMethods(updated).map(label),
+        describeRequest(req)
+      );
+
       await recordAuditLog({
         action: "AUTH_METHOD_ENABLED_TOTP",
         changedBy: user.id,
@@ -281,6 +295,14 @@ export class AuthMethodsController {
         select: METHOD_FIELDS,
       });
 
+      notifyAuthMethodChanged(
+        updated,
+        label("email"),
+        "enabled",
+        activeMethods(updated).map(label),
+        describeRequest(req)
+      );
+
       await recordAuditLog({
         action: "AUTH_METHOD_ENABLED_EMAIL",
         changedBy: user.id,
@@ -293,6 +315,64 @@ export class AuthMethodsController {
       return res.json(summarise(updated));
     } catch (error) {
       return handleError(error, res, "Email method");
+    }
+  }
+
+  /**
+   * Sets a password, enabling password sign-in.
+   *
+   * This is how an account that turned its password off gets one back, and it
+   * is a deliberate re-entry of a new password rather than a switch that
+   * revives the old hash: the person doing it should have to know the value
+   * they are turning on.
+   */
+  async setPassword(req: Request, res: Response) {
+    try {
+      const newPassword =
+        typeof req.body?.newPassword === "string" ? req.body.newPassword : "";
+
+      if (newPassword.length < 8) {
+        return handleValidationError(
+          res,
+          "Password must be at least 8 characters.",
+          "newPassword",
+          "Auth methods"
+        );
+      }
+
+      const user = await loadUser(req.user!.id);
+      if (!user)
+        return handleUnauthorizedError(
+          res,
+          "Account not found",
+          "Auth methods"
+        );
+
+      const updated = await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          passwordHash: await bcrypt.hash(newPassword, 10),
+          passwordEnabled: true,
+          // A password just chosen by its owner is not one they must change.
+          mustChangePassword: false,
+        },
+        select: METHOD_FIELDS,
+      });
+
+      notifyPasswordChanged(updated, "enabled", describeRequest(req));
+
+      await recordAuditLog({
+        action: "AUTH_METHOD_ENABLED_PASSWORD",
+        changedBy: user.id,
+        entityType: "USER_AUTH",
+        entityId: user.id,
+        oldValues: null,
+        newValues: null,
+      });
+
+      return res.json(summarise(updated));
+    } catch (error) {
+      return handleError(error, res, "Auth methods");
     }
   }
 
@@ -320,16 +400,8 @@ export class AuthMethodsController {
           "Auth methods"
         );
 
-      if (method === "password") {
-        // Every sign-in starts with a password today; removing it would leave
-        // no way in. Refuse explicitly rather than pretending it is supported.
-        return handleForbiddenError(
-          res,
-          "Password sign-in cannot be turned off. It is the first step of every sign-in.",
-          "Auth methods"
-        );
-      }
-
+      // Password is disableable like anything else now; `canDisable` is what
+      // stops an account being left with no way to start a sign-in.
       const verdict = canDisable(user, method);
       if (!verdict.allowed) {
         return res.status(409).json({
@@ -339,20 +411,38 @@ export class AuthMethodsController {
         });
       }
 
+      // The password hash is deliberately left in place: clearing it would
+      // make re-enabling a password a reset flow rather than a toggle, and the
+      // login route refuses a password whenever `passwordEnabled` is false, so
+      // a retained hash grants nothing on its own.
       const updated = await prisma.user.update({
         where: { id: user.id },
         data:
           method === "totp"
             ? { totpVerifiedAt: null, totpSecret: null }
-            : { emailOtpVerifiedAt: null },
+            : method === "email"
+              ? { emailOtpVerifiedAt: null }
+              : { passwordEnabled: false },
         select: METHOD_FIELDS,
       });
+
+      // The message that matters most: a second factor coming off is exactly
+      // what someone with a stolen session would do first.
+      notifyAuthMethodChanged(
+        updated,
+        label(method),
+        "disabled",
+        activeMethods(updated).map(label),
+        describeRequest(req)
+      );
 
       await recordAuditLog({
         action:
           method === "totp"
             ? "AUTH_METHOD_DISABLED_TOTP"
-            : "AUTH_METHOD_DISABLED_EMAIL",
+            : method === "email"
+              ? "AUTH_METHOD_DISABLED_EMAIL"
+              : "AUTH_METHOD_DISABLED_PASSWORD",
         changedBy: user.id,
         entityType: "USER_AUTH",
         entityId: user.id,

@@ -24,9 +24,8 @@ export const EMAIL_COLORS = {
   text: "#1C1C1E",
   muted: "#6E6E73",
   dim: "#8E8E93",
-  /** Ralli Wolf red: links, the action button, and nothing else. */
+  /** Ralli Wolf red: accents only. */
   link: "#ED1C24",
-  buttonText: "#FFFFFF",
 } as const;
 
 export const EMAIL_FONT_STACKS = {
@@ -37,33 +36,6 @@ export const EMAIL_FONT_STACKS = {
 export const EMAIL_MOBILE_BREAKPOINT_PX = 480;
 
 const APP_NAME = "Ralli Wolf Operations";
-
-/**
- * Where the deployed web app lives.
- *
- * Every link in an email is built from this, so it must never resolve to a
- * developer machine: a password-reset link pointing at localhost is useless in
- * the recipient's inbox. `FRONTEND_URL` overrides it per environment; the
- * default is production rather than a local address for exactly that reason.
- *
- * The trailing slash is stripped so callers can safely append `/login`
- * without producing a double slash.
- */
-const PRODUCTION_APP_URL = "https://ralli-wolf-web.onrender.com";
-
-export function appUrl() {
-  const configured = process.env.FRONTEND_URL?.trim();
-  const base = configured || PRODUCTION_APP_URL;
-  return base.replace(/\/+$/, "");
-}
-
-export function appDomain() {
-  try {
-    return new URL(appUrl()).host;
-  } catch {
-    return new URL(PRODUCTION_APP_URL).host;
-  }
-}
 
 export type EmailRow = { label: string; value: string };
 
@@ -76,7 +48,6 @@ export type EmailContent = {
   paragraphs?: string[];
   /** A one-time code, set in mono at display size. */
   code?: string;
-  button?: { label: string; href: string };
   /** Fine print directly under the action. */
   note?: string;
   rowsLabel?: string;
@@ -152,10 +123,6 @@ export function renderEmail(content: EmailContent): string {
     ? `<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 20px"><tr><td style="border:1px solid ${C.border};padding:16px 24px;font-family:${F.mono};font-size:30px;font-weight:600;letter-spacing:0.22em;color:${C.text};line-height:36px">${escapeHtml(content.code)}</td></tr></table>`
     : "";
 
-  const button = content.button
-    ? `<a href="${escapeHtml(content.button.href)}" style="display:inline-block;font-family:${F.mono};font-size:12px;color:${C.buttonText};text-decoration:none;padding:10px 16px;background-color:${C.link};border:1px solid ${C.link};line-height:16px">${escapeHtml(content.button.label)}</a>`
-    : "";
-
   const note = content.note
     ? `<p style="margin:18px 0 0;font-family:${F.mono};font-size:11px;color:${C.dim};line-height:16px">${escapeHtml(content.note)}</p>`
     : "";
@@ -194,7 +161,6 @@ export function renderEmail(content: EmailContent): string {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse"><tr>
 <td class="masthead" style="vertical-align:middle">
 <p style="margin:0;font-family:${F.sans};font-size:13px;font-weight:500;color:${C.text};line-height:16px">${escapeHtml(APP_NAME)}</p>
-<a href="${escapeHtml(appUrl())}" style="font-family:${F.mono};font-size:11px;color:${C.link};line-height:16px;text-decoration:none">${escapeHtml(appDomain())}</a>
 </td>
 <td align="right" class="masthead stamp" style="vertical-align:middle">
 <p style="margin:0;font-family:${F.mono};font-size:12px;color:${C.dim}">${stamp}</p>
@@ -204,7 +170,7 @@ export function renderEmail(content: EmailContent): string {
 <tr><td class="gutter" style="padding:40px 32px 36px">
 <p style="margin:0 0 14px;font-family:${F.mono};font-size:11px;color:${C.dim};line-height:16px">${escapeHtml(content.eyebrow)}</p>
 <h1 class="headline" style="margin:0 0 24px;font-family:${F.sans};font-weight:500;font-size:28px;line-height:1.2;letter-spacing:-0.022em;color:${C.text}">${escapeHtml(content.heading)}</h1>
-${paragraphs}${code}${content.bodyHtml ?? ""}${button}${note}
+${paragraphs}${code}${content.bodyHtml ?? ""}${note}
 </td></tr>
 ${rowsSection}
 <tr><td class="gutter" style="border-top:1px dashed ${C.border};padding:18px 32px 22px">

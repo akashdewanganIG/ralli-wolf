@@ -95,7 +95,7 @@ This **single environment file** contains all configuration for:
 - Database credentials (PostgreSQL)
 - Backend API configuration (Express)
 - Frontend configuration (Next.js - `NEXT_PUBLIC_*` variables)
-- Third-party service credentials (AWS S3, MSG91, Plunk, GST API)
+- Third-party service credentials (AWS S3, MSG91, Resend, GST API)
 - JWT secrets and encryption keys
 - Feature flags and optional settings
 
@@ -190,12 +190,12 @@ MSG91_AUTH_KEY="your-msg91-auth-key"
 MSG91_OTP_TEMPLATE_ID="your-template-id"
 ```
 
-**Plunk (Required for email campaigns):**
+**Resend (Required for all transactional email):**
 
 ```bash
-PLUNK_API_KEY="your-plunk-api-key"
-PLUNK_FROM_EMAIL="no-reply@yourdomain.com"
-PLUNK_FROM_NAME="Your Company CRM"
+RESEND_API_KEY="re_your_api_key"
+RESEND_FROM_EMAIL="Ralli Wolf <otp-noreply@yourdomain.com>"
+RESEND_REPLY_TO=""
 ```
 
 **GST API (Required for subdealer GST verification):**
@@ -593,12 +593,10 @@ MSG91_AUTH_KEY="your-msg91-auth-key"
 MSG91_OTP_TEMPLATE_ID="your-template-id"
 ```
 
-**Brevo/Plunk:**
+**Brevo:**
 
 ```bash
-PLUNK_API_KEY="your-plunk-or-brevo-api-key"
-PLUNK_FROM_EMAIL="no-reply@yourdomain.com"
-PLUNK_FROM_NAME="Your Company CRM"
+BREVO_API_KEY="your-brevo-api-key"
 ```
 
 **Note:** Integration Manager settings take precedence over environment variables.

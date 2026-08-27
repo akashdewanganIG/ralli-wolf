@@ -1,4 +1,24 @@
 /**
+ * Canonical form of an email address for storage and for lookups.
+ *
+ * Addresses must be written and read through the same normalisation or
+ * matching silently depends on how someone happened to type it: a lead
+ * submitted as `John@X.com` would not match the existing `john@x.com`, and
+ * both would sit in the database as separate people. The local part is
+ * technically case-sensitive per RFC 5321, but no mail provider in practice
+ * treats it that way, and matching people is what this is for.
+ *
+ * Returns null for absent or blank input so callers can assign it straight to
+ * a nullable column.
+ */
+export function normalizeEmail(
+  email: string | null | undefined
+): string | null {
+  const trimmed = email?.trim().toLowerCase();
+  return trimmed ? trimmed : null;
+}
+
+/**
  * Validate email address with specific domain requirements
  * Pattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.(com|co|in|org|net|edu|gov|io|info)$
  */

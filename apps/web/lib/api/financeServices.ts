@@ -273,6 +273,29 @@ export type PlannedOperation = {
   workCenter: { code: string; name: string };
 };
 
+/** One step of a BOM's routing — where the work happens and how long it takes. */
+export type BomOperationRow = {
+  id: number;
+  bomId: number;
+  sequence: number;
+  name: string;
+  description: string | null;
+  setupMinutes: number;
+  runMinutesPerUnit: string;
+  isBlocking: boolean;
+  workCenter: { id: number; code: string; name: string; costPerHour: string };
+};
+
+export type BomOperationPayload = {
+  workCenterId: number;
+  name: string;
+  description?: string;
+  sequence?: number;
+  setupMinutes?: number;
+  runMinutesPerUnit?: string;
+  isBlocking?: boolean;
+};
+
 export type PlanningBoardRow = {
   id: number;
   orderNumber: string;
@@ -318,6 +341,38 @@ export const planningService = {
     parallelCapacity?: number;
   }): Promise<{ data: WorkCenterRow }> =>
     (await apiClient.post("/api/planning/work-centers", payload)).data,
+
+  bomOperations: async (bomId: number): Promise<{ data: BomOperationRow[] }> =>
+    (await apiClient.get(`/api/planning/boms/${bomId}/operations`)).data,
+
+  addBomOperation: async (
+    bomId: number,
+    payload: BomOperationPayload
+  ): Promise<{ data: BomOperationRow }> =>
+    (await apiClient.post(`/api/planning/boms/${bomId}/operations`, payload))
+      .data,
+
+  updateBomOperation: async (
+    bomId: number,
+    operationId: number,
+    payload: Partial<BomOperationPayload>
+  ): Promise<{ data: BomOperationRow }> =>
+    (
+      await apiClient.patch(
+        `/api/planning/boms/${bomId}/operations/${operationId}`,
+        payload
+      )
+    ).data,
+
+  deleteBomOperation: async (
+    bomId: number,
+    operationId: number
+  ): Promise<{ data: { id: number; name: string } }> =>
+    (
+      await apiClient.delete(
+        `/api/planning/boms/${bomId}/operations/${operationId}`
+      )
+    ).data,
 
   scheduleOrder: async (
     id: number

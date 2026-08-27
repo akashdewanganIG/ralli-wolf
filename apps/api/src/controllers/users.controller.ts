@@ -19,6 +19,8 @@ import {
   isValidName,
 } from "../utils/validators.js";
 import { parsePhoneNumber } from "../utils/phoneHelper.js";
+import { createNotification } from "./notification.controller.js";
+import { NotificationType } from "@prisma/client";
 import { recordAuditLog } from "../utils/audit.utils.js";
 import { isPermission } from "@repo/db/permissions";
 
@@ -633,10 +635,28 @@ export class UserController {
         }
       }
 
+      // Read the role before writing, so the notice below fires on an actual
+      // change rather than on every save that happens to include a role.
+      const before = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { role: true },
+      });
+
       const user = await prisma.user.update({
         where: { id: userId },
         data: updateData,
       });
+
+      if (before && before.role !== user.role) {
+        void createNotification({
+          userId: user.id,
+          type: NotificationType.ROLE_CHANGED,
+          title: `Your role is now ${user.role}`,
+          message: `An administrator changed your role from ${before.role} to ${user.role}. What you can reach in Ralli Wolf has changed accordingly.`,
+        }).catch(error =>
+          console.error("[Users] Role change notice failed:", error)
+        );
+      }
 
       res.json(user);
     } catch (error: any) {
@@ -675,6 +695,19 @@ export class UserController {
           deletedBy: req.user?.id,
         },
       });
+
+      // Sent after the write, so it only ever describes an account that really
+      // was switched off. Without it the person simply stops being able to
+      // sign in, with nothing telling them why.
+      void createNotification({
+        userId,
+        type: NotificationType.ACCOUNT_DEACTIVATED,
+        title: "Your Ralli Wolf access has been switched off",
+        message:
+          "An administrator has deactivated your account, so you will no longer be able to sign in. If you believe this is a mistake, contact them.",
+      }).catch(error =>
+        console.error("[Users] Deactivation notice failed:", error)
+      );
 
       res.status(204).send();
     } catch (error: any) {

@@ -27,6 +27,7 @@ import {
   toDecimal,
 } from "../services/supplyChain/decimal.js";
 import { createNotification } from "./notification.controller.js";
+import { emailService } from "../services/email.service.js";
 import { buildFullName } from "../utils/nameHelpers.js";
 import {
   handleSupplyChainError,
@@ -1053,10 +1054,83 @@ export class PurchasingController {
         return updated;
       });
 
+      // Sending the order to the supplier happens after the transaction, not
+      // inside it: a mail failure must not roll back a status change that has
+      // already been decided, and the supplier can be re-sent to.
+      if (status === PurchaseOrderStatus.SENT) {
+        void this.deliverPurchaseOrder(order.id).catch(error =>
+          console.error("[Purchasing] Sending PO to supplier failed:", error)
+        );
+      }
+
       return res.json({ data: order });
     } catch (error) {
       handleSupplyChainError(error, res, operation);
     }
+  }
+
+  /**
+   * Emails a purchase order to its supplier and tells the raiser it went.
+   *
+   * Until this existed an order could be marked SENT without anything leaving
+   * the building: the status said the supplier had it, and the supplier did
+   * not. Never throws — the caller has already committed the status change.
+   */
+  private async deliverPurchaseOrder(purchaseOrderId: number) {
+    const po = await prisma.purchaseOrder.findUnique({
+      where: { id: purchaseOrderId },
+      include: {
+        supplier: { select: { name: true, email: true } },
+        warehouse: { select: { name: true } },
+        lines: {
+          orderBy: { lineNumber: "asc" },
+          include: {
+            product: { select: { name: true } },
+            uom: { select: { code: true } },
+          },
+        },
+      },
+    });
+    if (!po) return;
+
+    if (!po.supplier.email) {
+      console.warn("[Purchasing] Supplier has no email; PO not sent", {
+        poNumber: po.poNumber,
+      });
+    } else {
+      await emailService.sendPurchaseOrderEmail({
+        to: po.supplier.email,
+        supplierName: po.supplier.name,
+        poNumber: po.poNumber,
+        orderDate: po.orderDate,
+        expectedDeliveryDate: po.expectedDeliveryDate,
+        currencyCode: po.currencyCode,
+        subtotal: Number(po.subtotal),
+        taxAmount: Number(po.taxAmount),
+        grandTotal: Number(po.grandTotal),
+        paymentTerms: po.paymentTerms,
+        deliverTo: po.shipToAddress ?? po.warehouse?.name ?? null,
+        notes: po.notes,
+        lines: po.lines.map(line => ({
+          description:
+            line.description ?? line.product?.name ?? `Item ${line.lineNumber}`,
+          quantity: line.quantity.toFixed(2),
+          uom: line.uom?.code ?? null,
+          unitPrice: line.unitPrice.toFixed(2),
+          lineTotal: line.lineTotal.toFixed(2),
+        })),
+      });
+    }
+
+    await createNotification({
+      userId: po.createdById,
+      type: "PURCHASE_ORDER_SENT",
+      title: `${po.poNumber} has been sent to ${po.supplier.name}`,
+      message: po.supplier.email
+        ? `The order was emailed to ${po.supplier.email}. You will be notified when goods are received against it.`
+        : `${po.supplier.name} has no email address on file, so the order could not be emailed. Send it to them another way, or add an address to the supplier record.`,
+      link: `/purchasing/orders/${po.id}`,
+    });
   }
 
   /**

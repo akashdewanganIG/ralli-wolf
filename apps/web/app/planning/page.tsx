@@ -208,6 +208,16 @@ export default function PlanningPage() {
                     >
                       Schedule
                     </Button>
+                  ) : row.bom ? (
+                    // Dead-end otherwise: the fix is always to put a routing on
+                    // the BOM, so send the planner straight there.
+                    <Link
+                      href={`/bom/${row.bom.id}?tab=routing`}
+                      onClick={event => event.stopPropagation()}
+                      className="text-xs font-medium text-primary hover:text-info"
+                    >
+                      Add routing
+                    </Link>
                   ) : (
                     <span className="text-xs text-muted-foreground">
                       No routing

@@ -17,7 +17,7 @@ export type NotificationDefinition = {
   /** One line explaining when it fires. */
   description: string;
   /** Grouping header in the settings list. */
-  group: "Approvals" | "Purchasing" | "Inventory";
+  group: "Approvals" | "Purchasing" | "Inventory" | "Finance" | "Your account";
   /**
    * Whether an email exists for this type. Everything listed has one today;
    * the flag keeps the UI honest if a future type is in-app only.
@@ -49,10 +49,17 @@ export const NOTIFICATION_CATALOGUE: readonly NotificationDefinition[] = [
     supportsEmail: true,
   },
   {
+    type: NotificationType.PURCHASE_ORDER_SENT,
+    label: "Purchase order sent",
+    description:
+      "A purchase order you raised has been emailed to the supplier.",
+    group: "Purchasing",
+    supportsEmail: true,
+  },
+  {
     type: NotificationType.QC_FAILED,
     label: "Quality check failed",
-    description:
-      "Inspected goods are rejected or passed only with conditions.",
+    description: "Inspected goods are rejected or passed only with conditions.",
     group: "Purchasing",
     supportsEmail: true,
   },
@@ -62,6 +69,29 @@ export const NOTIFICATION_CATALOGUE: readonly NotificationDefinition[] = [
     description:
       "Stock falls below its reorder point or a critical alert is raised.",
     group: "Inventory",
+    supportsEmail: true,
+  },
+  {
+    type: NotificationType.INVOICE_OVERDUE,
+    label: "Overdue invoices",
+    description:
+      "A supplier or customer invoice passes its due date while still unpaid.",
+    group: "Finance",
+    supportsEmail: true,
+  },
+  {
+    type: NotificationType.ROLE_CHANGED,
+    label: "Your role changed",
+    description: "An administrator changes what your account can reach.",
+    group: "Your account",
+    supportsEmail: true,
+  },
+  {
+    type: NotificationType.ACCOUNT_DEACTIVATED,
+    label: "Your account was deactivated",
+    description:
+      "Your access is switched off, so a failed sign-in has an explanation.",
+    group: "Your account",
     supportsEmail: true,
   },
 ] as const;

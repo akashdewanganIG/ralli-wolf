@@ -68,6 +68,14 @@ planningRouter.post(
   "/boms/:bomId/operations",
   planning.addBomOperation.bind(planning)
 );
+planningRouter.patch(
+  "/boms/:bomId/operations/:operationId",
+  planning.updateBomOperation.bind(planning)
+);
+planningRouter.delete(
+  "/boms/:bomId/operations/:operationId",
+  planning.deleteBomOperation.bind(planning)
+);
 
 // Scheduling a production order across its routing
 planningRouter.get(

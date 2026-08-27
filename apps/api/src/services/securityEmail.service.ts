@@ -70,7 +70,7 @@ export async function sendLoginAlertEmail(input: {
     "Ralli Wolf Operations",
   ].join("\n");
 
-  await sendResendEmail({
+  return sendResendEmail({
     to: input.to,
     subject: "New sign-in to your Ralli Wolf account",
     html,
@@ -133,11 +133,161 @@ export async function sendFailedLoginWarningEmail(input: {
     "Ralli Wolf Operations",
   ].join("\n");
 
-  await sendResendEmail({
+  return sendResendEmail({
     to: input.to,
     subject: "Failed sign-in attempts on your Ralli Wolf account",
     html,
     text,
     category: "login_warning",
+  });
+}
+
+/** How the password came to be changed, which decides the advice given. */
+export type PasswordChangeReason = "reset" | "changed" | "enabled";
+
+const CHANGE_COPY: Record<
+  PasswordChangeReason,
+  { eyebrow: string; heading: string; opening: string }
+> = {
+  reset: {
+    eyebrow: "Account security",
+    heading: "Your password was reset",
+    opening:
+      "your password has been reset using a code sent to this address, and the old one no longer works.",
+  },
+  changed: {
+    eyebrow: "Account security",
+    heading: "Your password was changed",
+    opening:
+      "your password has just been changed, and the old one no longer works.",
+  },
+  enabled: {
+    eyebrow: "Account security",
+    heading: "Password sign-in was turned on",
+    opening:
+      "a password has been set on your account, so signing in now starts with it.",
+  },
+};
+
+/**
+ * Tells the account owner their password changed.
+ *
+ * This is the control that makes a stolen reset code survivable: whoever holds
+ * the account may not have noticed the change, and this is the message that
+ * tells them. It is therefore sent on every path that writes a password —
+ * a reset, a deliberate change, and turning password sign-in back on — rather
+ * than only the one that felt security-related when it was written.
+ *
+ * It never contains the password, and it does not link to a reset: an email
+ * that arrives unexpectedly should not also hand over a one-click way in.
+ */
+export async function sendPasswordChangedEmail(input: {
+  to: string;
+  firstName: string | null;
+  reason: PasswordChangeReason;
+  context: SignInContext;
+}) {
+  const name = input.firstName?.trim() || "there";
+  const copy = CHANGE_COPY[input.reason];
+  const rows = contextRows(input.context);
+  const advice =
+    "If this was not you, your account may be compromised. Contact your administrator straight away — they can reset your access.";
+
+  const html = renderEmail({
+    preview: `${copy.heading}.`,
+    eyebrow: copy.eyebrow,
+    heading: copy.heading,
+    paragraphs: [`Hi ${name}, ${copy.opening}`, advice],
+    rowsLabel: "Change details",
+    rows,
+    footer:
+      "You receive this message whenever the password on your account changes.",
+    date: input.context.at,
+  });
+
+  const text = [
+    `Hi ${name},`,
+    "",
+    `${copy.heading}: ${copy.opening}`,
+    ...rows.map(row => `${row.label}: ${row.value}`),
+    "",
+    advice,
+    "Ralli Wolf Operations",
+  ].join("\n");
+
+  return sendResendEmail({
+    to: input.to,
+    subject: `${copy.heading} — Ralli Wolf`,
+    html,
+    text,
+    category: "password_changed",
+  });
+}
+
+/**
+ * Tells the account owner a sign-in method was turned on or off.
+ *
+ * Without this, someone who reaches an open session can quietly remove the
+ * second factor and leave no trace the owner would ever see. The audit log
+ * records it, but the owner does not read the audit log.
+ */
+export async function sendAuthMethodChangedEmail(input: {
+  to: string;
+  firstName: string | null;
+  /** Human label, e.g. "Email code" or "Authenticator app". */
+  method: string;
+  action: "enabled" | "disabled";
+  /** Methods still able to sign in, so the owner can judge the risk. */
+  remaining: string[];
+  context: SignInContext;
+}) {
+  const name = input.firstName?.trim() || "there";
+  const turned = input.action === "enabled" ? "turned on" : "turned off";
+  const rows: EmailRow[] = [
+    { label: "Method", value: input.method },
+    { label: "Change", value: turned },
+    {
+      label: "Still active",
+      value: input.remaining.length ? input.remaining.join(", ") : "none",
+    },
+    ...contextRows(input.context),
+  ];
+
+  const advice =
+    input.action === "disabled"
+      ? "If you did not turn this off, someone may have access to your account. Contact your administrator straight away."
+      : "If you did not turn this on, contact your administrator straight away.";
+
+  const html = renderEmail({
+    preview: `${input.method} was ${turned} on your account.`,
+    eyebrow: "Account security",
+    heading: `A sign-in method was ${turned}`,
+    paragraphs: [
+      `Hi ${name}, ${input.method.toLowerCase()} has been ${turned} on your Ralli Wolf account.`,
+      advice,
+    ],
+    rowsLabel: "Change details",
+    rows,
+    footer:
+      "You receive this message whenever the ways of signing in to your account change.",
+    date: input.context.at,
+  });
+
+  const text = [
+    `Hi ${name},`,
+    "",
+    `${input.method} has been ${turned} on your Ralli Wolf account.`,
+    ...rows.map(row => `${row.label}: ${row.value}`),
+    "",
+    advice,
+    "Ralli Wolf Operations",
+  ].join("\n");
+
+  return sendResendEmail({
+    to: input.to,
+    subject: `${input.method} was ${turned} — Ralli Wolf`,
+    html,
+    text,
+    category: "auth_method_changed",
   });
 }

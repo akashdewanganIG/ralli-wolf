@@ -134,6 +134,16 @@ export const authService = {
     return response.data;
   },
 
+  /** Sets a password and turns password sign-in back on. */
+  setAuthPassword: async (
+    newPassword: string
+  ): Promise<AuthMethodsSummary> => {
+    const response = await apiClient.post("/api/auth/methods/password", {
+      newPassword,
+    });
+    return response.data;
+  },
+
   disableAuthMethod: async (
     method: "totp" | "email" | "password"
   ): Promise<AuthMethodsSummary> => {

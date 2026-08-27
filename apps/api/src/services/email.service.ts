@@ -1,27 +1,36 @@
 /**
- * Email Service using Plunk.
+ * Application email.
  *
  * Transport only: every message body is rendered by the shared shell in
  * `emailTemplate.ts`, so this file decides what an email says and never how
  * it looks.
+ *
+ * Delivery goes through Resend, the same path as the sign-in codes and
+ * security alerts. One provider means one sending domain, one reputation to
+ * maintain, and one dashboard to look in when someone says an email never
+ * arrived.
  */
 import {
-  appUrl,
   EMAIL_COLORS,
   EMAIL_FONT_STACKS,
   renderEmail,
   type EmailRow,
 } from "./emailTemplate.js";
+import { sendResendEmail, type ResendAttachment } from "./resendClient.js";
 
-interface PlunkEmailOptions {
+interface EmailOptions {
   to: string;
   subject: string;
+  /** Rendered HTML. A plain-text part is derived from it automatically. */
   body: string;
+  /** Retained for call-site compatibility; Resend takes the name from `from`. */
   name?: string;
   replyTo?: string;
   cc?: string[];
   bcc?: string[];
   attachments?: Record<string, { content: string; mime: string }>;
+  /** Groups the send in Resend's dashboard. */
+  category?: string;
 }
 
 interface UserCreationEmailData {
@@ -32,30 +41,6 @@ interface UserCreationEmailData {
 }
 
 class EmailService {
-  private apiKey: string;
-  private fromEmail: string;
-  private fromName: string;
-  private apiUrl = "https://api.useplunk.com/v1/send";
-
-  constructor() {
-    this.apiKey = process.env.PLUNK_API_KEY || "";
-    this.fromEmail = process.env.PLUNK_FROM_EMAIL || "";
-    this.fromName = process.env.PLUNK_FROM_NAME || "CRM System";
-
-    if (!this.apiKey) {
-      console.warn("PLUNK_API_KEY is not set in environment variables");
-    }
-    if (!this.fromEmail) {
-      console.warn("PLUNK_FROM_EMAIL is not set in environment variables");
-    }
-    console.log("Email service initialized:", {
-      hasApiKey: !!this.apiKey,
-      apiKeyLength: this.apiKey?.length,
-      fromEmail: this.fromEmail,
-      fromName: this.fromName,
-    });
-  }
-
   private escapeHtml(input: string): string {
     return input
       .replace(/&/g, "&amp;")
@@ -66,90 +51,48 @@ class EmailService {
   }
 
   /**
-   * Send a generic email using Plunk
+   * Sends one message, reporting success as a boolean.
+   *
+   * Callers decide how much a failure matters — a lead-assignment notice can
+   * be dropped, a password-reset code cannot — so this never throws. It does
+   * always log, with Resend's message id on success and the reason on
+   * failure, because a send that vanishes without either is untraceable.
    */
-  async sendEmail(options: PlunkEmailOptions): Promise<boolean> {
-    if (!this.apiKey) {
-      console.error("Email service not configured: Missing PLUNK_API_KEY");
-      return false;
-    }
-
-    if (!this.fromEmail) {
-      console.error("Email service not configured: Missing PLUNK_FROM_EMAIL");
-      return false;
-    }
-
-    const useCustomFrom = process.env.PLUNK_USE_CUSTOM_FROM === "true";
-
-    const payload: any = {
-      to: options.to,
-      subject: options.subject,
-      body: options.body,
-      subscribed: false,
-      // Plunk: name/from/reply are optional overrides; omit if not defined/verified
-      name: options.name || this.fromName || undefined,
-      from: useCustomFrom ? this.fromEmail : undefined,
-      reply: useCustomFrom
-        ? options.replyTo || this.fromEmail
-        : options.replyTo || undefined,
-      // CC and BCC support (Plunk transactional API)
-      cc: options.cc && options.cc.length > 0 ? options.cc : undefined,
-      bcc: options.bcc && options.bcc.length > 0 ? options.bcc : undefined,
-    };
-
-    // Remove undefined optional fields to avoid API rejection
-    Object.keys(payload).forEach(k => {
-      if (payload[k] === undefined) delete payload[k];
-    });
-
-    if (options.attachments && Object.keys(options.attachments).length > 0) {
-      // Plunk expects attachments as an array of { filename, content, contentType }
-      payload.attachments = Object.entries(options.attachments).map(
-        ([filename, meta]) => ({
+  async sendEmail(options: EmailOptions): Promise<boolean> {
+    const attachments: ResendAttachment[] | undefined = options.attachments
+      ? Object.entries(options.attachments).map(([filename, meta]) => ({
           filename,
           content: meta.content,
           contentType: meta.mime,
-        })
-      );
-    }
-
-    console.log("Sending email with Plunk:", {
-      to: options.to,
-      subject: options.subject,
-      from: this.fromEmail,
-      hasApiKey: !!this.apiKey,
-    });
+        }))
+      : undefined;
 
     try {
-      const response = await fetch(this.apiUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify(payload),
+      const { id } = await sendResendEmail({
+        to: options.to,
+        subject: options.subject,
+        html: options.body,
+        category: options.category ?? "application",
+        cc: options.cc,
+        bcc: options.bcc,
+        replyTo: options.replyTo,
+        attachments,
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("Plunk API error:", errorData);
-        return false;
-      }
-
-      const data = await response.json();
-      console.log("Email sent successfully:", data);
+      console.log("Email sent", {
+        to: options.to,
+        subject: options.subject,
+        messageId: id,
+      });
       return true;
     } catch (error) {
-      console.error("Error sending email:", error);
+      console.error("Email delivery failed", {
+        to: options.to,
+        subject: options.subject,
+        error: error instanceof Error ? error.message : "Unknown Resend error",
+      });
       return false;
     }
   }
-
-  /** Base URL of the web app, for links back into it. */
-  private appUrl() {
-    return appUrl();
-  }
-
   /**
    * Sends a newly created user their credentials.
    *
@@ -172,7 +115,6 @@ class EmailService {
         `Hi ${data.name}, an administrator has created your Ralli Wolf Operations account. Sign in with the credentials below.`,
         "Change your password as soon as you are in. It is temporary, and it should not be shared with anyone.",
       ],
-      button: { label: "Go to dashboard", href: `${this.appUrl()}/login` },
       rowsLabel: "Your credentials",
       rows,
       footer:
@@ -217,8 +159,8 @@ class EmailService {
   /**
    * Tells a sales user that leads have landed in their queue.
    *
-   * The portal link used to be a hard-coded third-party domain; it now follows
-   * FRONTEND_URL like every other link in this file.
+   * Says what landed and leaves it there. These emails carry no link back
+   * into the app by design.
    */
   async sendLeadAssignmentNotificationEmail(
     email: string,
@@ -234,10 +176,6 @@ class EmailService {
       paragraphs: [
         `Hi ${name}, ${leadCount} new ${plural} ${leadCount === 1 ? "has" : "have"} been assigned to you. They are waiting in your queue.`,
       ],
-      button: {
-        label: "Open your leads",
-        href: `${this.appUrl()}/leads/assigned`,
-      },
       rowsLabel: "Assignment",
       rows: [{ label: "New leads", value: String(leadCount) }],
       footer:
@@ -247,35 +185,6 @@ class EmailService {
     return await this.sendEmail({
       to: email,
       subject: `${leadCount} new ${plural} assigned to you`,
-      body,
-      name,
-    });
-  }
-
-  /** Sends the tokenised link that lets someone set a new password. */
-  async sendPasswordResetEmail(
-    email: string,
-    name: string,
-    resetToken: string
-  ): Promise<boolean> {
-    const resetUrl = `${this.appUrl()}/reset-password?token=${resetToken}`;
-
-    const body = renderEmail({
-      preview: "Reset your Ralli Wolf Operations password.",
-      eyebrow: "Password reset",
-      heading: "Reset your password",
-      paragraphs: [
-        `Hi ${name}, we received a request to reset your password. Use the button below to choose a new one.`,
-      ],
-      button: { label: "Reset password", href: resetUrl },
-      note: "This link expires shortly and can be used once. If the button does not work, copy the address from your browser's status bar.",
-      footer:
-        "If you did not request a reset, ignore this email — your password is unchanged.",
-    });
-
-    return await this.sendEmail({
-      to: email,
-      subject: "Reset your Ralli Wolf Operations password",
       body,
       name,
     });
@@ -332,10 +241,6 @@ class EmailService {
       paragraphs: [
         `Hi ${data.approverName}, ${data.requesterName} has submitted a ${data.objectType.toLowerCase()} for your approval.`,
       ],
-      button: {
-        label: "Review the request",
-        href: `${this.appUrl()}/sales/approvals`,
-      },
       rowsLabel: "Request details",
       rows,
       footer:
@@ -409,6 +314,104 @@ class EmailService {
    * slot. Everything interpolated into them is escaped here, which is the
    * condition that slot comes with.
    */
+  /**
+   * Sends a purchase order to the supplier.
+   *
+   * The only email in this file addressed to someone outside the business, so
+   * it states the order plainly and asks for one thing back: confirmation.
+   * Amounts are the ordered ones — this is the document the supplier will
+   * invoice against, so it must match what was approved.
+   */
+  async sendPurchaseOrderEmail(data: {
+    to: string;
+    supplierName: string;
+    poNumber: string;
+    orderDate: Date;
+    expectedDeliveryDate?: Date | null;
+    currencyCode: string;
+    subtotal: number;
+    taxAmount: number;
+    grandTotal: number;
+    paymentTerms?: string | null;
+    deliverTo?: string | null;
+    notes?: string | null;
+    lines: Array<{
+      description: string;
+      quantity: string;
+      uom?: string | null;
+      unitPrice: string;
+      lineTotal: string;
+    }>;
+  }): Promise<boolean> {
+    const C = EMAIL_COLORS;
+    const F = EMAIL_FONT_STACKS;
+    const money = (value: number) => `${data.currencyCode} ${value.toFixed(2)}`;
+    const date = (value: Date) =>
+      new Intl.DateTimeFormat("en-IN", {
+        dateStyle: "medium",
+        timeZone: "Asia/Kolkata",
+      }).format(value);
+
+    const cell = `padding:8px 10px;border-bottom:1px solid ${C.border};font-family:${F.mono};font-size:12px;color:${C.text};line-height:18px`;
+    const head = `padding:0 10px 8px;border-bottom:1px solid ${C.border};font-family:${F.mono};font-size:11px;color:${C.dim};line-height:16px;text-align:left`;
+
+    const rowsHtml = data.lines
+      .map(
+        line =>
+          `<tr><td style="${cell}">${this.escapeHtml(line.description)}</td><td style="${cell};text-align:right">${this.escapeHtml(line.quantity)}${line.uom ? ` ${this.escapeHtml(line.uom)}` : ""}</td><td style="${cell};text-align:right">${this.escapeHtml(line.unitPrice)}</td><td style="${cell};text-align:right">${this.escapeHtml(line.lineTotal)}</td></tr>`
+      )
+      .join("");
+
+    const bodyHtml = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 20px">
+<tr><th style="${head}">Item</th><th style="${head};text-align:right">Qty</th><th style="${head};text-align:right">Unit price</th><th style="${head};text-align:right">Total</th></tr>
+${rowsHtml}
+<tr><td colspan="3" style="${cell};text-align:right;color:${C.dim}">Subtotal</td><td style="${cell};text-align:right">${this.escapeHtml(money(data.subtotal))}</td></tr>
+<tr><td colspan="3" style="${cell};text-align:right;color:${C.dim}">Tax</td><td style="${cell};text-align:right">${this.escapeHtml(money(data.taxAmount))}</td></tr>
+<tr><td colspan="3" style="${cell};text-align:right;font-weight:600">Total</td><td style="${cell};text-align:right;font-weight:600">${this.escapeHtml(money(data.grandTotal))}</td></tr>
+</table>`;
+
+    const rows: EmailRow[] = [
+      { label: "Order number", value: data.poNumber },
+      { label: "Order date", value: date(data.orderDate) },
+    ];
+    if (data.expectedDeliveryDate) {
+      rows.push({
+        label: "Required by",
+        value: date(data.expectedDeliveryDate),
+      });
+    }
+    if (data.paymentTerms) {
+      rows.push({ label: "Payment terms", value: data.paymentTerms });
+    }
+    if (data.deliverTo) {
+      rows.push({ label: "Deliver to", value: data.deliverTo });
+    }
+
+    const body = renderEmail({
+      preview: `Purchase order ${data.poNumber} from Ralli Wolf Operations.`,
+      eyebrow: "Purchase order",
+      heading: `Purchase order ${data.poNumber}`,
+      paragraphs: [
+        `Dear ${data.supplierName}, please find our purchase order below.`,
+        ...(data.notes ? [data.notes] : []),
+      ],
+      bodyHtml,
+      note: "Please confirm receipt of this order and the delivery date by replying to this email.",
+      rowsLabel: "Order details",
+      rows,
+      footer:
+        "This purchase order is issued by Ralli Wolf Operations. Quote the order number on your invoice and delivery documents.",
+    });
+
+    return await this.sendEmail({
+      to: data.to,
+      subject: `Purchase order ${data.poNumber} from Ralli Wolf Operations`,
+      body,
+      name: data.supplierName,
+      category: "purchase_order",
+    });
+  }
+
   async sendQuoteEmail(data: {
     to: string;
     contactName: string;
@@ -502,6 +505,12 @@ class EmailService {
     if (quote.notes) {
       rows.push({ label: "Notes", value: quote.notes });
     }
+    // The PDF address is given as a value rather than a link. It is the one
+    // thing in here the reader may need to fetch, so it is stated plainly and
+    // can be copied; nothing in these emails is clickable by design.
+    if (quote.pdfUrl) {
+      rows.push({ label: "Quote PDF", value: quote.pdfUrl });
+    }
 
     const body = renderEmail({
       preview: `Quote ${quote.quoteNumber} — ${money(quote.grandTotal)}`,
@@ -510,10 +519,9 @@ class EmailService {
       paragraphs: [
         `Dear ${data.contactName},`,
         data.message ||
-          "Please find your quote below. The full PDF is attached to the button underneath the totals.",
+          "Please find your quote below. The address of the full PDF is in the quote details underneath the totals.",
       ],
       bodyHtml,
-      button: { label: "Download quote PDF", href: quote.pdfUrl },
       rowsLabel: "Quote details",
       rows,
       footer:

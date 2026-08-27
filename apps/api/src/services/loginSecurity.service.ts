@@ -1,7 +1,10 @@
 import type { Request } from "express";
 import {
+  sendAuthMethodChangedEmail,
   sendFailedLoginWarningEmail,
   sendLoginAlertEmail,
+  sendPasswordChangedEmail,
+  type PasswordChangeReason,
   type SignInContext,
 } from "./securityEmail.service.js";
 
@@ -86,18 +89,17 @@ export function recordFailedAttempt(
   if (!dueForWarning) return;
 
   record.lastWarnedAt = now;
-  void sendFailedLoginWarningEmail({
-    to: user.email,
-    firstName: user.firstName,
-    attempts: record.count,
-    stage,
-    context,
-  }).catch(error => {
-    console.error("Failed-login warning email not delivered", {
-      userId: user.id,
-      error: error instanceof Error ? error.message : "Unknown Resend error",
-    });
-  });
+  dispatch(
+    "Failed-login warning",
+    user.id,
+    sendFailedLoginWarningEmail({
+      to: user.email,
+      firstName: user.firstName,
+      attempts: record.count,
+      stage,
+      context,
+    })
+  );
 }
 
 /** Clears the run of failures once the account authenticates successfully. */
@@ -105,19 +107,87 @@ export function clearFailedAttempts(userId: number) {
   attempts.delete(userId);
 }
 
+/**
+ * Fires one security email without letting it affect the caller.
+ *
+ * Every notice in this file is sent after the thing it describes has already
+ * happened, so a mail failure must never surface as an error on that action.
+ * Logging the message id on success is what makes "it never arrived"
+ * investigable: it is the only handle tying our logs to Resend's.
+ */
+function dispatch(
+  what: string,
+  userId: number,
+  send: Promise<{ id: string }>
+): void {
+  void send
+    .then(({ id }) =>
+      console.info(`${what} dispatched`, { userId, messageId: id })
+    )
+    .catch(error =>
+      console.error(`${what} not delivered`, {
+        userId,
+        error: error instanceof Error ? error.message : "Unknown Resend error",
+      })
+    );
+}
+
 /** Tells the owner a session started. Fire-and-forget, like the warning. */
 export function notifySuccessfulLogin(
   user: AccountRef,
   context: SignInContext
 ) {
-  void sendLoginAlertEmail({
-    to: user.email,
-    firstName: user.firstName,
-    context,
-  }).catch(error => {
-    console.error("Login alert email not delivered", {
-      userId: user.id,
-      error: error instanceof Error ? error.message : "Unknown Resend error",
-    });
-  });
+  dispatch(
+    "Login alert",
+    user.id,
+    sendLoginAlertEmail({
+      to: user.email,
+      firstName: user.firstName,
+      context,
+    })
+  );
+}
+
+/**
+ * Tells the owner their password changed. Fire-and-forget, like the alerts
+ * above: the change itself has already been committed, and a mail failure must
+ * not turn a successful password change into an error the user sees.
+ */
+export function notifyPasswordChanged(
+  user: AccountRef,
+  reason: PasswordChangeReason,
+  context: SignInContext
+) {
+  dispatch(
+    "Password change notice",
+    user.id,
+    sendPasswordChangedEmail({
+      to: user.email,
+      firstName: user.firstName,
+      reason,
+      context,
+    })
+  );
+}
+
+/** Tells the owner a sign-in method was turned on or off. Fire-and-forget. */
+export function notifyAuthMethodChanged(
+  user: AccountRef,
+  method: string,
+  action: "enabled" | "disabled",
+  remaining: string[],
+  context: SignInContext
+) {
+  dispatch(
+    "Auth method change notice",
+    user.id,
+    sendAuthMethodChangedEmail({
+      to: user.email,
+      firstName: user.firstName,
+      method,
+      action,
+      remaining,
+      context,
+    })
+  );
 }
