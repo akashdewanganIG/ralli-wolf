@@ -10,7 +10,7 @@ import { Input } from "@repo/ui/components/ui/input";
 import { cn } from "@repo/ui/lib/utils";
 import ralliWolfLogo from "../app/assets/images/logos/ralli-wolf-logo.png";
 import { useAuth } from "../contexts/AuthContext";
-import type { ApiError } from "../lib/api/types";
+import { isSignedIn, type ApiError } from "../lib/api/types";
 import { validateEmailBasic } from "../lib/validation";
 import { toast } from "@/lib/toast";
 import LoginShowcase from "./LoginShowcase";
@@ -19,12 +19,16 @@ import LoginFaq from "./LoginFaq";
 import LoginFooter from "./LoginFooter";
 
 /**
- * Sign-in is two steps: whatever begins it, then whatever confirms it.
+ * Sign-in has one step or two, and only the server knows which.
  *
- * For most accounts that is a password followed by a code. An account that has
- * turned its password off starts at the code instead, which is why the
- * password field is optional here — the server decides whether one is needed,
- * because only it knows which methods the account kept.
+ * An account with just a password is signed in by `/login` itself. An account
+ * with a second factor gets a challenge to confirm. An account that turned its
+ * password off starts at that challenge instead — which is why the password
+ * field is optional here.
+ *
+ * The form must therefore read what came back rather than assume a challenge:
+ * assuming one is what put an authenticator prompt in front of accounts that
+ * had never enrolled an authenticator.
  */
 type Step = "credentials" | "code";
 type Factor = "totp" | "email";
@@ -236,7 +240,23 @@ export function LoginForm({
     setIsSubmitting(true);
     clearError();
     try {
-      const challenge = await login({ email: normalizedEmail, password });
+      const result = await login({ email: normalizedEmail, password });
+
+      // An account whose only sign-in method is its password is already
+      // signed in at this point — there is no second step to show. Going to
+      // the code screen anyway is what made an authenticator prompt appear
+      // for accounts that have never enrolled one.
+      if (isSignedIn(result)) {
+        toast.success("Welcome back", {
+          description: "You are signed in to Ralli Wolf.",
+        });
+        router.replace(
+          result.user.role?.toUpperCase() === "SALES" ? "/sales-user" : "/"
+        );
+        return;
+      }
+
+      const challenge = result;
       setMfaToken(challenge.mfaToken);
       setMaskedEmail(challenge.maskedEmail);
       setFactor(challenge.factor);
@@ -324,9 +344,7 @@ export function LoginForm({
 
   const submitDisabled =
     isSubmitting ||
-    (step === "credentials"
-      ? !!emailError || !email
-      : otp.length !== 6);
+    (step === "credentials" ? !!emailError || !email : otp.length !== 6);
 
   const canFallBackToEmail =
     step === "code" && factor === "totp" && availableFactors.includes("email");

@@ -12,6 +12,7 @@ import {
   LoginRequest,
   LoginOtpVerifyRequest,
   LoginMfaChallenge,
+  LoginResult,
   AuthMethodsSummary,
   TotpEnrolment,
   LoginOtpResendResponse,
@@ -78,7 +79,7 @@ export const authService = {
    * Step one of sign-in. A correct password does not return a session — it
    * returns a challenge, and the emailed code must be verified next.
    */
-  login: async (credentials: LoginRequest): Promise<LoginMfaChallenge> => {
+  login: async (credentials: LoginRequest): Promise<LoginResult> => {
     const response = await apiClient.post("/api/auth/login", credentials);
     return response.data;
   },
@@ -135,9 +136,7 @@ export const authService = {
   },
 
   /** Sets a password and turns password sign-in back on. */
-  setAuthPassword: async (
-    newPassword: string
-  ): Promise<AuthMethodsSummary> => {
+  setAuthPassword: async (newPassword: string): Promise<AuthMethodsSummary> => {
     const response = await apiClient.post("/api/auth/methods/password", {
       newPassword,
     });

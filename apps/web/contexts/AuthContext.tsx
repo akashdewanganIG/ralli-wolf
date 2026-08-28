@@ -14,7 +14,8 @@ import { authService } from "../lib/api/services";
 import {
   User,
   LoginRequest,
-  LoginMfaChallenge,
+  LoginResult,
+  isSignedIn,
   LoginOtpResendResponse,
   LoginOtpVerifyRequest,
   SignupRequest,
@@ -30,7 +31,7 @@ interface AuthContextType {
    * Verifies the password and triggers the emailed code. Resolves with the
    * challenge to hand to `loginWithOtp`; it does not sign anyone in.
    */
-  login: (credentials: LoginRequest) => Promise<LoginMfaChallenge>;
+  login: (credentials: LoginRequest) => Promise<LoginResult>;
   resendLoginOtp: (mfaToken: string) => Promise<LoginOtpResendResponse>;
   /** Completes sign-in by redeeming the emailed code. */
   loginWithOtp: (credentials: LoginOtpVerifyRequest) => Promise<User>;
@@ -103,7 +104,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
       clearError();
       // Deliberately does not touch `isLoading`: no session exists yet, and
       // flipping it would blank the sign-in form mid-flow.
-      return await authService.login(credentials);
+      const result = await authService.login(credentials);
+
+      // An account whose only method is its password is signed in by /login
+      // itself, with no second step to wait for. Store that session here so
+      // the caller does not have to know which of the two answers it got.
+      if (isSignedIn(result)) {
+        persistAuthSession(result, undefined, false);
+      }
+      return result;
     } catch (err) {
       const apiError = err as ApiError;
       setError(apiError.message || "Login failed");

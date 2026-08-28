@@ -542,6 +542,21 @@ export interface LoginMfaChallenge {
   availableFactors: Array<"totp" | "email">;
 }
 
+/**
+ * What `POST /auth/login` actually answers with.
+ *
+ * An account with a second factor gets a challenge; an account whose only
+ * method is its password is signed in there and then, so the session arrives
+ * immediately. The caller must tell them apart before assuming a code is
+ * coming — `isSignedIn` below is the check.
+ */
+export type LoginResult = LoginMfaChallenge | LoginResponse;
+
+/** Narrows a login answer to the case where a session was issued outright. */
+export function isSignedIn(result: LoginResult): result is LoginResponse {
+  return "token" in result && typeof result.token === "string";
+}
+
 export interface LoginOtpResendResponse {
   success: boolean;
   maskedEmail: string;
