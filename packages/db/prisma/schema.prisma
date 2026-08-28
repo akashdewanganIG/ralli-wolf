@@ -43,11 +43,10 @@ model User {
   totpVerifiedAt          DateTime?                @map("totp_verified_at")
   /// Set once the user has completed an emailed-code challenge.
   ///
-  /// Defaulted on insert because an emailed code is the second factor every
-  /// account starts with: leaving it null gives an account no second factor
-  /// at all, and `/login` then reports a challenge it never issued. Turning
-  /// the method off is an UPDATE, which this default does not touch.
-  emailOtpVerifiedAt      DateTime?                @default(now()) @map("email_otp_verified_at")
+  /// No default: a second factor is opt-in, added by the account holder in
+  /// Settings. An account without one signs in with its password alone, which
+  /// `/login` handles directly rather than asking for a code it never sent.
+  emailOtpVerifiedAt      DateTime?                @map("email_otp_verified_at")
   auditLogs               AuditLog[]               @relation("AuditLogUser")
   botSessions             BotSession[]
   campaigns               Campaign[]               @relation("CampaignCreator")

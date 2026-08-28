@@ -48,16 +48,28 @@ const user = await prisma.user.create({
 });
 const token = generateToken(user.id, user.email);
 try {
-  // Created with email OTP verified (DB default) + password.
-  const sum = await call("GET", "/api/auth/methods", undefined, token);
+  // A second factor is opt-in, so the account starts on its password alone.
+  const fresh = await call("GET", "/api/auth/methods", undefined, token);
   ok(
-    sum.json.minimumRequired === 1,
+    fresh.json.minimumRequired === 1,
     "minimum is now 1",
-    `got ${sum.json.minimumRequired}`
+    `got ${fresh.json.minimumRequired}`
   );
   ok(
+    fresh.json.activeCount === 1,
+    "a new account starts with password only",
+    `got ${fresh.json.activeCount}`
+  );
+
+  // Enrol the emailed code so the rules below have two methods to act on.
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { emailOtpVerifiedAt: new Date() },
+  });
+  const sum = await call("GET", "/api/auth/methods", undefined, token);
+  ok(
     sum.json.activeCount === 2,
-    "starts with password + email",
+    "enrolling the email code gives two methods",
     `got ${sum.json.activeCount}`
   );
 

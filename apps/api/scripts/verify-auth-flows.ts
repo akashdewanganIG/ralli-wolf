@@ -41,11 +41,26 @@ const user = await prisma.user.create({
   },
 });
 try {
-  // The fix that locked Rishabh out: a brand-new row must get a second factor.
+  // A second factor is opt-in, so a new account starts on its password alone.
+  ok(!user.emailOtpVerifiedAt, "new account starts with no second factor");
+
+  const soloLogin = await post("/api/auth/login", { email, password });
   ok(
-    !!user.emailOtpVerifiedAt,
-    "new user gets emailOtpVerifiedAt from DB default"
+    soloLogin.status === 200 && !!soloLogin.json.token,
+    "password-only account signs straight in",
+    `got ${soloLogin.status}`
   );
+  ok(
+    soloLogin.json.mfaRequired === undefined,
+    "no code is demanded when no second factor is enrolled"
+  );
+
+  // Everything below exercises the emailed-code machinery, so enrol it first
+  // rather than relying on a default that no longer exists.
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { emailOtpVerifiedAt: new Date() },
+  });
 
   const bad = await post("/api/auth/login", { email, password: "wrong" });
   ok(bad.status === 401, "wrong password -> 401", `got ${bad.status}`);
