@@ -7,13 +7,13 @@ import { Label } from "@repo/ui/components/ui/label";
 import { cn } from "@repo/ui/lib/utils";
 import { ChevronDown, Plus, Search, X } from "@repo/ui/icons";
 import React, { useEffect, useRef, useState } from "react";
-import { useCreateKeyword, useKeywords } from "../hooks/useKeywords";
+import { useCreateKeyword, useKeywords } from "../hooks/use-keywords";
 import { ListSkeleton } from "./skeletons";
 import { Tag } from "@repo/ui/components/ui/tag";
 
 interface KeywordSelectProps {
   selectedKeywordIds: number[];
-  onSelectionChange?: (keywordIds: number[]) => void;
+  onSelectionChange: (keywordIds: number[]) => void;
   label?: string;
   placeholder?: string;
   className?: string;
@@ -21,7 +21,7 @@ interface KeywordSelectProps {
 
 export function KeywordSelect({
   selectedKeywordIds = [],
-  onSelectionChange = () => {},
+  onSelectionChange,
   label = "Keyword",
   placeholder = "Select or create keywords",
   className,
@@ -32,40 +32,24 @@ export function KeywordSelect({
   const [isCreating, setIsCreating] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Fetch all keywords (for displaying selected ones)
   const { data: allKeywords = [], isLoading: isLoadingAllKeywords } =
     useKeywords();
 
-  // Fetch keywords with search (for the dropdown list)
   const searchTerm = searchQuery.trim() || undefined;
   const { data: searchKeywords = [], isLoading: isLoadingSearchKeywords } =
     useKeywords(searchTerm);
 
   const createKeywordMutation = useCreateKeyword();
 
-  // Ensure onSelectionChange is always a function
-  const handleSelectionChange = React.useCallback(
-    (keywordIds: number[]) => {
-      if (typeof onSelectionChange === "function") {
-        onSelectionChange(keywordIds);
-      } else {
-        console.error(
-          "onSelectionChange is not a function",
-          typeof onSelectionChange,
-          onSelectionChange
-        );
-      }
-    },
-    [onSelectionChange]
-  );
+  const handleSelectionChange = React.useCallback(onSelectionChange, [
+    onSelectionChange,
+  ]);
 
-  // Use search results if searching, otherwise use all keywords
   const keywords = searchTerm ? searchKeywords : allKeywords;
   const isLoadingKeywords = searchTerm
     ? isLoadingSearchKeywords
     : isLoadingAllKeywords;
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -87,12 +71,10 @@ export function KeywordSelect({
     };
   }, [isOpen]);
 
-  // Get selected keywords from all keywords (so they show even when searching)
   const selectedKeywords = allKeywords.filter(k =>
     selectedKeywordIds.includes(k.id)
   );
 
-  // Available keywords are those in the current list that aren't selected
   const availableKeywords = keywords.filter(
     k => !selectedKeywordIds.includes(k.id)
   );
@@ -109,29 +91,25 @@ export function KeywordSelect({
     handleSelectionChange(selectedKeywordIds.filter(id => id !== keywordId));
   };
 
-  const handleCreateKeyword = async () => {
+  const handleCreateKeyword = () => {
     if (!newKeywordName.trim()) return;
 
     const keywordName = newKeywordName.trim().toLowerCase();
     setIsCreating(true);
-
-    try {
-      const newKeyword = await createKeywordMutation.mutateAsync(keywordName);
-      handleSelectionChange([...selectedKeywordIds, newKeyword.id]);
-      setNewKeywordName("");
-      setSearchQuery("");
-    } catch (error) {
-      console.error("Failed to create keyword:", error);
-    } finally {
-      setIsCreating(false);
-    }
+    createKeywordMutation.mutate(keywordName, {
+      onSuccess: newKeyword => {
+        handleSelectionChange([...selectedKeywordIds, newKeyword.id]);
+        setNewKeywordName("");
+        setSearchQuery("");
+      },
+      onSettled: () => setIsCreating(false),
+    });
   };
 
   return (
     <div className={cn("space-y-2", className)}>
       {label && <Label>{label}</Label>}
 
-      {/* Selected Keywords Display */}
       {selectedKeywords.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-2">
           {selectedKeywords.map(keyword => (
@@ -146,7 +124,6 @@ export function KeywordSelect({
         </div>
       )}
 
-      {/* Dropdown */}
       <div className="relative" ref={dropdownRef}>
         <Button
           type="button"
@@ -164,7 +141,6 @@ export function KeywordSelect({
 
         {isOpen && (
           <div className="absolute z-50 w-full mt-1 bg-surface border rounded-md shadow-lg max-h-80 overflow-auto">
-            {/* Search Input */}
             <div className="p-2 border-b">
               <div className="relative">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -178,7 +154,6 @@ export function KeywordSelect({
               </div>
             </div>
 
-            {/* Create New Keyword */}
             <div className="p-2 border-b">
               <div className="flex gap-2">
                 <Input
@@ -204,7 +179,6 @@ export function KeywordSelect({
               </div>
             </div>
 
-            {/* Keywords List */}
             <div className="max-h-48 overflow-auto">
               {isLoadingKeywords ? (
                 <div className="p-4">

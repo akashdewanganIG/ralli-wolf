@@ -16,8 +16,12 @@ import {
   resetSupplyChainData,
   seedSupplyChainReference,
 } from "./seed-supply-chain.js";
+import bcrypt from "bcryptjs";
+import {
+  assertDestructiveDatabaseAllowed,
+  requireDemoSeedPassword,
+} from "./seed-safety.js";
 
-// Use DIRECT_URL for seeding to avoid PgBouncer prepared statement issues
 const prisma = new PrismaClient({
   datasources: {
     db: {
@@ -26,9 +30,6 @@ const prisma = new PrismaClient({
   },
 });
 
-// -------------------------------
-// Helpers
-// -------------------------------
 function randInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
@@ -59,17 +60,13 @@ function buildEmail(name: string, company: string): string {
 }
 
 async function main() {
+  assertDestructiveDatabaseAllowed("The primary database seed");
   console.log("🌱 Seeding database (destructive reset, medium volume)...");
 
-  // Destructive reset in FK-safe order (sequential to avoid prepared statement conflicts with connection poolers)
-  // Supply-chain tables first: they reference products and users, so clearing
-  // those below would otherwise fail on a foreign key.
   await resetSupplyChainData(prisma);
 
-  // Approvals reference users and must go before the user wipe.
   await prisma.approvalProcess.deleteMany({});
 
-  // Opportunity-Quote-Order tables (delete in reverse dependency order)
   await prisma.salesOrderLineItem.deleteMany({});
   await prisma.salesOrder.deleteMany({});
   await prisma.quoteLineItem.deleteMany({});
@@ -80,6 +77,9 @@ async function main() {
 
   await prisma.chatHistory.deleteMany({});
   await prisma.botSession.deleteMany({});
+  await prisma.webhookReceipt.deleteMany({});
+  await prisma.rateLimitBucket.deleteMany({});
+  await prisma.schedulerLease.deleteMany({});
   await prisma.analyticsEvent.deleteMany({});
   await prisma.formSubmission.deleteMany({});
   await prisma.campaignMember.deleteMany({});
@@ -95,32 +95,70 @@ async function main() {
   await prisma.account.deleteMany({});
   await prisma.user.deleteMany({});
 
-  // Currencies
   console.log("\n💰 Creating currencies...\n");
-  // Kept in step with the 20260824120000_add_world_currencies migration, so a
-  // freshly seeded database and a freshly migrated one offer the same list.
+
   const currencies = [
     { code: "USD", name: "US Dollar", symbol: "$", country: "United States" },
     { code: "EUR", name: "Euro", symbol: "€", country: "European Union" },
     { code: "JPY", name: "Japanese Yen", symbol: "¥", country: "Japan" },
-    { code: "GBP", name: "British Pound", symbol: "£", country: "United Kingdom" },
-    { code: "AUD", name: "Australian Dollar", symbol: "$", country: "Australia" },
+    {
+      code: "GBP",
+      name: "British Pound",
+      symbol: "£",
+      country: "United Kingdom",
+    },
+    {
+      code: "AUD",
+      name: "Australian Dollar",
+      symbol: "$",
+      country: "Australia",
+    },
     { code: "CAD", name: "Canadian Dollar", symbol: "$", country: "Canada" },
     { code: "CHF", name: "Swiss Franc", symbol: "CHF", country: "Switzerland" },
     { code: "CNY", name: "Chinese Yuan", symbol: "¥", country: "China" },
     { code: "INR", name: "Indian Rupee", symbol: "₹", country: "India" },
-    { code: "NZD", name: "New Zealand Dollar", symbol: "$", country: "New Zealand" },
-    { code: "SGD", name: "Singapore Dollar", symbol: "$", country: "Singapore" },
-    { code: "HKD", name: "Hong Kong Dollar", symbol: "$", country: "Hong Kong" },
+    {
+      code: "NZD",
+      name: "New Zealand Dollar",
+      symbol: "$",
+      country: "New Zealand",
+    },
+    {
+      code: "SGD",
+      name: "Singapore Dollar",
+      symbol: "$",
+      country: "Singapore",
+    },
+    {
+      code: "HKD",
+      name: "Hong Kong Dollar",
+      symbol: "$",
+      country: "Hong Kong",
+    },
     { code: "SEK", name: "Swedish Krona", symbol: "kr", country: "Sweden" },
     { code: "NOK", name: "Norwegian Krone", symbol: "kr", country: "Norway" },
     { code: "DKK", name: "Danish Krone", symbol: "kr", country: "Denmark" },
     { code: "ISK", name: "Icelandic Krona", symbol: "kr", country: "Iceland" },
-    { code: "KRW", name: "South Korean Won", symbol: "₩", country: "South Korea" },
-    { code: "TWD", name: "New Taiwan Dollar", symbol: "NT$", country: "Taiwan" },
+    {
+      code: "KRW",
+      name: "South Korean Won",
+      symbol: "₩",
+      country: "South Korea",
+    },
+    {
+      code: "TWD",
+      name: "New Taiwan Dollar",
+      symbol: "NT$",
+      country: "Taiwan",
+    },
     { code: "MXN", name: "Mexican Peso", symbol: "$", country: "Mexico" },
     { code: "BRL", name: "Brazilian Real", symbol: "R$", country: "Brazil" },
-    { code: "ZAR", name: "South African Rand", symbol: "R", country: "South Africa" },
+    {
+      code: "ZAR",
+      name: "South African Rand",
+      symbol: "R",
+      country: "South Africa",
+    },
     { code: "RUB", name: "Russian Ruble", symbol: "₽", country: "Russia" },
     { code: "TRY", name: "Turkish Lira", symbol: "₺", country: "Turkey" },
     { code: "PLN", name: "Polish Zloty", symbol: "zł", country: "Poland" },
@@ -130,7 +168,12 @@ async function main() {
     { code: "BGN", name: "Bulgarian Lev", symbol: "лв", country: "Bulgaria" },
     { code: "UAH", name: "Ukrainian Hryvnia", symbol: "₴", country: "Ukraine" },
     { code: "RSD", name: "Serbian Dinar", symbol: "дин", country: "Serbia" },
-    { code: "AED", name: "UAE Dirham", symbol: "د.إ", country: "United Arab Emirates" },
+    {
+      code: "AED",
+      name: "UAE Dirham",
+      symbol: "د.إ",
+      country: "United Arab Emirates",
+    },
     { code: "SAR", name: "Saudi Riyal", symbol: "﷼", country: "Saudi Arabia" },
     { code: "QAR", name: "Qatari Riyal", symbol: "﷼", country: "Qatar" },
     { code: "KWD", name: "Kuwaiti Dinar", symbol: "د.ك", country: "Kuwait" },
@@ -143,9 +186,24 @@ async function main() {
     { code: "IRR", name: "Iranian Rial", symbol: "﷼", country: "Iran" },
     { code: "YER", name: "Yemeni Rial", symbol: "﷼", country: "Yemen" },
     { code: "THB", name: "Thai Baht", symbol: "฿", country: "Thailand" },
-    { code: "MYR", name: "Malaysian Ringgit", symbol: "RM", country: "Malaysia" },
-    { code: "IDR", name: "Indonesian Rupiah", symbol: "Rp", country: "Indonesia" },
-    { code: "PHP", name: "Philippine Peso", symbol: "₱", country: "Philippines" },
+    {
+      code: "MYR",
+      name: "Malaysian Ringgit",
+      symbol: "RM",
+      country: "Malaysia",
+    },
+    {
+      code: "IDR",
+      name: "Indonesian Rupiah",
+      symbol: "Rp",
+      country: "Indonesia",
+    },
+    {
+      code: "PHP",
+      name: "Philippine Peso",
+      symbol: "₱",
+      country: "Philippines",
+    },
     { code: "VND", name: "Vietnamese Dong", symbol: "₫", country: "Vietnam" },
     { code: "BND", name: "Brunei Dollar", symbol: "$", country: "Brunei" },
     { code: "KHR", name: "Cambodian Riel", symbol: "៛", country: "Cambodia" },
@@ -154,63 +212,161 @@ async function main() {
     { code: "MNT", name: "Mongolian Tugrik", symbol: "₮", country: "Mongolia" },
     { code: "MOP", name: "Macanese Pataca", symbol: "MOP$", country: "Macao" },
     { code: "FJD", name: "Fijian Dollar", symbol: "$", country: "Fiji" },
-    { code: "PGK", name: "Papua New Guinean Kina", symbol: "K", country: "Papua New Guinea" },
+    {
+      code: "PGK",
+      name: "Papua New Guinean Kina",
+      symbol: "K",
+      country: "Papua New Guinea",
+    },
     { code: "PKR", name: "Pakistani Rupee", symbol: "₨", country: "Pakistan" },
-    { code: "BDT", name: "Bangladeshi Taka", symbol: "৳", country: "Bangladesh" },
-    { code: "LKR", name: "Sri Lankan Rupee", symbol: "₨", country: "Sri Lanka" },
+    {
+      code: "BDT",
+      name: "Bangladeshi Taka",
+      symbol: "৳",
+      country: "Bangladesh",
+    },
+    {
+      code: "LKR",
+      name: "Sri Lankan Rupee",
+      symbol: "₨",
+      country: "Sri Lanka",
+    },
     { code: "NPR", name: "Nepalese Rupee", symbol: "₨", country: "Nepal" },
-    { code: "MVR", name: "Maldivian Rufiyaa", symbol: "Rf", country: "Maldives" },
-    { code: "AFN", name: "Afghan Afghani", symbol: "؋", country: "Afghanistan" },
-    { code: "BTN", name: "Bhutanese Ngultrum", symbol: "Nu.", country: "Bhutan" },
-    { code: "KZT", name: "Kazakhstani Tenge", symbol: "₸", country: "Kazakhstan" },
-    { code: "UZS", name: "Uzbekistani Som", symbol: "so'm", country: "Uzbekistan" },
-    { code: "AZN", name: "Azerbaijani Manat", symbol: "₼", country: "Azerbaijan" },
+    {
+      code: "MVR",
+      name: "Maldivian Rufiyaa",
+      symbol: "Rf",
+      country: "Maldives",
+    },
+    {
+      code: "AFN",
+      name: "Afghan Afghani",
+      symbol: "؋",
+      country: "Afghanistan",
+    },
+    {
+      code: "BTN",
+      name: "Bhutanese Ngultrum",
+      symbol: "Nu.",
+      country: "Bhutan",
+    },
+    {
+      code: "KZT",
+      name: "Kazakhstani Tenge",
+      symbol: "₸",
+      country: "Kazakhstan",
+    },
+    {
+      code: "UZS",
+      name: "Uzbekistani Som",
+      symbol: "so'm",
+      country: "Uzbekistan",
+    },
+    {
+      code: "AZN",
+      name: "Azerbaijani Manat",
+      symbol: "₼",
+      country: "Azerbaijan",
+    },
     { code: "GEL", name: "Georgian Lari", symbol: "₾", country: "Georgia" },
     { code: "AMD", name: "Armenian Dram", symbol: "֏", country: "Armenia" },
     { code: "EGP", name: "Egyptian Pound", symbol: "£", country: "Egypt" },
     { code: "NGN", name: "Nigerian Naira", symbol: "₦", country: "Nigeria" },
     { code: "KES", name: "Kenyan Shilling", symbol: "KSh", country: "Kenya" },
-    { code: "TZS", name: "Tanzanian Shilling", symbol: "TSh", country: "Tanzania" },
+    {
+      code: "TZS",
+      name: "Tanzanian Shilling",
+      symbol: "TSh",
+      country: "Tanzania",
+    },
     { code: "UGX", name: "Ugandan Shilling", symbol: "USh", country: "Uganda" },
     { code: "GHS", name: "Ghanaian Cedi", symbol: "₵", country: "Ghana" },
     { code: "ETB", name: "Ethiopian Birr", symbol: "Br", country: "Ethiopia" },
-    { code: "MAD", name: "Moroccan Dirham", symbol: "د.م.", country: "Morocco" },
+    {
+      code: "MAD",
+      name: "Moroccan Dirham",
+      symbol: "د.م.",
+      country: "Morocco",
+    },
     { code: "DZD", name: "Algerian Dinar", symbol: "د.ج", country: "Algeria" },
     { code: "TND", name: "Tunisian Dinar", symbol: "د.ت", country: "Tunisia" },
     { code: "MUR", name: "Mauritian Rupee", symbol: "₨", country: "Mauritius" },
     { code: "BWP", name: "Botswana Pula", symbol: "P", country: "Botswana" },
     { code: "NAD", name: "Namibian Dollar", symbol: "$", country: "Namibia" },
     { code: "ZMW", name: "Zambian Kwacha", symbol: "ZK", country: "Zambia" },
-    { code: "MZN", name: "Mozambican Metical", symbol: "MT", country: "Mozambique" },
+    {
+      code: "MZN",
+      name: "Mozambican Metical",
+      symbol: "MT",
+      country: "Mozambique",
+    },
     { code: "AOA", name: "Angolan Kwanza", symbol: "Kz", country: "Angola" },
-    { code: "XOF", name: "West African CFA Franc", symbol: "CFA", country: "West African Union" },
-    { code: "XAF", name: "Central African CFA Franc", symbol: "FCFA", country: "Central African Union" },
+    {
+      code: "XOF",
+      name: "West African CFA Franc",
+      symbol: "CFA",
+      country: "West African Union",
+    },
+    {
+      code: "XAF",
+      name: "Central African CFA Franc",
+      symbol: "FCFA",
+      country: "Central African Union",
+    },
     { code: "ARS", name: "Argentine Peso", symbol: "$", country: "Argentina" },
     { code: "CLP", name: "Chilean Peso", symbol: "$", country: "Chile" },
     { code: "COP", name: "Colombian Peso", symbol: "$", country: "Colombia" },
     { code: "PEN", name: "Peruvian Sol", symbol: "S/", country: "Peru" },
     { code: "UYU", name: "Uruguayan Peso", symbol: "$U", country: "Uruguay" },
-    { code: "BOB", name: "Bolivian Boliviano", symbol: "Bs.", country: "Bolivia" },
-    { code: "PYG", name: "Paraguayan Guarani", symbol: "₲", country: "Paraguay" },
-    { code: "CRC", name: "Costa Rican Colon", symbol: "₡", country: "Costa Rica" },
-    { code: "GTQ", name: "Guatemalan Quetzal", symbol: "Q", country: "Guatemala" },
-    { code: "DOP", name: "Dominican Peso", symbol: "RD$", country: "Dominican Republic" },
+    {
+      code: "BOB",
+      name: "Bolivian Boliviano",
+      symbol: "Bs.",
+      country: "Bolivia",
+    },
+    {
+      code: "PYG",
+      name: "Paraguayan Guarani",
+      symbol: "₲",
+      country: "Paraguay",
+    },
+    {
+      code: "CRC",
+      name: "Costa Rican Colon",
+      symbol: "₡",
+      country: "Costa Rica",
+    },
+    {
+      code: "GTQ",
+      name: "Guatemalan Quetzal",
+      symbol: "Q",
+      country: "Guatemala",
+    },
+    {
+      code: "DOP",
+      name: "Dominican Peso",
+      symbol: "RD$",
+      country: "Dominican Republic",
+    },
     { code: "JMD", name: "Jamaican Dollar", symbol: "$", country: "Jamaica" },
-    { code: "TTD", name: "Trinidad and Tobago Dollar", symbol: "$", country: "Trinidad and Tobago" },
+    {
+      code: "TTD",
+      name: "Trinidad and Tobago Dollar",
+      symbol: "$",
+      country: "Trinidad and Tobago",
+    },
   ];
   await prisma.currency.createMany({
     data: currencies,
     skipDuplicates: true,
   });
 
-  // add default currency in global settings
   await prisma.globalSetting.upsert({
     where: { key: "defaultCurrency" },
     update: { value: "INR" },
     create: { key: "defaultCurrency", value: "INR" },
   });
 
-  // add default opportunity discount threshold (0 = any discount requires approval)
   await prisma.globalSetting.upsert({
     where: { key: "OPPORTUNITY_DISCOUNT_THRESHOLD" },
     update: {},
@@ -222,37 +378,50 @@ async function main() {
     },
   });
 
-  // Supply-chain reference data: units of measure, document numbering and
-  // alert-engine settings. Idempotent, so it is also safe to run on its own
-  // against an existing environment via `npm run db:seed:supply-chain`.
   console.log("\n📦 Seeding supply chain reference data...\n");
   await seedSupplyChainReference(prisma);
 
-  // Users with roles
-  const passwordHash =
-    "$2a$10$zkwJCafrQjcLn2.Z1bJA.OKYuQ/RVFL6w2pKEFWY5387H/ET4zmOu"; // "admin123"
+  const passwordHash = await bcrypt.hash(requireDemoSeedPassword(), 12);
 
   console.log("\n🔐 Creating user accounts...\n");
 
-  // 1. ADMIN User
   const superAdminUser = await prisma.user.upsert({
     where: { email: "superadmin@example.com" },
-    update: {},
+    update: {
+      firstName: "Super",
+      lastName: "Admin",
+      passwordHash,
+      role: UserRole.ADMIN,
+      region: null,
+      countryCode: "91",
+      deletedAt: null,
+      deletedBy: null,
+      sessionVersion: { increment: 1 },
+    },
     create: {
       firstName: "Super",
       lastName: "Admin",
       email: "superadmin@example.com",
       passwordHash,
       role: UserRole.ADMIN,
-      region: null, // System admins don't need regions
+      region: null,
       countryCode: "91",
     },
   });
 
-  // 2. ADMIN User
   const adminUser = await prisma.user.upsert({
     where: { email: "admin@example.com" },
-    update: {},
+    update: {
+      firstName: "Admin",
+      lastName: "User",
+      passwordHash,
+      role: UserRole.ADMIN,
+      region: Region.NORTH,
+      countryCode: "91",
+      deletedAt: null,
+      deletedBy: null,
+      sessionVersion: { increment: 1 },
+    },
     create: {
       firstName: "Admin",
       lastName: "User",
@@ -260,22 +429,6 @@ async function main() {
       passwordHash,
       role: UserRole.ADMIN,
       region: Region.NORTH,
-      countryCode: "91",
-    },
-  });
-
-  // 3. DEVELOPER User (matches .env credentials)
-  // Note: Email and password should match your .env file for developer login
-  const developerUser = await prisma.user.upsert({
-    where: { email: "developer@example.com" },
-    update: {},
-    create: {
-      firstName: "Developer",
-      lastName: "Access",
-      email: "developer@example.com",
-      passwordHash, // "admin123" - but you should use DEVELOPER_LOGIN_PASSWORD from .env
-      role: UserRole.ADMIN,
-      region: null,
       countryCode: "91",
     },
   });
@@ -310,7 +463,17 @@ async function main() {
     salesUserProfiles.map(profile =>
       prisma.user.upsert({
         where: { email: profile.email },
-        update: {},
+        update: {
+          firstName: profile.firstName,
+          lastName: profile.lastName,
+          passwordHash,
+          role: UserRole.SALES,
+          region: profile.region,
+          countryCode: "91",
+          deletedAt: null,
+          deletedBy: null,
+          sessionVersion: { increment: 1 },
+        },
         create: {
           firstName: profile.firstName,
           lastName: profile.lastName,
@@ -327,7 +490,17 @@ async function main() {
 
   const marketingUser = await prisma.user.upsert({
     where: { email: "mike.marketing@example.com" },
-    update: {},
+    update: {
+      firstName: "Mike",
+      lastName: "Marketing",
+      passwordHash,
+      role: UserRole.ADMIN,
+      region: Region.EAST,
+      countryCode: "91",
+      deletedAt: null,
+      deletedBy: null,
+      sessionVersion: { increment: 1 },
+    },
     create: {
       firstName: "Mike",
       lastName: "Marketing",
@@ -339,7 +512,6 @@ async function main() {
     },
   });
 
-  // Accounts
   const industries = [
     "Technology",
     "Marketing",
@@ -439,7 +611,6 @@ async function main() {
     "Product Manager",
   ];
 
-  // Campaigns
   const landingCampaign = await prisma.campaign.create({
     data: {
       name: "Spring Landing Page Lead Gen",
@@ -491,7 +662,6 @@ async function main() {
     },
   });
 
-  // Leads
   const leadSources = ["IMPORT", "LANDING_PAGE", "MANUAL"];
   const leadStatuses = [
     "OPEN",
@@ -512,7 +682,6 @@ async function main() {
   ].sort(() => Math.random() - 0.5);
   const usedLeadEmails = new Set<string>();
 
-  // Location data for seed data (Indian context)
   const cities = [
     "Mumbai",
     "Delhi",
@@ -569,7 +738,6 @@ async function main() {
     const company = pick(companyNames);
     let email = buildEmail(fullName, company);
 
-    // Ensure unique email by adding suffix if needed
     let counter = 1;
     while (usedLeadEmails.has(email)) {
       email = email.replace("@", `+${counter}@`);
@@ -577,7 +745,6 @@ async function main() {
     }
     usedLeadEmails.add(email);
 
-    // Pick location indices (same index for matching data)
     const statusPool = owner
       ? leadStatuses
       : leadStatuses.filter(s => s !== "CONVERTED");
@@ -637,7 +804,6 @@ async function main() {
     leads.push({ id: created.id, email: created.email });
   }
 
-  // Campaign Members (contacts + leads)
   const memberStatuses = ["Invited", "Clicked", "Responded"];
   const allCampaigns = [landingCampaign, whatsappCampaign, emailCampaign];
 
@@ -668,7 +834,6 @@ async function main() {
     }
   }
 
-  // Analytics Events by channel
   type MemberRef = { campaignId: number; contactId?: number; leadId?: number };
   const membersLanding = await prisma.campaignMember.findMany({
     where: { campaignId: landingCampaign.id },
@@ -694,7 +859,7 @@ async function main() {
   });
 
   const analyticsToCreate: any[] = [];
-  // Landing page events
+
   for (const m of membersLanding) {
     const ref = {
       campaignId: m.campaignId,
@@ -709,7 +874,7 @@ async function main() {
         makeEvent(ref, "form_submit", { form: "demo", success: true })
       );
   }
-  // WhatsApp events
+
   for (const m of membersWhatsApp) {
     const ref = {
       campaignId: m.campaignId,
@@ -726,7 +891,7 @@ async function main() {
         })
       );
   }
-  // Email events
+
   for (const m of membersEmail) {
     const ref = {
       campaignId: m.campaignId,
@@ -746,14 +911,12 @@ async function main() {
       );
   }
 
-  // Batch create analytics in chunks to avoid large payloads
   const chunkSize = 100;
   for (let i = 0; i < analyticsToCreate.length; i += chunkSize) {
     const slice = analyticsToCreate.slice(i, i + chunkSize);
     await prisma.analyticsEvent.createMany({ data: slice });
   }
 
-  // Form Submissions (landing page)
   const formSubsToCreate: any[] = [];
   const landingMembers = [...membersLanding];
   for (let i = 0; i < randInt(30, 50) && i < landingMembers.length; i++) {
@@ -783,7 +946,6 @@ async function main() {
     });
   }
 
-  // WhatsApp Bot Sessions + Chat History
   const whatsappContacts = membersWhatsApp
     .filter(m => m.contactId)
     .slice(0, randInt(10, 20));
@@ -829,7 +991,6 @@ async function main() {
     }
   }
 
-  // Lead Assignment Rules
   await prisma.leadAssignmentRule.createMany({
     data: [
       {
@@ -851,12 +1012,11 @@ async function main() {
     ],
   });
 
-  // 1. default pricebook entry
   const standardPriceBook = await prisma.priceBook.upsert({
-    where: { id: 1 }, // Assuming ID 1 for standard price book
+    where: { id: 1 },
     update: { name: "Standard Price Book" },
     create: {
-      id: 1, // Explicitly set ID for standard price book
+      id: 1,
       name: "Standard Price Book",
       currencyCode: "INR",
       description: "Standard prices for all products.",
@@ -864,12 +1024,8 @@ async function main() {
     },
   });
 
-  // ============================================
-  // OPPORTUNITY-QUOTE-ORDER SEED DATA
-  // ============================================
   console.log("\n💼 Creating Opportunities, Quotes, and Sales Orders...\n");
 
-  // First, create product categories and products for line items
   const productCategory = await prisma.productCategory.upsert({
     where: { name: "Software Services" },
     update: {},
@@ -888,7 +1044,6 @@ async function main() {
     },
   });
 
-  // Create products
   const productData = [
     {
       name: "Enterprise CRM License",
@@ -984,7 +1139,6 @@ async function main() {
     });
   }
 
-  // Create price book entries for all products
   for (const p of products) {
     await prisma.priceBookEntry.upsert({
       where: {
@@ -1004,20 +1158,17 @@ async function main() {
     });
   }
 
-  // Get price book entries for creating line items
   const priceBookEntries = await prisma.priceBookEntry.findMany({
     where: { priceBookId: standardPriceBook.id },
     include: { product: true },
   });
 
-  // Get accounts and contacts for opportunities (use existing ones)
   const allAccounts = await prisma.account.findMany({ take: 20 });
   const allContacts = await prisma.contact.findMany({
     where: { accountId: { not: null } },
     take: 50,
   });
 
-  // Opportunity stages with probabilities
   const stageProbabilities: Record<OpportunityStage, number> = {
     [OpportunityStage.PROSPECT]: 10,
     [OpportunityStage.QUALIFICATION]: 20,
@@ -1032,7 +1183,6 @@ async function main() {
   const opportunityTypes = Object.values(OpportunityType);
   const opportunityStages = Object.values(OpportunityStage);
 
-  // Generate opportunity number
   let oppCounter = 1;
   const generateOppNumber = () => {
     const now = new Date();
@@ -1041,17 +1191,15 @@ async function main() {
     return `OPP-${yy}${mm}-${(oppCounter++).toString().padStart(4, "0")}`;
   };
 
-  // Generate quote number with version
   let quoteCounter = 1;
   const generateQuoteNumber = (version: number = 1) => {
     const now = new Date();
     const yy = now.getFullYear().toString().slice(-2);
     const mm = (now.getMonth() + 1).toString().padStart(2, "0");
-    const versionLetter = String.fromCharCode(64 + version); // A, B, C...
+    const versionLetter = String.fromCharCode(64 + version);
     return `QUO-${yy}${mm}-${(quoteCounter++).toString().padStart(4, "0")}-${versionLetter}`;
   };
 
-  // Generate order number
   let orderCounter = 1;
   const generateOrderNumber = () => {
     const now = new Date();
@@ -1060,7 +1208,6 @@ async function main() {
     return `ORD-${yy}${mm}-${(orderCounter++).toString().padStart(4, "0")}`;
   };
 
-  // Create opportunities with varying stages and statuses
   const opportunityNames = [
     "Enterprise CRM Implementation",
     "Digital Transformation Project",
@@ -1099,7 +1246,6 @@ async function main() {
     const owner = salesUsers[i % salesUsers.length];
     const stage = opportunityStages[Math.min(i % 8, 7)] as OpportunityStage;
 
-    // Determine status based on stage
     let status: OpportunityStatus = OpportunityStatus.IN_PROGRESS;
     if (stage === OpportunityStage.PROSPECT) {
       status = OpportunityStatus.DRAFT;
@@ -1176,7 +1322,6 @@ async function main() {
       ownerId: opportunity.ownerId,
     });
 
-    // Add 2-5 line items per opportunity
     const numLineItems = randInt(2, 5);
     const selectedProducts = priceBookEntries
       .sort(() => Math.random() - 0.5)
@@ -1208,13 +1353,11 @@ async function main() {
       });
     }
 
-    // Update opportunity amount with calculated total
     await prisma.opportunity.update({
       where: { id: opportunity.id },
       data: { amount: totalAmount },
     });
 
-    // Add activity entries for the opportunity
     const activityTypes = [
       "STAGE_CHANGE",
       "NOTE",
@@ -1296,7 +1439,6 @@ async function main() {
     `  ✓ Created ${createdOpportunities.length} opportunities with line items and activities`
   );
 
-  // Create Quotes for opportunities that have QUOTE_CREATED status or are in later stages
   console.log("  Creating quotes from opportunities...");
 
   const opportunitiesForQuotes = createdOpportunities.filter(
@@ -1318,25 +1460,22 @@ async function main() {
   }[] = [];
 
   for (const opp of opportunitiesForQuotes) {
-    // Get opportunity line items
     const oppLineItems = await prisma.opportunityLineItem.findMany({
       where: { opportunityId: opp.id },
       include: { product: true, priceBookEntry: true },
     });
 
-    // Calculate totals
     const subtotal = oppLineItems.reduce(
       (sum, li) => sum + Number(li.totalPrice),
       0
     );
     const discountPercent = randInt(0, 10);
     const discount = subtotal * (discountPercent / 100);
-    const taxPercent = 18; // GST
+    const taxPercent = 18;
     const taxAmount = (subtotal - discount) * (taxPercent / 100);
     const shippingAmount = randInt(0, 5000);
     const grandTotal = subtotal - discount + taxAmount + shippingAmount;
 
-    // Determine quote status based on opportunity stage
     let quoteStatus: QuoteStatus = QuoteStatus.DRAFT;
     if (opp.stage === OpportunityStage.CLOSED_WON) {
       quoteStatus = QuoteStatus.ACCEPTED;
@@ -1435,7 +1574,6 @@ async function main() {
       grandTotal: Number(quote.grandTotal),
     });
 
-    // Copy line items from opportunity to quote
     for (let j = 0; j < oppLineItems.length; j++) {
       const oli = oppLineItems[j];
       await prisma.quoteLineItem.create({
@@ -1457,7 +1595,6 @@ async function main() {
 
   console.log(`  ✓ Created ${createdQuotes.length} quotes with line items`);
 
-  // Create Sales Orders from ACCEPTED quotes
   console.log("  Creating sales orders from accepted quotes...");
 
   const acceptedQuotes = createdQuotes.filter(
@@ -1477,7 +1614,6 @@ async function main() {
 
     if (!fullQuote) continue;
 
-    // Determine order status - some delivered, some in progress
     const orderStatus = pick([
       SalesOrderStatus.APPROVED,
       SalesOrderStatus.IN_FULFILLMENT,
@@ -1551,7 +1687,6 @@ async function main() {
       status: order.status,
     });
 
-    // Copy line items from quote to order
     for (const qli of fullQuote.lineItems) {
       await prisma.salesOrderLineItem.create({
         data: {
@@ -1578,7 +1713,6 @@ async function main() {
   console.log(`   - ${createdQuotes.length} Quotes`);
   console.log(`   - ${createdOrders.length} Sales Orders`);
 
-  // Log all created user credentials for easy reference
   console.log("\n" + "=".repeat(80));
   console.log("🎉 DATABASE SEEDED SUCCESSFULLY!");
   console.log("=".repeat(80));
@@ -1595,7 +1729,7 @@ async function main() {
   );
   console.log(`│ Email:    ${superAdminUser.email.padEnd(64)} │`);
   console.log(
-    "│ Password: admin123                                                          │"
+    "│ Password: configured through DEMO_SEED_PASSWORD                            │"
   );
   console.log(
     "│ Role:     ADMIN                                                             │"
@@ -1615,7 +1749,7 @@ async function main() {
   );
   console.log(`│ Email:    ${adminUser.email.padEnd(64)} │`);
   console.log(
-    "│ Password: admin123                                                          │"
+    "│ Password: configured through DEMO_SEED_PASSWORD                            │"
   );
   console.log(
     "│ Role:     ADMIN                                                             │"
@@ -1628,42 +1762,7 @@ async function main() {
     "\n┌─────────────────────────────────────────────────────────────────────────────┐"
   );
   console.log(
-    "│ 3. DEVELOPER (Developer Access - Matches .env)                              │"
-  );
-  console.log(
-    "├─────────────────────────────────────────────────────────────────────────────┤"
-  );
-  console.log(`│ Email:    ${developerUser.email.padEnd(64)} │`);
-  console.log(
-    "│ Password: admin123 (for seed) OR your DEVELOPER_LOGIN_PASSWORD from .env   │"
-  );
-  console.log(
-    "│ Role:     ADMIN                                                             │"
-  );
-  console.log(
-    "│                                                                             │"
-  );
-  console.log(
-    "│ ⚠️  IMPORTANT: For developer login to work, add these to your .env:         │"
-  );
-  console.log(
-    '│     DEVELOPER_LOGIN_EMAIL="developer@example.com"                           │'
-  );
-  console.log(
-    '│     DEVELOPER_LOGIN_PASSWORD="admin123"                         │'
-  );
-  console.log(
-    '│     DEVELOPER_LOGIN_NAME="Developer Access"                                 │'
-  );
-  console.log(
-    "└─────────────────────────────────────────────────────────────────────────────┘"
-  );
-
-  console.log(
-    "\n┌─────────────────────────────────────────────────────────────────────────────┐"
-  );
-  console.log(
-    "│ 4. SALES USERS (Sales Access)                                               │"
+    "│ 3. SALES USERS (Sales Access)                                               │"
   );
   console.log(
     "├─────────────────────────────────────────────────────────────────────────────┤"
@@ -1672,7 +1771,7 @@ async function main() {
     console.log(`│ Email:    ${user.email.padEnd(64)} │`);
     if (index === 0) {
       console.log(
-        "│ Password: admin123                                                          │"
+        "│ Password: configured through DEMO_SEED_PASSWORD                            │"
       );
       console.log(
         "│ Role:     SALES                                                             │"

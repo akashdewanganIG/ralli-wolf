@@ -5,7 +5,7 @@ import { Checkbox } from "@repo/ui/components/ui/checkbox";
 import { Button } from "@repo/ui/components/ui/button";
 import { Input } from "@repo/ui/components/ui/input";
 import Link from "next/link";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   ErrorBanner,
   Field,
@@ -16,20 +16,21 @@ import {
   SimpleTable,
   DEFAULT_PAGE_SIZE,
 } from "@/components/supply-chain/shared";
-import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
+import { WarehouseFilter } from "@/components/supply-chain/warehouse-filter";
 import {
   ProductPicker,
   type PickedProduct,
-} from "@/components/supply-chain/ProductPicker";
+} from "@/components/supply-chain/product-picker";
 import {
   useInventoryMutations,
   useReorderRules,
   useSuppliers,
-} from "@/hooks/useSupplyChain";
+} from "@/hooks/use-supply-chain";
 import { formatDateTime, formatQuantity } from "@/lib/utils/decimal";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { FormDialog } from "@repo/ui/components/ui/form-dialog";
-import { DataTransfer } from "@/components/data-transfer/DataTransfer";
+import { DialogFooter } from "@repo/ui/components/ui/dialog";
+import { DataTransfer } from "@/components/data-transfer/data-transfer";
 
 export default function ReorderRulesPage() {
   const [page, setPage] = useState(1);
@@ -126,105 +127,100 @@ export default function ReorderRulesPage() {
           onOpenChange={setShowForm}
           title="Reorder policy"
           description="Saving for an item and warehouse that already has a policy updates it."
-        >
-          <form onSubmit={submit} className="grid gap-4 md:grid-cols-3">
-            <Field label="Item" className="md:col-span-2" composite>
-              <ProductPicker value={product} onChange={setProduct} autoFocus />
-            </Field>
-            <Field label="Warehouse" composite>
-              <WarehouseFilter
-                value={warehouseId}
-                onChange={setWarehouseId}
-                allowAll={false}
-                required
-              />
-            </Field>
-
-            <Field
-              label="Safety stock"
-              hint="The buffer you never want to dip below"
-            >
-              <Input
-                value={safetyStock}
-                onChange={e => setSafetyStock(e.target.value)}
-                inputMode="decimal"
-              />
-            </Field>
-            <Field
-              label="Reorder point"
-              hint="Must be at or above safety stock"
-            >
-              <Input
-                value={reorderPoint}
-                onChange={e => setReorderPoint(e.target.value)}
-                inputMode="decimal"
-              />
-            </Field>
-            <Field
-              label="Reorder quantity"
-              hint="How much to buy when triggered"
-            >
-              <Input
-                value={reorderQuantity}
-                onChange={e => setReorderQuantity(e.target.value)}
-                inputMode="decimal"
-              />
-            </Field>
-
-            <Field
-              label="Maximum stock"
-              hint="Optional. Above this an overstock alert is raised."
-            >
-              <Input
-                value={maximumStock}
-                onChange={e => setMaximumStock(e.target.value)}
-                inputMode="decimal"
-                placeholder="Not set"
-              />
-            </Field>
-            <Field label="Lead time (days)">
-              <Input
-                value={leadTimeDays}
-                onChange={e => setLeadTimeDays(e.target.value)}
-                inputMode="numeric"
-              />
-            </Field>
-            <Field label="Preferred supplier">
-              <SelectField
-                value={preferredSupplierId}
-                onChange={e => setPreferredSupplierId(e.target.value)}
-              >
-                <option value="">None</option>
-                {suppliers.map(supplier => (
-                  <option key={supplier.id} value={supplier.id}>
-                    {supplier.code} — {supplier.name}
-                  </option>
-                ))}
-              </SelectField>
-            </Field>
-
-            <label className="flex items-center gap-2 text-sm md:col-span-3">
-              <Checkbox
-                checked={autoRequisition}
-                onCheckedChange={setAutoRequisition}
-              />
-              Raise a purchase requisition automatically when this item hits its
-              reorder point
-            </label>
-
-            <div className="md:col-span-3 dialog-form-actions">
-              <Button type="submit" disabled={!canSubmit}>
-                {saveReorderRule.isPending ? "Saving…" : "Save policy"}
-              </Button>
+          onSubmit={submit}
+          bodyClassName="gap-3 md:grid-cols-3"
+          footer={
+            <DialogFooter>
               <button
                 type="button"
                 onClick={resetForm}
-                className="rounded-lg border inline-flex items-center justify-center h-10 whitespace-nowrap px-4 text-sm hover:bg-muted"
+                className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-md border border-border px-3 text-sm hover:bg-muted"
               >
                 Clear
               </button>
-            </div>
-          </form>
+              <Button type="submit" disabled={!canSubmit}>
+                {saveReorderRule.isPending ? "Saving…" : "Save policy"}
+              </Button>
+            </DialogFooter>
+          }
+        >
+          <Field label="Item" className="md:col-span-2" composite>
+            <ProductPicker value={product} onChange={setProduct} autoFocus />
+          </Field>
+          <Field label="Warehouse" composite>
+            <WarehouseFilter
+              value={warehouseId}
+              onChange={setWarehouseId}
+              allowAll={false}
+              required
+            />
+          </Field>
+
+          <Field
+            label="Safety stock"
+            hint="The buffer you never want to dip below"
+          >
+            <Input
+              value={safetyStock}
+              onChange={e => setSafetyStock(e.target.value)}
+              inputMode="decimal"
+            />
+          </Field>
+          <Field label="Reorder point" hint="Must be at or above safety stock">
+            <Input
+              value={reorderPoint}
+              onChange={e => setReorderPoint(e.target.value)}
+              inputMode="decimal"
+            />
+          </Field>
+          <Field label="Reorder quantity" hint="How much to buy when triggered">
+            <Input
+              value={reorderQuantity}
+              onChange={e => setReorderQuantity(e.target.value)}
+              inputMode="decimal"
+            />
+          </Field>
+
+          <Field
+            label="Maximum stock"
+            hint="Optional. Above this an overstock alert is raised."
+          >
+            <Input
+              value={maximumStock}
+              onChange={e => setMaximumStock(e.target.value)}
+              inputMode="decimal"
+              placeholder="Not set"
+            />
+          </Field>
+          <Field label="Lead time (days)">
+            <Input
+              value={leadTimeDays}
+              onChange={e => setLeadTimeDays(e.target.value)}
+              inputMode="numeric"
+            />
+          </Field>
+          <Field label="Preferred supplier">
+            <SelectField
+              value={preferredSupplierId}
+              onChange={e => setPreferredSupplierId(e.target.value)}
+            >
+              <option value="">None</option>
+              {suppliers.map(supplier => (
+                <option key={supplier.id} value={supplier.id}>
+                  {supplier.code} — {supplier.name}
+                </option>
+              ))}
+            </SelectField>
+          </Field>
+
+          <label className="flex items-center gap-2 text-sm md:col-span-3">
+            <Checkbox
+              checked={autoRequisition}
+              onCheckedChange={setAutoRequisition}
+            />
+            Raise a purchase requisition automatically when this item hits its
+            reorder point
+          </label>
         </FormDialog>
 
         <Panel

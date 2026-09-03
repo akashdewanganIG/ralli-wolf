@@ -1,10 +1,6 @@
 import { prisma } from "@repo/db";
 import { Prisma } from "@prisma/client";
 
-/**
- * Document families that get a human-readable, gap-tolerant running number.
- * The key is also the row key in `number_sequences`.
- */
 export const SEQUENCE_KEYS = {
   STOCK_MOVEMENT: "STOCK_MOVEMENT",
   STOCK_LOT: "STOCK_LOT",
@@ -25,6 +21,11 @@ export const SEQUENCE_KEYS = {
   CUSTOMER_INVOICE: "CUSTOMER_INVOICE",
   PAYMENT: "PAYMENT",
   WORK_CENTER: "WORK_CENTER",
+  CUSTOMER_ORDER: "CUSTOMER_ORDER",
+  AAKRAMAN_ORDER: "AAKRAMAN_ORDER",
+  SALES_OPPORTUNITY: "SALES_OPPORTUNITY",
+  SALES_QUOTE: "SALES_QUOTE",
+  SALES_ORDER: "SALES_ORDER",
 } as const;
 
 export type SequenceKey = (typeof SEQUENCE_KEYS)[keyof typeof SEQUENCE_KEYS];
@@ -35,11 +36,6 @@ interface SequenceDefaults {
   resetPeriod: "NONE" | "YEARLY" | "MONTHLY";
 }
 
-/**
- * Seed values used the first time a family issues a number. Once the row
- * exists it is authoritative, so an admin can change a prefix in the database
- * without touching code.
- */
 const SEQUENCE_DEFAULTS: Record<SequenceKey, SequenceDefaults> = {
   STOCK_MOVEMENT: { prefix: "MOV", padding: 7, resetPeriod: "YEARLY" },
   STOCK_LOT: { prefix: "LOT", padding: 7, resetPeriod: "YEARLY" },
@@ -60,6 +56,11 @@ const SEQUENCE_DEFAULTS: Record<SequenceKey, SequenceDefaults> = {
   CUSTOMER_INVOICE: { prefix: "INV", padding: 5, resetPeriod: "YEARLY" },
   PAYMENT: { prefix: "PAY", padding: 6, resetPeriod: "YEARLY" },
   WORK_CENTER: { prefix: "WC", padding: 4, resetPeriod: "NONE" },
+  CUSTOMER_ORDER: { prefix: "ORD", padding: 7, resetPeriod: "YEARLY" },
+  AAKRAMAN_ORDER: { prefix: "AKR", padding: 7, resetPeriod: "YEARLY" },
+  SALES_OPPORTUNITY: { prefix: "OPP", padding: 4, resetPeriod: "MONTHLY" },
+  SALES_QUOTE: { prefix: "QUO", padding: 4, resetPeriod: "MONTHLY" },
+  SALES_ORDER: { prefix: "ORD", padding: 4, resetPeriod: "MONTHLY" },
 };
 
 function periodKeyFor(resetPeriod: string, now: Date): string {
@@ -81,18 +82,6 @@ interface SequenceRow {
   reset_period: string;
 }
 
-/**
- * Reserve the next number for a document family.
- *
- * The counter is bumped by a single `INSERT ... ON CONFLICT DO UPDATE ...
- * RETURNING`, which Postgres executes atomically and which takes a row lock
- * for the duration of the surrounding transaction. Two concurrent callers
- * therefore serialise on the sequence row and can never receive the same
- * number, unlike the "read the highest existing number and add one" pattern.
- *
- * Always pass the transaction client of the document being created so the
- * number and the document commit or roll back together.
- */
 export async function nextDocumentNumber(
   tx: Prisma.TransactionClient,
   key: SequenceKey,
@@ -134,18 +123,10 @@ export async function nextDocumentNumber(
   return segments.join("-");
 }
 
-/**
- * Convenience wrapper for callers that are not already inside a transaction.
- * Prefer {@link nextDocumentNumber} whenever a document is being written.
- */
 export async function reserveDocumentNumber(key: SequenceKey): Promise<string> {
   return prisma.$transaction(tx => nextDocumentNumber(tx, key));
 }
 
-/**
- * Returns the configuration rows so the UI can show, and an admin can edit,
- * how each document family is numbered.
- */
 export async function listSequences() {
   return prisma.numberSequence.findMany({ orderBy: { key: "asc" } });
 }

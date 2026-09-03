@@ -1,44 +1,13 @@
 import { Request, Response } from "express";
 import { prisma } from "@repo/db";
 import { recordAuditLog } from "../utils/audit.utils.js";
-import * as nodeCrypto from "node:crypto";
+import { encryptSecret } from "@repo/db/crypto";
+import { normalizeProviderBaseUrl } from "../utils/provider-url.js";
 
 function maskTail(value: string, show: number = 4): string {
   if (!value) return "";
   const tail = value.slice(-show);
   return `****${tail}`;
-}
-
-function deriveKey(): Buffer {
-  const key = process.env.ENCRYPTION_KEY || "";
-  const raw = key.startsWith("base64:")
-    ? Buffer.from(key.slice(7), "base64")
-    : key.startsWith("hex:")
-      ? Buffer.from(key.slice(4), "hex")
-      : Buffer.from(key, "utf8");
-  return raw.length === 32
-    ? raw
-    : nodeCrypto.createHash("sha256").update(raw).digest();
-}
-
-function encryptGCM(plainText: string): {
-  cipherText: string;
-  iv: string;
-  authTag: string;
-} {
-  const key = deriveKey();
-  const iv = nodeCrypto.randomBytes(12);
-  const cipher = nodeCrypto.createCipheriv("aes-256-gcm", key, iv);
-  const encrypted = Buffer.concat([
-    cipher.update(plainText, "utf8"),
-    cipher.final(),
-  ]);
-  const authTag = cipher.getAuthTag();
-  return {
-    cipherText: encrypted.toString("base64"),
-    iv: iv.toString("base64"),
-    authTag: authTag.toString("base64"),
-  };
 }
 
 export const integrationsController = {
@@ -76,7 +45,7 @@ export const integrationsController = {
     }
     const userId = String(req.user?.id ?? "system");
     const cleaned = apiKey.trim();
-    const enc = encryptGCM(cleaned);
+    const enc = encryptSecret(cleaned);
     const masked = maskTail(cleaned);
     const existing = await prisma.integrationCredential.findUnique({
       where: { provider },
@@ -161,12 +130,30 @@ export const integrationsController = {
     const changedBy = req.user?.id ?? 0;
     const oldValues: Record<string, unknown> = {};
     const newValues: Record<string, unknown> = {};
+    let emailBaseUrl: string | null | undefined;
+    let whatsappBaseUrl: string | null | undefined;
+    try {
+      emailBaseUrl = body.email?.baseUrl?.trim()
+        ? normalizeProviderBaseUrl(body.email.baseUrl, "brevo")
+        : body.email?.baseUrl === undefined
+          ? undefined
+          : null;
+      whatsappBaseUrl = body.whatsapp?.baseUrl?.trim()
+        ? normalizeProviderBaseUrl(body.whatsapp.baseUrl, "msg91")
+        : body.whatsapp?.baseUrl === undefined
+          ? undefined
+          : null;
+    } catch (error) {
+      return res.status(400).json({
+        error: error instanceof Error ? error.message : "Invalid provider URL",
+      });
+    }
     if (body.email?.baseUrl !== undefined) {
       const existingBaseUrl = await prisma.appConfig.findUnique({
         where: { key: "email.baseUrl" },
       });
       oldValues["email.baseUrl"] = existingBaseUrl?.plainValue ?? null;
-      const nextValue = body.email.baseUrl?.trim() || null;
+      const nextValue = emailBaseUrl ?? null;
       newValues["email.baseUrl"] = nextValue;
 
       await prisma.appConfig.upsert({
@@ -193,7 +180,7 @@ export const integrationsController = {
       });
       oldValues["email.webhookSecret"] = existingWebhook?.maskedTail ?? null;
       if (cleaned) {
-        const enc = encryptGCM(cleaned);
+        const enc = encryptSecret(cleaned);
         const masked = maskTail(cleaned);
         newValues["email.webhookSecret"] = masked;
         await prisma.appConfig.upsert({
@@ -216,7 +203,6 @@ export const integrationsController = {
           },
         });
       } else {
-        // Clearing secret
         newValues["email.webhookSecret"] = null;
         await prisma.appConfig.upsert({
           where: { key: "email.webhookSecret" },
@@ -241,7 +227,7 @@ export const integrationsController = {
         where: { key: "whatsapp.baseUrl" },
       });
       oldValues["whatsapp.baseUrl"] = existingBaseUrl?.plainValue ?? null;
-      const nextBaseUrl = body.whatsapp.baseUrl?.trim() || null;
+      const nextBaseUrl = whatsappBaseUrl ?? null;
       newValues["whatsapp.baseUrl"] = nextBaseUrl;
       await prisma.appConfig.upsert({
         where: { key: "whatsapp.baseUrl" },

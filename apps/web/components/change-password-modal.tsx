@@ -6,6 +6,7 @@ import { CheckCircle2, Eye, EyeOff } from "@repo/ui/icons";
 import { Button } from "@repo/ui/components/ui/button";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -91,11 +92,8 @@ export function ChangePasswordModal({
   onChanged,
 }: {
   open: boolean;
-  onClose: () => void;
-  /**
-   * The account is still on its emailed password. The dialog cannot be
-   * dismissed, because the API refuses every other route until it is replaced.
-   */
+  onClose?: () => void;
+
   forced?: boolean;
   onChanged?: () => void;
 }) {
@@ -141,7 +139,7 @@ export function ChangePasswordModal({
   const handleOpenChange = (nextOpen: boolean) => {
     if (nextOpen || submitting || forced) return;
     reset();
-    onClose();
+    onClose?.();
   };
 
   const updateField = (setter: (value: string) => void) => (value: string) => {
@@ -172,7 +170,7 @@ export function ChangePasswordModal({
       toast.success("Password updated successfully");
       reset();
       onChanged?.();
-      onClose();
+      onClose?.();
     } catch (submitError: unknown) {
       const message = getErrorMessage(submitError);
       setError(message);
@@ -200,7 +198,7 @@ export function ChangePasswordModal({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="sm:max-w-md"
+        className="gap-0 overflow-hidden sm:max-w-md"
         showCloseButton={!forced}
         onEscapeKeyDown={forced ? event => event.preventDefault() : undefined}
         onInteractOutside={forced ? event => event.preventDefault() : undefined}
@@ -211,178 +209,176 @@ export function ChangePasswordModal({
           </DialogTitle>
           <DialogDescription>
             {forced
-              ? "You are signed in with the password that was emailed to you. Enter it once more, then choose a password only you know."
+              ? "You are signed in with an initial password. Enter it once more, then choose a password only you know."
               : "Confirm your current password, then choose a strong password you do not use elsewhere."}
           </DialogDescription>
         </DialogHeader>
 
-        {error && (
-          <div
-            role="alert"
-            aria-live="assertive"
-            className="rounded-lg border border-error/20 bg-error-surface px-3.5 py-3 text-sm text-error-foreground"
-          >
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="current-password">Current password</Label>
-            <div className="relative">
-              <Input
-                id="current-password"
-                type={showCurrentPassword ? "text" : "password"}
-                value={currentPassword}
-                onChange={event =>
-                  updateField(setCurrentPassword)(event.target.value)
-                }
-                autoComplete="current-password"
-                autoFocus
-                required
-                disabled={submitting}
-                className="pr-10"
-              />
-              {visibilityButton(
-                showCurrentPassword,
-                () => setShowCurrentPassword(value => !value),
-                "current password"
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="new-password">New password</Label>
-            <div className="relative">
-              <Input
-                id="new-password"
-                type={showNewPassword ? "text" : "password"}
-                value={newPassword}
-                onChange={event =>
-                  updateField(setNewPassword)(event.target.value)
-                }
-                autoComplete="new-password"
-                minLength={8}
-                required
-                disabled={submitting}
-                className="pr-10"
-                aria-invalid={
-                  passwordStrength ? !passwordStrength.isValid : undefined
-                }
-                aria-describedby={
-                  passwordStrength
-                    ? "password-strength"
-                    : "password-requirements"
-                }
-              />
-              {visibilityButton(
-                showNewPassword,
-                () => setShowNewPassword(value => !value),
-                "new password"
-              )}
-            </div>
-
-            {passwordStrength ? (
-              <div id="password-strength" className="space-y-2 pt-1">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary"
-                    role="progressbar"
-                    aria-label="Password strength"
-                    aria-valuemin={0}
-                    aria-valuemax={MAX_PASSWORD_SCORE}
-                    aria-valuenow={passwordStrength.score}
-                  >
-                    <div
-                      className={`h-full rounded-full transition-[width,background-color] duration-200 ${strengthTone}`}
-                      style={{
-                        width: `${(passwordStrength.score / MAX_PASSWORD_SCORE) * 100}%`,
-                      }}
-                    />
-                  </div>
-                  <span className="min-w-10 text-right text-xs font-medium text-muted-foreground">
-                    {strengthLabel}
-                  </span>
-                </div>
-                {passwordStrength.feedback.length > 0 ? (
-                  <ul className="grid gap-1 text-xs leading-4 text-muted-foreground sm:grid-cols-2">
-                    {passwordStrength.feedback.slice(0, 4).map(message => (
-                      <li key={message}>• {message}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="flex items-center gap-1.5 text-xs text-success-foreground">
-                    <CheckCircle2 className="size-3.5" /> All password
-                    requirements are met.
-                  </p>
+        <form
+          onSubmit={onSubmit}
+          className="flex min-h-0 flex-1 flex-col overflow-hidden"
+        >
+          <DialogBody className="space-y-3">
+            {error && (
+              <div
+                role="alert"
+                aria-live="assertive"
+                className="rounded-lg border border-error/20 bg-error-surface px-3.5 py-3 text-sm text-error-foreground"
+              >
+                {error}
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label htmlFor="current-password">Current password</Label>
+              <div className="relative">
+                <Input
+                  id="current-password"
+                  type={showCurrentPassword ? "text" : "password"}
+                  value={currentPassword}
+                  onChange={event =>
+                    updateField(setCurrentPassword)(event.target.value)
+                  }
+                  autoComplete="current-password"
+                  autoFocus
+                  required
+                  disabled={submitting}
+                  className="pr-10"
+                />
+                {visibilityButton(
+                  showCurrentPassword,
+                  () => setShowCurrentPassword(value => !value),
+                  "current password"
                 )}
               </div>
-            ) : (
-              <p
-                id="password-requirements"
-                className="text-xs leading-4 text-muted-foreground"
-              >
-                Use 8+ characters with upper and lowercase letters, a number,
-                and a symbol.
-              </p>
-            )}
-          </div>
+            </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="confirm-password">Confirm new password</Label>
-            <div className="relative">
-              <Input
-                id="confirm-password"
-                type={showConfirmPassword ? "text" : "password"}
-                value={confirmPassword}
-                onChange={event =>
-                  updateField(setConfirmPassword)(event.target.value)
-                }
-                autoComplete="new-password"
-                required
-                disabled={submitting}
-                className="pr-10"
-                aria-invalid={!passwordsMatch}
-                aria-describedby={
-                  !passwordsMatch ? "password-match-error" : undefined
-                }
-              />
-              {visibilityButton(
-                showConfirmPassword,
-                () => setShowConfirmPassword(value => !value),
-                "password confirmation"
+            <div className="space-y-1.5">
+              <Label htmlFor="new-password">New password</Label>
+              <div className="relative">
+                <Input
+                  id="new-password"
+                  type={showNewPassword ? "text" : "password"}
+                  value={newPassword}
+                  onChange={event =>
+                    updateField(setNewPassword)(event.target.value)
+                  }
+                  autoComplete="new-password"
+                  minLength={8}
+                  required
+                  disabled={submitting}
+                  className="pr-10"
+                  aria-invalid={
+                    passwordStrength ? !passwordStrength.isValid : undefined
+                  }
+                  aria-describedby={
+                    passwordStrength
+                      ? "password-strength"
+                      : "password-requirements"
+                  }
+                />
+                {visibilityButton(
+                  showNewPassword,
+                  () => setShowNewPassword(value => !value),
+                  "new password"
+                )}
+              </div>
+
+              {passwordStrength ? (
+                <div id="password-strength" className="space-y-2 pt-1">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary"
+                      role="progressbar"
+                      aria-label="Password strength"
+                      aria-valuemin={0}
+                      aria-valuemax={MAX_PASSWORD_SCORE}
+                      aria-valuenow={passwordStrength.score}
+                    >
+                      <div
+                        className={`h-full rounded-full transition-[width,background-color] duration-200 ${strengthTone}`}
+                        style={{
+                          width: `${(passwordStrength.score / MAX_PASSWORD_SCORE) * 100}%`,
+                        }}
+                      />
+                    </div>
+                    <span className="min-w-10 text-right text-xs font-medium text-muted-foreground">
+                      {strengthLabel}
+                    </span>
+                  </div>
+                  {passwordStrength.feedback.length > 0 ? (
+                    <ul className="grid gap-1 text-xs leading-4 text-muted-foreground sm:grid-cols-2">
+                      {passwordStrength.feedback.slice(0, 4).map(message => (
+                        <li key={message}>• {message}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="flex items-center gap-1.5 text-xs text-success-foreground">
+                      <CheckCircle2 className="size-3.5" /> All password
+                      requirements are met.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p
+                  id="password-requirements"
+                  className="text-xs leading-4 text-muted-foreground"
+                >
+                  Use 8+ characters with upper and lowercase letters, a number,
+                  and a symbol.
+                </p>
               )}
             </div>
-            {!passwordsMatch && (
-              <p
-                id="password-match-error"
-                className="text-xs text-error-foreground"
-              >
-                The passwords do not match.
+
+            <div className="space-y-1.5">
+              <Label htmlFor="confirm-password">Confirm new password</Label>
+              <div className="relative">
+                <Input
+                  id="confirm-password"
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={event =>
+                    updateField(setConfirmPassword)(event.target.value)
+                  }
+                  autoComplete="new-password"
+                  required
+                  disabled={submitting}
+                  className="pr-10"
+                  aria-invalid={!passwordsMatch}
+                  aria-describedby={
+                    !passwordsMatch ? "password-match-error" : undefined
+                  }
+                />
+                {visibilityButton(
+                  showConfirmPassword,
+                  () => setShowConfirmPassword(value => !value),
+                  "password confirmation"
+                )}
+              </div>
+              {!passwordsMatch && (
+                <p
+                  id="password-match-error"
+                  className="text-xs text-error-foreground"
+                >
+                  The passwords do not match.
+                </p>
+              )}
+            </div>
+
+            {forced && (
+              <p className="text-xs leading-4 text-muted-foreground">
+                Do not know the initial password?{" "}
+                <Link
+                  href="/forgot-password"
+                  className="font-medium text-primary transition-colors hover:text-info"
+                >
+                  Reset it with an email code
+                </Link>{" "}
+                instead.
               </p>
             )}
-          </div>
+          </DialogBody>
 
-          {/*
-            A user who signed in with an email code may never have received the
-            generated password, so "current password" is unanswerable for them.
-            The reset flow proves the same thing (control of the inbox) and
-            clears the same flag, so it is the way out rather than a dead end.
-          */}
-          {forced && (
-            <p className="text-xs leading-4 text-muted-foreground">
-              Never received that password?{" "}
-              <Link
-                href="/forgot-password"
-                className="font-medium text-primary transition-colors hover:text-info"
-              >
-                Reset it with an email code
-              </Link>{" "}
-              instead.
-            </p>
-          )}
-
-          <DialogFooter className="pt-1">
+          <DialogFooter>
             {!forced && (
               <Button
                 type="button"

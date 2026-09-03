@@ -10,7 +10,7 @@ import {
   handleNotFoundError,
   handleValidationError,
   validateRequiredFields,
-} from "../utils/errorHandler.js";
+} from "../utils/error-handler.js";
 import { recordAuditLog } from "../utils/audit.utils.js";
 import {
   SegmentRuleType,

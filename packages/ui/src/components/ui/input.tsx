@@ -8,7 +8,6 @@ import {
 
 export interface InputProps
   extends Omit<React.ComponentProps<"input">, "size"> {
-  /** Height/padding/type scale. Shared with Select, Textarea and Button. */
   size?: ControlSize;
 }
 

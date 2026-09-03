@@ -31,9 +31,9 @@ import {
 import { DomainError, NotFoundError } from "../services/supplyChain/errors.js";
 import {
   ZERO,
+  requireNonNegative,
   roundCost,
   roundQuantity,
-  toDecimal,
 } from "../services/supplyChain/decimal.js";
 import {
   handleSupplyChainError,
@@ -45,19 +45,15 @@ import {
   parseEnum,
   parseEnumList,
   parseId,
+  parseOptionalInteger,
   parseOptionalId,
   parsePagination,
   requireArray,
   requireString,
   requireUserId,
-} from "../utils/supplyChainHttp.js";
+} from "../utils/supply-chain-http.js";
 
 export class InventoryController {
-  /**
-   * GET /api/inventory/stock
-   * Live on-hand position, one row per item per warehouse, with what is free
-   * to promise and what it is worth.
-   */
   async listStock(req: Request, res: Response) {
     const operation = "List stock positions";
     try {
@@ -92,6 +88,7 @@ export class InventoryController {
             id: true,
             code: true,
             name: true,
+            imageUrl: true,
             itemType: true,
             trackingType: true,
             pickingStrategy: true,
@@ -154,8 +151,6 @@ export class InventoryController {
         };
       });
 
-      // Filtering on a computed position has to happen after the maths, so
-      // this branch pages in memory rather than returning a wrong count.
       let effectiveTotal = totalItems;
       if (onlyBelowReorder) {
         rows = rows.filter(row => row.isBelowReorderPoint || row.isStockedOut);
@@ -172,10 +167,6 @@ export class InventoryController {
     }
   }
 
-  /**
-   * GET /api/inventory/stock/:productId
-   * Where a single item physically is, down to bin, lot and pallet.
-   */
   async getProductStock(req: Request, res: Response) {
     const operation = "Get product stock detail";
     try {
@@ -290,11 +281,6 @@ export class InventoryController {
     }
   }
 
-  /**
-   * GET /api/inventory/movements
-   * The stock ledger. Every on-hand figure in the system can be reconciled
-   * against these rows.
-   */
   async listMovements(req: Request, res: Response) {
     const operation = "List stock movements";
     try {
@@ -373,7 +359,6 @@ export class InventoryController {
     }
   }
 
-  /** GET /api/inventory/lots */
   async listLots(req: Request, res: Response) {
     const operation = "List stock lots";
     try {
@@ -439,11 +424,6 @@ export class InventoryController {
     }
   }
 
-  /**
-   * POST /api/inventory/receipts
-   * Book stock in outside the purchasing flow: opening balances, customer
-   * returns, production output recorded by hand.
-   */
   async createReceipt(req: Request, res: Response) {
     const operation = "Receive stock";
     try {
@@ -500,10 +480,6 @@ export class InventoryController {
     }
   }
 
-  /**
-   * POST /api/inventory/adjustments
-   * Write stock on or off against a reason code.
-   */
   async createAdjustment(req: Request, res: Response) {
     const operation = "Adjust stock";
     try {
@@ -529,10 +505,6 @@ export class InventoryController {
     }
   }
 
-  /**
-   * POST /api/inventory/transfers
-   * Move stock between bins or warehouses, keeping the cost layer intact.
-   */
   async createTransfer(req: Request, res: Response) {
     const operation = "Transfer stock";
     try {
@@ -570,9 +542,6 @@ export class InventoryController {
     }
   }
 
-  // ---------------------------------------------------------------- alerts
-
-  /** GET /api/inventory/alerts */
   async listAlerts(req: Request, res: Response) {
     const operation = "List stock alerts";
     try {
@@ -637,10 +606,6 @@ export class InventoryController {
     }
   }
 
-  /**
-   * POST /api/inventory/alerts/evaluate
-   * Re-run the reorder engine on demand. Also runs on a schedule.
-   */
   async evaluateAlerts(req: Request, res: Response) {
     const operation = "Evaluate stock alerts";
     try {
@@ -656,7 +621,6 @@ export class InventoryController {
     }
   }
 
-  /** PATCH /api/inventory/alerts/:id/acknowledge */
   async acknowledgeAlert(req: Request, res: Response) {
     const operation = "Acknowledge stock alert";
     try {
@@ -673,7 +637,6 @@ export class InventoryController {
     }
   }
 
-  /** PATCH /api/inventory/alerts/:id/resolve */
   async resolveAlert(req: Request, res: Response) {
     const operation = "Resolve stock alert";
     try {
@@ -685,9 +648,6 @@ export class InventoryController {
     }
   }
 
-  // --------------------------------------------------------- reorder rules
-
-  /** GET /api/inventory/reorder-rules */
   async listReorderRules(req: Request, res: Response) {
     const operation = "List reorder rules";
     try {
@@ -748,25 +708,36 @@ export class InventoryController {
     }
   }
 
-  /** PUT /api/inventory/reorder-rules */
   async upsertReorderRule(req: Request, res: Response) {
     const operation = "Save reorder rule";
     try {
       const productId = parseId(String(req.body.productId), "productId");
       const warehouseId = parseId(String(req.body.warehouseId), "warehouseId");
 
-      const safetyStock = toDecimal(req.body.safetyStock ?? 0, "safetyStock");
-      const reorderPoint = toDecimal(
+      const safetyStock = requireNonNegative(
+        req.body.safetyStock ?? 0,
+        "safetyStock"
+      );
+      const reorderPoint = requireNonNegative(
         req.body.reorderPoint ?? 0,
         "reorderPoint"
       );
-      const reorderQuantity = toDecimal(
+      const reorderQuantity = requireNonNegative(
         req.body.reorderQuantity ?? 0,
         "reorderQuantity"
       );
-      const maximumStock = req.body.maximumStock
-        ? toDecimal(req.body.maximumStock, "maximumStock")
-        : null;
+      const maximumStock =
+        req.body.maximumStock === undefined ||
+        req.body.maximumStock === null ||
+        req.body.maximumStock === ""
+          ? null
+          : requireNonNegative(req.body.maximumStock, "maximumStock");
+      const leadTimeDays =
+        parseOptionalInteger(req.body.leadTimeDays, "leadTimeDays", 0, 3_650) ??
+        0;
+      const autoRequisition =
+        parseBoolean(req.body.autoRequisition, "autoRequisition") ?? false;
+      const isActive = parseBoolean(req.body.isActive, "isActive");
 
       if (reorderPoint.lessThan(safetyStock)) {
         throw new DomainError(
@@ -792,22 +763,20 @@ export class InventoryController {
           reorderPoint,
           reorderQuantity,
           maximumStock,
-          leadTimeDays: Number(req.body.leadTimeDays) || 0,
-          autoRequisition: parseBoolean(req.body.autoRequisition) ?? false,
+          leadTimeDays,
+          autoRequisition,
           preferredSupplierId: parseOptionalId(req.body.preferredSupplierId),
-          isActive: parseBoolean(req.body.isActive) ?? true,
+          isActive: isActive ?? true,
         },
         update: {
           safetyStock,
           reorderPoint,
           reorderQuantity,
           maximumStock,
-          leadTimeDays: Number(req.body.leadTimeDays) || 0,
-          autoRequisition: parseBoolean(req.body.autoRequisition) ?? false,
+          leadTimeDays,
+          autoRequisition,
           preferredSupplierId: parseOptionalId(req.body.preferredSupplierId),
-          ...(parseBoolean(req.body.isActive) !== undefined
-            ? { isActive: parseBoolean(req.body.isActive) }
-            : {}),
+          ...(isActive !== undefined ? { isActive } : {}),
         },
         include: {
           product: { select: { id: true, code: true, name: true } },
@@ -821,7 +790,6 @@ export class InventoryController {
     }
   }
 
-  /** DELETE /api/inventory/reorder-rules/:id */
   async deleteReorderRule(req: Request, res: Response) {
     const operation = "Delete reorder rule";
     try {
@@ -833,9 +801,6 @@ export class InventoryController {
     }
   }
 
-  // ---------------------------------------------------------- stock counts
-
-  /** GET /api/inventory/counts */
   async listCounts(req: Request, res: Response) {
     const operation = "List stock counts";
     try {
@@ -874,11 +839,6 @@ export class InventoryController {
     }
   }
 
-  /**
-   * POST /api/inventory/counts
-   * Open a count sheet, snapshotting what the system believes is in each
-   * location so the variance is measured against a fixed baseline.
-   */
   async createCount(req: Request, res: Response) {
     const operation = "Create stock count";
     try {
@@ -943,7 +903,6 @@ export class InventoryController {
     }
   }
 
-  /** GET /api/inventory/counts/:id */
   async getCount(req: Request, res: Response) {
     const operation = "Get stock count";
     try {
@@ -985,7 +944,6 @@ export class InventoryController {
     }
   }
 
-  /** PATCH /api/inventory/counts/:id/lines — record what was physically counted. */
   async recordCountLines(req: Request, res: Response) {
     const operation = "Record counted quantities";
     try {
@@ -1012,14 +970,14 @@ export class InventoryController {
 
         for (const line of lines) {
           const existing = await tx.stockCountLine.findUnique({
-            where: { id: Number(line.lineId) },
+            where: { id: parseId(String(line.lineId), "lineId") },
             include: { lot: { select: { unitCost: true } } },
           });
           if (!existing || existing.stockCountId !== id) {
             throw new NotFoundError(`Count line ${line.lineId}`);
           }
 
-          const countedQuantity = toDecimal(
+          const countedQuantity = requireNonNegative(
             line.countedQuantity,
             "countedQuantity"
           );
@@ -1034,8 +992,14 @@ export class InventoryController {
               countedQuantity,
               varianceQuantity: variance,
               varianceValue: roundCost(variance.times(unitCost)),
-              reasonCode: line.reasonCode ?? existing.reasonCode,
-              notes: line.notes ?? existing.notes,
+              reasonCode:
+                line.reasonCode === undefined
+                  ? existing.reasonCode
+                  : optionalString(line.reasonCode, "reasonCode", 100),
+              notes:
+                line.notes === undefined
+                  ? existing.notes
+                  : optionalString(line.notes, "notes"),
             },
           });
         }
@@ -1052,11 +1016,6 @@ export class InventoryController {
     }
   }
 
-  /**
-   * POST /api/inventory/counts/:id/post
-   * Turn counted variances into real stock adjustments. Lines that were never
-   * counted are left alone rather than being treated as zero.
-   */
   async postCount(req: Request, res: Response) {
     const operation = "Post stock count";
     try {
@@ -1086,7 +1045,6 @@ export class InventoryController {
           variance: string;
         }> = [];
 
-        // Ascending product order keeps the advisory locks deterministic.
         const orderedLines = [...count.lines].sort(
           (a, b) => a.productId - b.productId
         );
@@ -1150,13 +1108,6 @@ export class InventoryController {
     }
   }
 
-  // ------------------------------------------------------------- reporting
-
-  /**
-   * GET /api/inventory/valuation
-   * Stock value by item, derived from the cost of the layers actually on
-   * hand rather than a standard cost applied after the fact.
-   */
   async valuation(req: Request, res: Response) {
     const operation = "Inventory valuation";
     try {
@@ -1285,11 +1236,6 @@ export class InventoryController {
     }
   }
 
-  /**
-   * GET /api/inventory/dashboard
-   * The numbers the inventory landing page shows. Everything here is a live
-   * query — there are no cached counters to go stale.
-   */
   async dashboard(req: Request, res: Response) {
     const operation = "Inventory dashboard";
     try {
@@ -1437,7 +1383,6 @@ export class InventoryController {
     }
   }
 
-  /** GET /api/inventory/units — unit of measure master. */
   async listUnits(_req: Request, res: Response) {
     const operation = "List units of measure";
     try {

@@ -1,24 +1,23 @@
 "use client";
 
-import { useUpdateContact } from "@/hooks/useContacts";
+import { useUpdateContact } from "@/hooks/use-contacts";
 import { displayPhone } from "@/lib/phone-formatter";
 import { toast } from "@/lib/toast";
+import { Contact } from "@/lib/api/types";
 import React from "react";
 import ContactEditModal, { ContactEditValues } from "./contact-edit-modal";
 import { DataTable, TableColumn } from "./data-table";
-import { Contact } from "./data-types";
 
 interface ContactTableProps {
   contacts: Contact[];
   onContactClick?: (contact: Contact) => void;
-  onDeleteContact?: (contact: Contact) => void;
   showCheckboxes?: boolean;
   selectedItems?: string[];
   onSelectionChange?: (selectedIds: string[]) => void;
-  // Search props
+
   searchQuery?: string;
   isSearchMode?: boolean;
-  // Pagination props
+
   currentPage?: number;
   totalPages?: number;
   totalCount?: number;
@@ -30,14 +29,13 @@ interface ContactTableProps {
 export const ContactTable: React.FC<ContactTableProps> = ({
   contacts,
   onContactClick,
-  onDeleteContact,
   showCheckboxes = false,
   selectedItems = [],
   onSelectionChange,
-  // Search props
+
   searchQuery,
   isSearchMode = false,
-  // Pagination props
+
   currentPage = 1,
   totalPages = 1,
   totalCount,
@@ -93,9 +91,9 @@ export const ContactTable: React.FC<ContactTableProps> = ({
     {
       key: "accountName",
       label: "Account Name",
-      render: value => (
+      render: (_value, item) => (
         <span className="text-muted-foreground">
-          {value || "No account linked"}
+          {item.account?.name || "No account linked"}
         </span>
       ),
     },
@@ -121,22 +119,6 @@ export const ContactTable: React.FC<ContactTableProps> = ({
         );
       },
     },
-
-    // {
-    //   key: "source",
-    //   label: "Source",
-    //   render: (value, contact) => {
-    //     return (
-    //       <div className="flex items-center gap-2">
-    //         {contact.isConvertedLead ? (
-    //             Converted
-    //         ) : (
-    //             Direct Contact
-    //         )}
-    //       </div>
-    //     )
-    //   }
-    // }
   ];
 
   return (
@@ -158,15 +140,6 @@ export const ContactTable: React.FC<ContactTableProps> = ({
               setEditOpen(true);
             },
           },
-          { label: "View Account", onClick: () => {} },
-          ...(onDeleteContact
-            ? [
-                {
-                  label: "Delete Contact",
-                  onClick: (contact: Contact) => onDeleteContact(contact),
-                },
-              ]
-            : []),
         ]}
         onRowClick={onContactClick}
         getRowHref={contact => `/leads/contacts/${contact.id}`}
@@ -180,8 +153,6 @@ export const ContactTable: React.FC<ContactTableProps> = ({
         itemsPerPage={itemsPerPage}
         onPageChange={onPageChange}
         onItemsPerPageChange={onItemsPerPageChange}
-        showFilter={true}
-        customFilter={<></>}
         columnPreferenceKey="contact-table"
       />
       <ContactEditModal
@@ -192,6 +163,9 @@ export const ContactTable: React.FC<ContactTableProps> = ({
           email: editingContact?.email || "",
           phone: editingContact?.phone || "",
           position: editingContact?.position || "",
+          city: editingContact?.city || "",
+          state: editingContact?.state || "",
+          pincode: editingContact?.pincode || "",
         }}
         isSaving={updateContactMutation.isPending}
         onSave={async (values: ContactEditValues) => {
@@ -199,7 +173,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({
           try {
             await updateContactMutation.mutateAsync({
               id: parseInt(String(editingContact.id)),
-              data: values as any,
+              data: values,
             });
             toast.success("Contact updated successfully");
           } catch (err) {

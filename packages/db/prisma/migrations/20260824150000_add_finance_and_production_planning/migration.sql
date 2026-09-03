@@ -1,30 +1,30 @@
--- Finance management and production planning.
---
--- Two modules that hang off documents the application already has:
---   * supplier / customer invoices and payments settle the money already
---     represented by purchase orders, goods receipts and sales orders
---   * work centres, BOM routing operations and scheduled production operations
---     add the capacity layer production orders were missing
---
--- Purely additive: no existing table is altered, so this is safe on a live
--- database.
 
--- CreateEnum
+
+
+
+
+
+
+
+
+
+
+
 CREATE TYPE "InvoiceStatus" AS ENUM ('DRAFT', 'AWAITING_APPROVAL', 'APPROVED', 'PARTIALLY_PAID', 'PAID', 'CANCELLED', 'WRITTEN_OFF');
 
--- CreateEnum
+
 CREATE TYPE "PaymentDirection" AS ENUM ('OUTGOING', 'INCOMING');
 
--- CreateEnum
+
 CREATE TYPE "PaymentMethod" AS ENUM ('BANK_TRANSFER', 'CHEQUE', 'CASH', 'UPI', 'CARD', 'CREDIT_NOTE');
 
--- CreateEnum
+
 CREATE TYPE "WorkCenterType" AS ENUM ('MACHINE', 'ASSEMBLY_LINE', 'WORKSTATION', 'INSPECTION', 'PACKING');
 
--- CreateEnum
+
 CREATE TYPE "OperationStatus" AS ENUM ('PENDING', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED');
 
--- CreateTable
+
 CREATE TABLE "supplier_invoices" (
     "id" SERIAL NOT NULL,
     "invoice_number" TEXT NOT NULL,
@@ -50,7 +50,7 @@ CREATE TABLE "supplier_invoices" (
     CONSTRAINT "supplier_invoices_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
+
 CREATE TABLE "customer_invoices" (
     "id" SERIAL NOT NULL,
     "invoice_number" TEXT NOT NULL,
@@ -72,7 +72,7 @@ CREATE TABLE "customer_invoices" (
     CONSTRAINT "customer_invoices_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
+
 CREATE TABLE "payments" (
     "id" SERIAL NOT NULL,
     "payment_number" TEXT NOT NULL,
@@ -93,7 +93,7 @@ CREATE TABLE "payments" (
     CONSTRAINT "payments_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
+
 CREATE TABLE "payment_allocations" (
     "id" SERIAL NOT NULL,
     "payment_id" INTEGER NOT NULL,
@@ -105,7 +105,7 @@ CREATE TABLE "payment_allocations" (
     CONSTRAINT "payment_allocations_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
+
 CREATE TABLE "work_centers" (
     "id" SERIAL NOT NULL,
     "code" TEXT NOT NULL,
@@ -124,7 +124,7 @@ CREATE TABLE "work_centers" (
     CONSTRAINT "work_centers_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
+
 CREATE TABLE "bom_operations" (
     "id" SERIAL NOT NULL,
     "bom_id" INTEGER NOT NULL,
@@ -141,7 +141,7 @@ CREATE TABLE "bom_operations" (
     CONSTRAINT "bom_operations_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
+
 CREATE TABLE "production_order_operations" (
     "id" SERIAL NOT NULL,
     "production_order_id" INTEGER NOT NULL,
@@ -163,110 +163,110 @@ CREATE TABLE "production_order_operations" (
     CONSTRAINT "production_order_operations_pkey" PRIMARY KEY ("id")
 );
 
--- CreateIndex
+
 CREATE UNIQUE INDEX "supplier_invoices_invoice_number_key" ON "supplier_invoices"("invoice_number");
 
--- CreateIndex
+
 CREATE INDEX "supplier_invoices_supplier_id_idx" ON "supplier_invoices"("supplier_id");
 
--- CreateIndex
+
 CREATE INDEX "supplier_invoices_status_due_date_idx" ON "supplier_invoices"("status", "due_date");
 
--- CreateIndex
+
 CREATE UNIQUE INDEX "customer_invoices_invoice_number_key" ON "customer_invoices"("invoice_number");
 
--- CreateIndex
+
 CREATE INDEX "customer_invoices_account_id_idx" ON "customer_invoices"("account_id");
 
--- CreateIndex
+
 CREATE INDEX "customer_invoices_status_due_date_idx" ON "customer_invoices"("status", "due_date");
 
--- CreateIndex
+
 CREATE UNIQUE INDEX "payments_payment_number_key" ON "payments"("payment_number");
 
--- CreateIndex
+
 CREATE INDEX "payments_direction_payment_date_idx" ON "payments"("direction", "payment_date");
 
--- CreateIndex
+
 CREATE INDEX "payment_allocations_payment_id_idx" ON "payment_allocations"("payment_id");
 
--- CreateIndex
+
 CREATE INDEX "payment_allocations_supplier_invoice_id_idx" ON "payment_allocations"("supplier_invoice_id");
 
--- CreateIndex
+
 CREATE INDEX "payment_allocations_customer_invoice_id_idx" ON "payment_allocations"("customer_invoice_id");
 
--- CreateIndex
+
 CREATE UNIQUE INDEX "work_centers_code_key" ON "work_centers"("code");
 
--- CreateIndex
+
 CREATE INDEX "work_centers_warehouse_id_idx" ON "work_centers"("warehouse_id");
 
--- CreateIndex
+
 CREATE INDEX "bom_operations_work_center_id_idx" ON "bom_operations"("work_center_id");
 
--- CreateIndex
+
 CREATE UNIQUE INDEX "bom_operations_bom_id_sequence_key" ON "bom_operations"("bom_id", "sequence");
 
--- CreateIndex
+
 CREATE INDEX "production_order_operations_work_center_id_scheduled_start_idx" ON "production_order_operations"("work_center_id", "scheduled_start");
 
--- CreateIndex
+
 CREATE UNIQUE INDEX "production_order_operations_production_order_id_sequence_key" ON "production_order_operations"("production_order_id", "sequence");
 
--- AddForeignKey
+
 ALTER TABLE "supplier_invoices" ADD CONSTRAINT "supplier_invoices_supplier_id_fkey" FOREIGN KEY ("supplier_id") REFERENCES "suppliers"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- AddForeignKey
+
 ALTER TABLE "supplier_invoices" ADD CONSTRAINT "supplier_invoices_purchase_order_id_fkey" FOREIGN KEY ("purchase_order_id") REFERENCES "purchase_orders"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
--- AddForeignKey
+
 ALTER TABLE "supplier_invoices" ADD CONSTRAINT "supplier_invoices_grn_id_fkey" FOREIGN KEY ("grn_id") REFERENCES "goods_receipt_notes"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
--- AddForeignKey
+
 ALTER TABLE "supplier_invoices" ADD CONSTRAINT "supplier_invoices_created_by_id_fkey" FOREIGN KEY ("created_by_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- AddForeignKey
+
 ALTER TABLE "supplier_invoices" ADD CONSTRAINT "supplier_invoices_approved_by_id_fkey" FOREIGN KEY ("approved_by_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
--- AddForeignKey
+
 ALTER TABLE "customer_invoices" ADD CONSTRAINT "customer_invoices_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "accounts"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- AddForeignKey
+
 ALTER TABLE "customer_invoices" ADD CONSTRAINT "customer_invoices_sales_order_id_fkey" FOREIGN KEY ("sales_order_id") REFERENCES "sales_orders"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
--- AddForeignKey
+
 ALTER TABLE "customer_invoices" ADD CONSTRAINT "customer_invoices_created_by_id_fkey" FOREIGN KEY ("created_by_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- AddForeignKey
+
 ALTER TABLE "payments" ADD CONSTRAINT "payments_supplier_id_fkey" FOREIGN KEY ("supplier_id") REFERENCES "suppliers"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
--- AddForeignKey
+
 ALTER TABLE "payments" ADD CONSTRAINT "payments_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "accounts"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
--- AddForeignKey
+
 ALTER TABLE "payments" ADD CONSTRAINT "payments_recorded_by_id_fkey" FOREIGN KEY ("recorded_by_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- AddForeignKey
+
 ALTER TABLE "payment_allocations" ADD CONSTRAINT "payment_allocations_payment_id_fkey" FOREIGN KEY ("payment_id") REFERENCES "payments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- AddForeignKey
+
 ALTER TABLE "payment_allocations" ADD CONSTRAINT "payment_allocations_supplier_invoice_id_fkey" FOREIGN KEY ("supplier_invoice_id") REFERENCES "supplier_invoices"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
--- AddForeignKey
+
 ALTER TABLE "payment_allocations" ADD CONSTRAINT "payment_allocations_customer_invoice_id_fkey" FOREIGN KEY ("customer_invoice_id") REFERENCES "customer_invoices"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
--- AddForeignKey
+
 ALTER TABLE "work_centers" ADD CONSTRAINT "work_centers_warehouse_id_fkey" FOREIGN KEY ("warehouse_id") REFERENCES "warehouses"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- AddForeignKey
+
 ALTER TABLE "bom_operations" ADD CONSTRAINT "bom_operations_bom_id_fkey" FOREIGN KEY ("bom_id") REFERENCES "bills_of_materials"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- AddForeignKey
+
 ALTER TABLE "bom_operations" ADD CONSTRAINT "bom_operations_work_center_id_fkey" FOREIGN KEY ("work_center_id") REFERENCES "work_centers"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- AddForeignKey
+
 ALTER TABLE "production_order_operations" ADD CONSTRAINT "production_order_operations_production_order_id_fkey" FOREIGN KEY ("production_order_id") REFERENCES "production_orders"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- AddForeignKey
+
 ALTER TABLE "production_order_operations" ADD CONSTRAINT "production_order_operations_work_center_id_fkey" FOREIGN KEY ("work_center_id") REFERENCES "work_centers"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

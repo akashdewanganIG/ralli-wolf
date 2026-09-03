@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   ErrorBanner,
   FilterBar,
@@ -15,13 +15,19 @@ import {
   StatusBadge,
   DEFAULT_PAGE_SIZE,
 } from "@/components/supply-chain/shared";
-import { useQualityChecks, useSuppliers } from "@/hooks/useSupplyChain";
+import { EntityImageGallery } from "@/components/supply-chain/entity-image-gallery";
+import { useQualityCheckImages } from "@/hooks/use-entity-images";
+import { useQualityChecks, useSuppliers } from "@/hooks/use-supply-chain";
 import { formatDateTime, formatQuantity } from "@/lib/utils/decimal";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
-import { DataTransfer } from "@/components/data-transfer/DataTransfer";
+import { DataTransfer } from "@/components/data-transfer/data-transfer";
 
 export default function QualityChecksPage() {
   const [page, setPage] = useState(1);
+  const [selectedCheck, setSelectedCheck] = useState<{
+    id: number;
+    qcNumber: string;
+  } | null>(null);
   const [result, setResult] = useState("");
   const [supplierId, setSupplierId] = useState("");
 
@@ -215,6 +221,24 @@ export default function QualityChecksPage() {
                   "—",
               },
               { header: "When", cell: row => formatDateTime(row.inspectedAt) },
+              {
+                header: "Photos",
+                cell: row => (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedCheck(
+                        selectedCheck?.id === row.id
+                          ? null
+                          : { id: row.id, qcNumber: row.qcNumber }
+                      )
+                    }
+                    className="text-xs font-medium text-primary underline-offset-2 hover:underline"
+                  >
+                    {selectedCheck?.id === row.id ? "Hide" : "View"}
+                  </button>
+                ),
+              },
             ]}
           />
           <Pager
@@ -223,7 +247,42 @@ export default function QualityChecksPage() {
             onChange={setPage}
           />
         </Panel>
+
+        {selectedCheck && (
+          <QualityCheckPhotos
+            qualityCheckId={selectedCheck.id}
+            qcNumber={selectedCheck.qcNumber}
+          />
+        )}
       </PageShell>
     </ProtectedRoute>
+  );
+}
+
+function QualityCheckPhotos({
+  qualityCheckId,
+  qcNumber,
+}: {
+  qualityCheckId: number;
+  qcNumber: string;
+}) {
+  const images = useQualityCheckImages(qualityCheckId);
+
+  return (
+    <Panel
+      title={`Inspection photos · ${qcNumber}`}
+      description="Defect evidence for this inspection. Attach close-ups of anything rejected so the supplier claim has a record."
+    >
+      <EntityImageGallery
+        images={images.query.data?.data ?? []}
+        maxImages={12}
+        itemLabel="inspection photos"
+        emptyHint="No photos attached to this inspection yet."
+        onUpload={files => images.addImages.mutateAsync({ images: files })}
+        onDelete={imageId => images.deleteImage.mutateAsync(imageId)}
+        isUploading={images.addImages.isPending}
+        isDeleting={images.deleteImage.isPending}
+      />
+    </Panel>
   );
 }

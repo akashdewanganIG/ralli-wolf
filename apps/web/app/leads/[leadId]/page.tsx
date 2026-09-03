@@ -3,7 +3,7 @@
 import React from "react";
 import { MainLayout } from "@/components/main-layout";
 import { LeadDetailPage } from "@/components/lead-detail-page";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import { useRouter } from "next/navigation";
 
 interface LeadDetailPageProps {
@@ -18,29 +18,13 @@ export default function LeadDetailRoute({ params }: LeadDetailPageProps) {
   const leadId = parseInt(resolvedParams.leadId);
 
   const handleBack = () => {
-    // Navigate back to leads list, preserving any tab state from referrer
     router.back();
   };
 
   return (
     <ProtectedRoute>
       <MainLayout>
-        <LeadDetailPage
-          leadId={leadId}
-          onBack={handleBack}
-          onEdit={() => {
-            console.log("Lead edit initiated");
-          }}
-          onDelete={() => {
-            console.log("Lead delete initiated");
-            handleBack();
-          }}
-          onConvert={() => {
-            console.log("Lead convert initiated");
-          }}
-          onSendEmail={() => console.log("Send email")}
-          onSendWhatsApp={() => console.log("Send WhatsApp")}
-        />
+        <LeadDetailPage leadId={leadId} onBack={handleBack} />
       </MainLayout>
     </ProtectedRoute>
   );

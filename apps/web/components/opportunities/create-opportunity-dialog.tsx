@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   Button,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -23,7 +24,7 @@ import {
   OPPORTUNITY_STAGES,
   OPPORTUNITY_TYPES,
 } from "./opportunity-enums";
-import { useCreateOpportunity } from "@/hooks/useOpportunities";
+import { useCreateOpportunity } from "@/hooks/use-opportunities";
 import { accountService } from "@/lib/api/services";
 import type { Account } from "@/lib/api/types";
 
@@ -51,7 +52,7 @@ export function CreateOpportunityDialog({
   const [selectedAccountName, setSelectedAccountName] = React.useState("");
   const [showAccountResults, setShowAccountResults] = React.useState(false);
   const [isSearching, setIsSearching] = React.useState(false);
-  // const [contactId, setContactId] = React.useState<string>("")
+
   const [stage, setStage] = React.useState<string>("PROSPECT");
   const [closeDate, setCloseDate] = React.useState<string>(todayPlus(30));
   const [type, setType] = React.useState<string>("");
@@ -69,7 +70,7 @@ export function CreateOpportunityDialog({
     setAccountResults([]);
     setSelectedAccountName("");
     setShowAccountResults(false);
-    // setContactId("")
+
     setStage("PROSPECT");
     setCloseDate(todayPlus(30));
     setType("");
@@ -82,7 +83,6 @@ export function CreateOpportunityDialog({
     if (!open) reset();
   }, [open, reset]);
 
-  // Debounced account search
   React.useEffect(() => {
     if (accountSearch.trim().length < 2) {
       setAccountResults([]);
@@ -108,7 +108,6 @@ export function CreateOpportunityDialog({
     return () => clearTimeout(timer);
   }, [accountSearch]);
 
-  // Close results when clicking outside
   React.useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (
@@ -131,7 +130,7 @@ export function CreateOpportunityDialog({
 
   const handleAccountInputChange = (value: string) => {
     setAccountSearch(value);
-    // Clear selection if user edits the text after selecting
+
     if (selectedAccountName && value !== selectedAccountName) {
       setAccountId(null);
       setSelectedAccountName("");
@@ -150,7 +149,7 @@ export function CreateOpportunityDialog({
       {
         name: name.trim(),
         accountId: accountId!,
-        // contactId: contactId ? Number(contactId) : undefined,
+
         stage: stage || undefined,
         expectedCloseDate: closeDate || undefined,
         type: type || undefined,
@@ -168,7 +167,7 @@ export function CreateOpportunityDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl gap-0 overflow-hidden">
         <DialogHeader>
           <DialogTitle>Create Opportunity</DialogTitle>
           <DialogDescription>
@@ -176,156 +175,151 @@ export function CreateOpportunityDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2 md:col-span-2">
-            <Label>
-              Opportunity Name <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="Enter opportunity name"
-            />
-            {showErrors && !name.trim() && (
-              <p className="text-xs text-destructive">
-                Opportunity name is required
-              </p>
-            )}
-          </div>
+        <DialogBody>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2 md:col-span-2">
+              <Label>
+                Opportunity Name <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Enter opportunity name"
+              />
+              {showErrors && !name.trim() && (
+                <p className="text-xs text-destructive">
+                  Opportunity name is required
+                </p>
+              )}
+            </div>
 
-          <div className="space-y-2 relative" ref={accountSearchRef}>
-            <Label>
-              Account Name <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              value={accountSearch}
-              onChange={e => handleAccountInputChange(e.target.value)}
-              onFocus={() => {
-                if (accountResults.length > 0 && !accountId)
-                  setShowAccountResults(true);
-              }}
-              placeholder="Search account name..."
-              autoComplete="off"
-            />
-            {isSearching && (
-              <p className="text-xs text-muted-foreground mt-1">Searching...</p>
-            )}
-            {showAccountResults && accountResults.length > 0 && (
-              <div className="absolute z-50 top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto overflow-x-auto rounded-md border border-border bg-surface shadow-lg">
-                {accountResults.map(account => (
-                  <button
-                    key={account.id}
-                    type="button"
-                    className="flex w-full items-center whitespace-nowrap px-3 py-2 text-left text-sm hover:bg-surface-secondary cursor-pointer transition-colors"
-                    onClick={() => handleSelectAccount(account)}
-                  >
-                    {account.name}
-                  </button>
-                ))}
-              </div>
-            )}
-            {showAccountResults &&
-              accountResults.length === 0 &&
-              accountSearch.trim().length >= 2 &&
-              !isSearching && (
-                <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-md border border-border bg-surface shadow-lg">
-                  <p className="px-3 py-2 text-sm text-muted-foreground">
-                    No accounts found
-                  </p>
+            <div className="space-y-2 relative" ref={accountSearchRef}>
+              <Label>
+                Account Name <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                value={accountSearch}
+                onChange={e => handleAccountInputChange(e.target.value)}
+                onFocus={() => {
+                  if (accountResults.length > 0 && !accountId)
+                    setShowAccountResults(true);
+                }}
+                placeholder="Search account name..."
+                autoComplete="off"
+              />
+              {isSearching && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Searching...
+                </p>
+              )}
+              {showAccountResults && accountResults.length > 0 && (
+                <div className="absolute z-50 top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto overflow-x-auto rounded-md border border-border bg-surface shadow-lg">
+                  {accountResults.map(account => (
+                    <button
+                      key={account.id}
+                      type="button"
+                      className="flex w-full items-center whitespace-nowrap px-3 py-2 text-left text-sm hover:bg-surface-secondary cursor-pointer transition-colors"
+                      onClick={() => handleSelectAccount(account)}
+                    >
+                      {account.name}
+                    </button>
+                  ))}
                 </div>
               )}
-            {showErrors && !accountId && (
-              <p className="text-xs text-destructive">
-                Account name is required
-              </p>
-            )}
+              {showAccountResults &&
+                accountResults.length === 0 &&
+                accountSearch.trim().length >= 2 &&
+                !isSearching && (
+                  <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-md border border-border bg-surface shadow-lg">
+                    <p className="px-3 py-2 text-sm text-muted-foreground">
+                      No accounts found
+                    </p>
+                  </div>
+                )}
+              {showErrors && !accountId && (
+                <p className="text-xs text-destructive">
+                  Account name is required
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Stage</Label>
+              <Select value={stage} onValueChange={setStage}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select stage" />
+                </SelectTrigger>
+                <SelectContent>
+                  {OPPORTUNITY_STAGES.map(s => (
+                    <SelectItem key={s} value={s}>
+                      {s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>
+                Close Date <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                type="date"
+                value={closeDate}
+                onChange={e => setCloseDate(e.target.value)}
+              />
+              {showErrors && !closeDate && (
+                <p className="text-xs text-destructive">
+                  Close date is required
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Type</Label>
+              <Select value={type} onValueChange={setType}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {OPPORTUNITY_TYPES.map(t => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <Label>Lead Source</Label>
+              <Select value={leadSource} onValueChange={setLeadSource}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select lead source" />
+                </SelectTrigger>
+                <SelectContent>
+                  {LEAD_SOURCES.map(ls => (
+                    <SelectItem key={ls} value={ls}>
+                      {ls}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <Label>Description</Label>
+              <Textarea
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                placeholder="Enter description"
+                className="min-h-[6.875rem]"
+              />
+            </div>
           </div>
+        </DialogBody>
 
-          <div className="space-y-2">
-            <Label>Stage</Label>
-            <Select value={stage} onValueChange={setStage}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select stage" />
-              </SelectTrigger>
-              <SelectContent>
-                {OPPORTUNITY_STAGES.map(s => (
-                  <SelectItem key={s} value={s}>
-                    {s}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* <div className="space-y-2">
-            <Label>Contact Id</Label>
-            <SearchableSelect
-              value={contactId || undefined}
-              onValueChange={setContactId}
-              placeholder="Select contact"
-              searchPlaceholder="Search contacts..."
-              items={contactItems}
-            />
-          </div> */}
-
-          <div className="space-y-2">
-            <Label>
-              Close Date <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              type="date"
-              value={closeDate}
-              onChange={e => setCloseDate(e.target.value)}
-            />
-            {showErrors && !closeDate && (
-              <p className="text-xs text-destructive">Close date is required</p>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <Label>Type</Label>
-            <Select value={type} onValueChange={setType}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select type" />
-              </SelectTrigger>
-              <SelectContent>
-                {OPPORTUNITY_TYPES.map(t => (
-                  <SelectItem key={t} value={t}>
-                    {t}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2 md:col-span-2">
-            <Label>Lead Source</Label>
-            <Select value={leadSource} onValueChange={setLeadSource}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select lead source" />
-              </SelectTrigger>
-              <SelectContent>
-                {LEAD_SOURCES.map(ls => (
-                  <SelectItem key={ls} value={ls}>
-                    {ls}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2 md:col-span-2">
-            <Label>Description</Label>
-            <Textarea
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              placeholder="Enter description"
-              className="min-h-[6.875rem]"
-            />
-          </div>
-        </div>
-
-        <DialogFooter className="mt-2">
+        <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>

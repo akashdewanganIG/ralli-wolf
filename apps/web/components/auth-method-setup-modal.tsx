@@ -6,6 +6,7 @@ import { Check, Copy } from "@repo/ui/icons";
 import { Button } from "@repo/ui/components/ui/button";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -35,17 +36,6 @@ const COPY = {
   },
 } as const;
 
-/**
- * Enrolment for a second factor, as a dialog.
- *
- * Both flows used to expand inline underneath their row, which meant the list
- * changed height as you used it and a QR code had to squeeze into a row that
- * was designed to be one line tall. A dialog gives the QR room and leaves the
- * list a stable, scannable column of methods.
- *
- * The code field is the same in both flows, so the only thing that varies is
- * what sits above it: a QR and a manual key, or nothing at all.
- */
 export function AuthMethodSetupModal({
   method,
   enrolment,
@@ -55,7 +45,6 @@ export function AuthMethodSetupModal({
   onCancel,
   onVerify,
 }: {
-  /** Which enrolment is running; `null` closes the dialog. */
   method: AuthMethodName | null;
   enrolment: TotpEnrolment | null;
   busy: boolean;
@@ -66,7 +55,6 @@ export function AuthMethodSetupModal({
 }) {
   const [code, setCode] = useState("");
 
-  // A dialog that reopens should never show the previous attempt's digits.
   useEffect(() => {
     if (method) setCode("");
   }, [method]);
@@ -92,66 +80,69 @@ export function AuthMethodSetupModal({
 
   return (
     <Dialog open={open} onOpenChange={next => (next ? undefined : onCancel())}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="gap-0 overflow-hidden sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{copy.title}</DialogTitle>
           <DialogDescription>{copy.description}</DialogDescription>
         </DialogHeader>
-
-        {method === "totp" && enrolment ? (
-          <div className="space-y-3">
-            <div className="flex justify-center">
-              <Image
-                src={enrolment.qrCodeDataUrl}
-                alt="Authenticator setup QR code"
-                width={168}
-                height={168}
-                unoptimized
-                className="rounded-lg border border-border bg-white p-2"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="totp-manual-key">Or enter this key by hand</Label>
-              <div className="flex items-center gap-1.5">
-                <code
-                  id="totp-manual-key"
-                  className="min-w-0 flex-1 truncate rounded-md border border-border bg-surface-subtle px-2.5 py-2 font-mono text-xs text-foreground"
-                >
-                  {enrolment.manualKey}
-                </code>
-                <CopyKeyButton onCopy={copyKey} />
+        <DialogBody className="space-y-3">
+          {method === "totp" && enrolment ? (
+            <div className="space-y-3">
+              <div className="flex justify-center">
+                <Image
+                  src={enrolment.qrCodeDataUrl}
+                  alt="Authenticator setup QR code"
+                  width={168}
+                  height={168}
+                  unoptimized
+                  className="rounded-lg border border-border bg-white p-2"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="totp-manual-key">
+                  Or enter this key by hand
+                </Label>
+                <div className="flex items-center gap-1.5">
+                  <code
+                    id="totp-manual-key"
+                    className="min-w-0 flex-1 truncate rounded-md border border-border bg-surface-subtle px-2.5 py-2 font-mono text-xs text-foreground"
+                  >
+                    {enrolment.manualKey}
+                  </code>
+                  <CopyKeyButton onCopy={copyKey} />
+                </div>
               </div>
             </div>
-          </div>
-        ) : null}
-
-        <div className="space-y-1.5">
-          <Label htmlFor="auth-setup-code">{copy.codeLabel}</Label>
-          <Input
-            id="auth-setup-code"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={6}
-            placeholder="000000"
-            value={code}
-            onChange={event =>
-              setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
-            }
-            className="text-center font-mono text-base tracking-[0.35em]"
-          />
-          {method === "email" ? (
-            <button
-              type="button"
-              onClick={onResend}
-              disabled={resendIn > 0 || busy}
-              className="rounded-sm text-xs font-medium text-primary outline-none transition-colors hover:underline focus-visible:ring-2 focus-visible:ring-ring/30 disabled:text-text-disabled disabled:no-underline"
-            >
-              {resendIn > 0 ? `Resend in ${resendIn}s` : "Resend code"}
-            </button>
           ) : null}
-        </div>
 
-        <DialogFooter className="pt-1">
+          <div className="space-y-1.5">
+            <Label htmlFor="auth-setup-code">{copy.codeLabel}</Label>
+            <Input
+              id="auth-setup-code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              placeholder="000000"
+              value={code}
+              onChange={event =>
+                setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
+              }
+              className="text-center font-mono text-base tracking-[0.35em]"
+            />
+            {method === "email" ? (
+              <button
+                type="button"
+                onClick={onResend}
+                disabled={resendIn > 0 || busy}
+                className="rounded-sm text-xs font-medium text-primary outline-none transition-colors hover:underline focus-visible:ring-2 focus-visible:ring-ring/30 disabled:text-text-disabled disabled:no-underline"
+              >
+                {resendIn > 0 ? `Resend in ${resendIn}s` : "Resend code"}
+              </button>
+            ) : null}
+          </div>
+        </DialogBody>
+
+        <DialogFooter>
           <Button
             type="button"
             variant="outline"
@@ -173,7 +164,6 @@ export function AuthMethodSetupModal({
   );
 }
 
-/** Copy affordance that confirms itself for a moment, then reverts. */
 function CopyKeyButton({ onCopy }: { onCopy: () => Promise<void> }) {
   const [copied, setCopied] = useState(false);
 

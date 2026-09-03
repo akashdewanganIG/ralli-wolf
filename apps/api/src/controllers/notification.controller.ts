@@ -1,31 +1,59 @@
 import { Request, Response } from "express";
 import { prisma } from "@repo/db";
-import { NotificationType } from "@prisma/client";
+import { NotificationType, Prisma } from "@prisma/client";
 import {
   handleError,
   handleNotFoundError,
   handleValidationError,
-} from "../utils/errorHandler.js";
+} from "../utils/error-handler.js";
 import {
   CONFIGURABLE_TYPES,
   NOTIFICATION_CATALOGUE,
   NOTIFICATION_DEFAULT,
-} from "../services/notificationCatalogue.js";
-import { buildNotificationEmail } from "../services/notificationEmail.js";
+} from "../services/notification-catalogue.js";
+import { buildNotificationEmail } from "../services/notification-email.js";
 import { emailService } from "../services/email.service.js";
+import { logError } from "../utils/logger.js";
+import {
+  parseBoundedInteger,
+  parsePositiveInteger,
+} from "../utils/validators.js";
+
+const NOTIFICATION_PUBLIC_SELECT = {
+  id: true,
+  type: true,
+  title: true,
+  message: true,
+  isRead: true,
+  link: true,
+  createdAt: true,
+  readAt: true,
+} satisfies Prisma.NotificationSelect;
 
 export class NotificationController {
   async getNotifications(req: Request, res: Response) {
     const operation = "Get notifications";
     try {
       const userId = req.user!.id;
-      const page = Math.max(1, parseInt(req.query.page as string) || 1);
+      const page =
+        req.query.page === undefined
+          ? 1
+          : parseBoundedInteger(req.query.page, 1, 1_000_000);
+      if (page === null) {
+        return handleValidationError(
+          res,
+          "page must be a positive integer",
+          "page",
+          operation
+        );
+      }
       const limit = 20;
       const skip = (page - 1) * limit;
 
       const [notifications, totalItems, unreadCount] = await Promise.all([
         prisma.notification.findMany({
           where: { userId },
+          select: NOTIFICATION_PUBLIC_SELECT,
           orderBy: { createdAt: "desc" },
           skip,
           take: limit,
@@ -53,14 +81,15 @@ export class NotificationController {
     const operation = "Mark notification read";
     try {
       const userId = req.user!.id;
-      const id = parseInt(req.params.id as string, 10);
-      if (isNaN(id)) {
+      const id = parsePositiveInteger(req.params.id);
+      if (id === null) {
         handleValidationError(res, "Invalid notification id", "id", operation);
         return;
       }
 
       const notification = await prisma.notification.findFirst({
         where: { id, userId },
+        select: { id: true },
       });
       if (!notification) {
         handleNotFoundError(res, "Notification", operation);
@@ -70,6 +99,7 @@ export class NotificationController {
       const updated = await prisma.notification.update({
         where: { id },
         data: { isRead: true, readAt: new Date() },
+        select: NOTIFICATION_PUBLIC_SELECT,
       });
 
       res.json({ data: updated });
@@ -78,13 +108,6 @@ export class NotificationController {
     }
   }
 
-  /**
-   * The full preference list for the current user.
-   *
-   * Always returns one entry per catalogue type — merged with whatever the
-   * user has saved — so the client renders the same list for a brand-new user
-   * as for one who has changed everything, with no client-side defaulting.
-   */
   async getPreferences(req: Request, res: Response) {
     const operation = "Get notification preferences";
     try {
@@ -114,13 +137,6 @@ export class NotificationController {
     }
   }
 
-  /**
-   * Saves the preference list.
-   *
-   * Takes the whole list rather than one row so the screen can save once,
-   * and writes them in a transaction so a partial save cannot leave a user
-   * with half their choices applied.
-   */
   async updatePreferences(req: Request, res: Response) {
     const operation = "Update notification preferences";
     try {
@@ -202,13 +218,6 @@ export class NotificationController {
   }
 }
 
-/**
- * Resolves one user's channels for one notification type.
- *
- * An absent row means the defaults, so a user who has never opened the
- * settings screen still receives everything. Types outside the catalogue are
- * not configurable and always go to the bell menu.
- */
 export async function resolveChannels(
   userId: number,
   type: NotificationType
@@ -223,14 +232,6 @@ export async function resolveChannels(
   return preference ?? { ...NOTIFICATION_DEFAULT };
 }
 
-/**
- * Whether this user wants email for this type.
- *
- * For callers that already send their own, richer email for the same event —
- * an approval request carries reference numbers and the requester's name that
- * a generic notification body cannot know. They send it themselves and gate it
- * on this, instead of letting `createNotification` send a second, thinner one.
- */
 export async function shouldSendEmail(
   userId: number,
   type: NotificationType
@@ -239,57 +240,77 @@ export async function shouldSendEmail(
   return channels.email;
 }
 
-/**
- * Pushes a notification to a user, honouring their preferences.
- *
- * Both channels are gated: turning a notification off in settings stops the
- * bell entry as well as the email, which is what "I do not want this" means.
- * The email is dispatched without being awaited — callers use this
- * fire-and-forget inside request handlers, and a slow mail provider must not
- * hold up the response that triggered it.
- *
- * Returns the created notification, or `null` when the user has switched the
- * in-app channel off.
- */
 export async function createNotification(params: {
   userId: number;
   type: NotificationType;
   title: string;
   message: string;
   link?: string;
-  /**
-   * Set when the caller sends its own email for this event. Suppresses the
-   * generic one so the recipient gets a single message, not two describing the
-   * same thing. The caller is then responsible for checking `shouldSendEmail`.
-   */
+
   emailHandledByCaller?: boolean;
+
+  dedupeKey?: string;
+
+  awaitEmailDelivery?: boolean;
 }) {
-  const { emailHandledByCaller, ...data } = params;
+  const { emailHandledByCaller, awaitEmailDelivery = false, ...data } = params;
+  if (data.dedupeKey && data.dedupeKey.length > 200) {
+    throw new Error("Notification dedupe key cannot exceed 200 characters");
+  }
   const channels = await resolveChannels(data.userId, data.type);
 
-  if (channels.email && !emailHandledByCaller) {
-    void sendNotificationEmail(data).catch(error =>
-      console.error("[Notification] Email dispatch failed:", error)
-    );
+  let notification = null;
+  if (channels.inApp) {
+    try {
+      notification = await prisma.notification.create({ data });
+    } catch (error) {
+      if (
+        data.dedupeKey &&
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        notification = await prisma.notification.findUnique({
+          where: { dedupeKey: data.dedupeKey },
+        });
+      } else {
+        throw error;
+      }
+    }
   }
 
-  if (!channels.inApp) return null;
-  return prisma.notification.create({ data });
+  if (channels.email && !emailHandledByCaller) {
+    const delivery = sendNotificationEmail(data);
+    if (awaitEmailDelivery) {
+      const accepted = await delivery;
+      if (!accepted) {
+        throw new Error("Notification email provider did not accept delivery");
+      }
+    } else {
+      void delivery.catch(error =>
+        logError("notification_email_dispatch_failed", error, {
+          userId: data.userId,
+          type: data.type,
+        })
+      );
+    }
+  }
+
+  return notification;
 }
 
-/** Renders and sends the email for one notification. Never throws. */
 async function sendNotificationEmail(params: {
   userId: number;
   type: NotificationType;
   title: string;
   message: string;
   link?: string;
+  dedupeKey?: string;
 }) {
   const user = await prisma.user.findUnique({
     where: { id: params.userId },
     select: { email: true, firstName: true, lastName: true },
   });
-  if (!user?.email) return;
+  if (!user?.email) return true;
 
   const recipientName = [user.firstName, user.lastName]
     .filter(Boolean)
@@ -302,10 +323,11 @@ async function sendNotificationEmail(params: {
     message: params.message,
   });
 
-  await emailService.sendEmail({
+  return emailService.sendEmail({
     to: user.email,
     subject,
     body: html,
     name: recipientName || user.email,
+    idempotencyKey: params.dedupeKey,
   });
 }

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@repo/ui/components/ui/button";
 import { Input } from "@repo/ui/components/ui/input";
 import { useRouter } from "next/navigation";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   ErrorBanner,
   FilterBar,
@@ -17,19 +17,19 @@ import {
   StatusBadge,
   DEFAULT_PAGE_SIZE,
 } from "@/components/supply-chain/shared";
-import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
+import { WarehouseFilter } from "@/components/supply-chain/warehouse-filter";
 import {
   ProductPicker,
   type PickedProduct,
-} from "@/components/supply-chain/ProductPicker";
+} from "@/components/supply-chain/product-picker";
 import {
   useMaterialMutations,
   useMaterialRequisitions,
-} from "@/hooks/useSupplyChain";
+} from "@/hooks/use-supply-chain";
 import { formatDate, formatDateTime } from "@/lib/utils/decimal";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { FormDialog } from "@repo/ui/components/ui/form-dialog";
-import { DataTransfer } from "@/components/data-transfer/DataTransfer";
+import { DataTransfer } from "@/components/data-transfer/data-transfer";
 
 interface DraftLine {
   product: PickedProduct | null;
@@ -124,114 +124,109 @@ export default function MaterialRequisitionsPage() {
           open={showForm}
           onOpenChange={setShowForm}
           title="New material requisition"
+          onSubmit={submit}
+          bodyClassName="block space-y-3"
+          isSubmitting={createRequisition.isPending}
+          submitDisabled={!canSubmit}
+          submitLabel="Create requisition"
         >
-          <form onSubmit={submit} className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-3">
-              <Field label="Issue from warehouse" composite>
-                <WarehouseFilter
-                  value={warehouseId}
-                  onChange={setWarehouseId}
-                  allowAll={false}
-                  required
-                />
-              </Field>
-              <Field label="Required by">
-                <Input
-                  type="date"
-                  value={requiredByDate}
-                  onChange={event => setRequiredByDate(event.target.value)}
-                />
-              </Field>
-              <Field label="Purpose">
-                <Input
-                  value={purpose}
-                  onChange={event => setPurpose(event.target.value)}
-                  placeholder="e.g. Line 2 assembly"
-                />
-              </Field>
-            </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            <Field label="Issue from warehouse" composite>
+              <WarehouseFilter
+                value={warehouseId}
+                onChange={setWarehouseId}
+                allowAll={false}
+                required
+              />
+            </Field>
+            <Field label="Required by">
+              <Input
+                type="date"
+                value={requiredByDate}
+                onChange={event => setRequiredByDate(event.target.value)}
+              />
+            </Field>
+            <Field label="Purpose">
+              <Input
+                value={purpose}
+                onChange={event => setPurpose(event.target.value)}
+                placeholder="e.g. Line 2 assembly"
+              />
+            </Field>
+          </div>
 
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">Lines</p>
-              {lines.map((line, index) => (
-                <div
-                  key={index}
-                  className="grid gap-2 md:grid-cols-[2fr,1fr,1fr,auto]"
-                >
-                  <ProductPicker
-                    value={line.product}
-                    onChange={product =>
-                      setLines(current =>
-                        current.map((entry, i) =>
-                          i === index ? { ...entry, product } : entry
-                        )
-                      )
-                    }
-                  />
-                  <Input
-                    placeholder="Quantity"
-                    inputMode="decimal"
-                    value={line.requestedQuantity}
-                    onChange={event =>
-                      setLines(current =>
-                        current.map((entry, i) =>
-                          i === index
-                            ? {
-                                ...entry,
-                                requestedQuantity: event.target.value,
-                              }
-                            : entry
-                        )
-                      )
-                    }
-                  />
-                  <Input
-                    placeholder="Notes"
-                    value={line.notes}
-                    onChange={event =>
-                      setLines(current =>
-                        current.map((entry, i) =>
-                          i === index
-                            ? { ...entry, notes: event.target.value }
-                            : entry
-                        )
-                      )
-                    }
-                  />
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setLines(current => current.filter((_, i) => i !== index))
-                    }
-                    disabled={lines.length === 1}
-                    className="rounded border px-3 text-sm hover:bg-muted disabled:opacity-40 whitespace-nowrap"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={() =>
-                  setLines(current => [
-                    ...current,
-                    { product: null, requestedQuantity: "", notes: "" },
-                  ])
-                }
-                className="rounded border px-3 py-1.5 text-sm hover:bg-muted whitespace-nowrap"
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground">Lines</p>
+            {lines.map((line, index) => (
+              <div
+                key={index}
+                className="grid gap-2 md:grid-cols-[2fr,1fr,1fr,auto]"
               >
-                Add line
-              </button>
-            </div>
-
-            <div className="dialog-form-actions">
-              <Button type="submit" disabled={!canSubmit}>
-                {createRequisition.isPending
-                  ? "Creating…"
-                  : "Create requisition"}
-              </Button>
-            </div>
-          </form>
+                <ProductPicker
+                  value={line.product}
+                  onChange={product =>
+                    setLines(current =>
+                      current.map((entry, i) =>
+                        i === index ? { ...entry, product } : entry
+                      )
+                    )
+                  }
+                />
+                <Input
+                  placeholder="Quantity"
+                  inputMode="decimal"
+                  value={line.requestedQuantity}
+                  onChange={event =>
+                    setLines(current =>
+                      current.map((entry, i) =>
+                        i === index
+                          ? {
+                              ...entry,
+                              requestedQuantity: event.target.value,
+                            }
+                          : entry
+                      )
+                    )
+                  }
+                />
+                <Input
+                  placeholder="Notes"
+                  value={line.notes}
+                  onChange={event =>
+                    setLines(current =>
+                      current.map((entry, i) =>
+                        i === index
+                          ? { ...entry, notes: event.target.value }
+                          : entry
+                      )
+                    )
+                  }
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setLines(current => current.filter((_, i) => i !== index))
+                  }
+                  disabled={lines.length === 1}
+                  className="rounded border px-3 text-sm hover:bg-muted disabled:opacity-40 whitespace-nowrap"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() =>
+                setLines(current => [
+                  ...current,
+                  { product: null, requestedQuantity: "", notes: "" },
+                ])
+              }
+              className="rounded border px-3 py-1.5 text-sm hover:bg-muted whitespace-nowrap"
+            >
+              Add line
+            </button>
+          </div>
         </FormDialog>
 
         <Panel

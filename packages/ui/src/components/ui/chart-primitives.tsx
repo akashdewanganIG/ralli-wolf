@@ -13,22 +13,8 @@ import {
 
 import { cn } from "@repo/ui/lib/utils";
 
-/**
- * Dashboard chart primitives.
- *
- * Each form here exists because a specific shape of data needs it — a magnitude
- * comparison, a single ratio, a lifecycle composition. They deliberately do not
- * share one generic "bar" component, because the whole point is that the form
- * follows the data.
- *
- * Colour comes from the `--chart-*` tokens in globals.css, which are validated
- * against each mode's card surface. Nothing here hard-codes a hex, so both
- * themes stay correct from one definition.
- */
-
 const AXIS_TICK = { fill: "var(--muted-foreground)", fontSize: 11 };
 
-/** Recharts hands tooltip payloads back loosely typed; this is the shape we use. */
 type TooltipRow = {
   label: string;
   value: string;
@@ -72,10 +58,6 @@ function TooltipShell({
   );
 }
 
-/**
- * Recharts clones the `content` element and injects `active`/`payload`, so this
- * is declared as a real component rather than an inline render callback.
- */
 function CategoryTooltip({
   valueLabel,
   active,
@@ -106,66 +88,28 @@ function CategoryTooltip({
 }
 
 export type CategoryDatum = {
-  /** Axis label. */
   name: string;
-  /** Magnitude that sets bar length. */
+
   value: number;
-  /** Preformatted value for the label and tooltip. */
+
   display: string;
-  /** Optional extra tooltip rows, e.g. a secondary measure. */
+
   detail?: Array<{ label: string; value: string }>;
 };
 
-/**
- * Thick vertical columns for comparing magnitude across named categories.
- *
- * Horizontal bars rather than columns, because the axis that grows is the one
- * that can afford to. A new movement type adds a row; columns would have had
- * to share the same width between more and more of them until each was a
- * sliver. Rows also give category names a full line to sit on instead of a
- * cramped tick under a column.
- *
- * The bars are deliberately slim. A fat column carried the comparison by
- * silhouette when there were six of them across a wide panel; in a stack of
- * rows the length alone does that, and thickness only costs vertical space
- * that more categories will want.
- *
- * A crosshatch sits inside the fill so the marks survive greyscale,
- * forced-colours and colour-blind viewing without relying on hue, and a
- * brighter cap closes the measuring end of each bar.
- *
- * Values sit at the end of their own bar, which is where the eye already is
- * after reading its length.
- */
-
-/**
- * The hover wash. Pre-mixed rather than an opacity so it can also be used as a
- * plain CSS background without fading text drawn over it.
- */
 const HOVER_FILL = "color-mix(in srgb, var(--chart-track) 45%, transparent)";
-/** Width reserved for category names. Enough for "Production consumption". */
+
 const NAME_WIDTH = 148;
-/** Height of one category row, and the thickness of the bar inside it. */
+
 const ROW_HEIGHT = 32;
 const BAR_SIZE = 13;
-/**
- * The numeric scale is kept but not drawn. Every bar already carries its own
- * value at the end, so a row of ticks underneath repeats what is written and
- * costs a strip of height that the rows themselves can use — and when the
- * plot scrolls, a bottom axis is the first thing to fall out of view.
- */
+
 const XAXIS_HEIGHT = 0;
-/** Room at the right for the value that sits past the end of the longest bar. */
+
 const VALUE_INSET = 64;
-/**
- * Beyond this many rows the plot scrolls instead of growing without bound, so
- * a panel cannot be pushed off the page by a long tail of categories.
- */
+
 const MAX_VISIBLE_ROWS = 10;
-/**
- * The same hatch as CSS rather than an SVG pattern, for marks drawn in plain
- * HTML. Same 7px lattice so the two forms read as one material.
- */
+
 const HATCH_CSS =
   "repeating-linear-gradient(45deg, var(--chart-mark-hatch) 0 1px, transparent 1px 7px), " +
   "repeating-linear-gradient(-45deg, var(--chart-mark-hatch) 0 1px, transparent 1px 7px)";
@@ -196,12 +140,6 @@ type BarShapeProps = {
   series: CategoryDatum[];
 };
 
-/**
- * One bar, drawn flat and measuring left to right.
- *
- * The crosshatch carries the mark without relying on hue, and a 2px cap closes
- * the measuring end — the right edge here, where a column had it on top.
- */
 function BarMark({
   x = 0,
   y = 0,
@@ -243,14 +181,11 @@ export function CategoryBarChart({
   data: CategoryDatum[];
   className?: string;
   valueLabel?: string;
-  /** Rows shown before the plot starts scrolling instead of growing. */
+
   maxVisibleRows?: number;
 }) {
   const rows = data.length;
-  // The plot is sized by its content, not by a figure given a fixed height:
-  // every category gets the same row, however many there are. Past the cap the
-  // wrapper scrolls, so a long tail of categories never squashes the rows nor
-  // pushes the rest of the panel off the page.
+
   const plotHeight = rows * ROW_HEIGHT + XAXIS_HEIGHT;
   const visibleHeight =
     Math.min(rows, maxVisibleRows) * ROW_HEIGHT + XAXIS_HEIGHT;
@@ -259,8 +194,7 @@ export function CategoryBarChart({
     <div
       className={cn(
         "w-full overflow-y-auto overscroll-y-contain",
-        // The numeric axis is pinned to the bottom of the plot, so when the
-        // rows scroll it travels with them rather than floating unlabelled.
+
         className
       )}
       style={{ maxHeight: visibleHeight }}
@@ -284,9 +218,7 @@ export function CategoryBarChart({
               tick={AXIS_TICK}
               interval={0}
             />
-            {/* Recharts paints its own band here, which is exactly the shape we
-                want now that the values sit inside the plot rather than in a
-                header band above it. */}
+
             <Tooltip
               cursor={{ fill: HOVER_FILL }}
               content={<CategoryTooltip valueLabel={valueLabel} />}
@@ -312,31 +244,16 @@ export function CategoryBarChart({
 
 export type MagnitudeDatum = {
   key: string;
-  /** Category name. Words, so it gets its own line rather than an axis tick. */
+
   label: string;
-  /** Magnitude that sets bar length. */
+
   value: number;
-  /** Preformatted value, shown beside the label. */
+
   display: string;
-  /** Secondary reading — a share, a count — set muted after the label. */
+
   meta?: string;
 };
 
-/**
- * Ranked horizontal bars for magnitude across a handful of named categories.
- *
- * A stacked composition bar answers "what share of the whole" in one line, but
- * it turns every small category into an unreadable sliver and strands its name
- * in a legend. One row per category keeps the small ones legible and puts each
- * number next to its own bar, which is the reading this panel actually needs.
- *
- * Bars scale to the largest value rather than the total, so the comparison uses
- * the full width; the share each category holds is stated in `meta` instead of
- * being left for the reader to estimate from a length.
- *
- * Same hue, hatch and lit end cap as the columns — a different form for a
- * different job, not a different chart language.
- */
 export function MagnitudeBars({
   data,
   className,
@@ -362,8 +279,6 @@ export function MagnitudeBars({
             </span>
           </div>
           <div className="mt-1.5 h-2.5 w-full bg-chart-track">
-            {/* A floor on the width so a category that rounds to nothing still
-                leaves a mark instead of vanishing from the list. */}
             <div
               className="h-full border-r-2 border-chart-accent"
               style={{
@@ -379,14 +294,6 @@ export function MagnitudeBars({
   );
 }
 
-/**
- * Radial gauge for a single ratio against a fixed limit.
- *
- * One number against 100% does not need an axis or a legend, so this draws the
- * arc directly rather than pulling in a chart engine. The value sits in the
- * middle at full size — the arc gives the reading its context, the number gives
- * the precision.
- */
 export function RatioGauge({
   value,
   caption,
@@ -394,19 +301,18 @@ export function RatioGauge({
   className,
   emphasis = "neutral",
 }: {
-  /** Percentage, 0-100. */
   value: number;
   caption?: React.ReactNode;
   size?: number;
   className?: string;
-  /** `warning` re-colours the arc once the ratio is uncomfortably high. */
+
   emphasis?: "neutral" | "warning";
 }) {
   const safe = Math.min(100, Math.max(0, Number.isFinite(value) ? value : 0));
   const stroke = 12;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
-  // Leave the bottom quarter open so the arc reads as a gauge, not a donut.
+
   const sweep = 0.75;
   const arcLength = circumference * sweep;
   const arcColor =
@@ -421,7 +327,6 @@ export function RatioGauge({
           viewBox={`0 0 ${size} ${size}`}
           role="img"
           aria-label={`${Math.round(safe)} percent`}
-          // Rotate so the arc starts bottom-left and sweeps clockwise.
           style={{ transform: "rotate(135deg)" }}
         >
           <circle
@@ -434,9 +339,7 @@ export function RatioGauge({
             strokeLinecap="round"
             strokeDasharray={`${arcLength} ${circumference}`}
           />
-          {/* Omitted entirely at zero: a zero-length dash with a round cap
-              still paints a dot in some browsers, which would read as a sliver
-              of occupancy that is not there — including while loading. */}
+
           {safe > 0 ? (
             <circle
               cx={size / 2}
@@ -474,7 +377,7 @@ export type CompositionSegment = {
   label: string;
   value: number;
   display: string;
-  /** Secondary figure shown beside the label, e.g. a count. */
+
   meta?: string;
 };
 
@@ -486,21 +389,13 @@ const STEP_TOKENS = [
   "var(--chart-step-5)",
 ];
 
-/**
- * A single horizontal bar split into ordered segments, with a legend.
- *
- * Used where the categories are stages of one lifecycle: colour runs light to
- * dark along the ramp so the reader sees the ordering in the colour itself,
- * which a categorical palette would throw away. Every segment is also named in
- * the legend, so identity never rests on colour alone.
- */
 export function CompositionBar({
   segments,
   total,
   className,
 }: {
   segments: CompositionSegment[];
-  /** Preformatted total, shown above the bar. */
+
   total?: string;
   className?: string;
 }) {

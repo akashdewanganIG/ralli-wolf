@@ -5,7 +5,6 @@ import { requireSubdealerAuth } from "../middleware/auth.middleware.js";
 const router = Router();
 const orderController = new OrderController();
 
-// Create order (protected - requires subdealer auth)
 router.post(
   "/",
   requireSubdealerAuth,

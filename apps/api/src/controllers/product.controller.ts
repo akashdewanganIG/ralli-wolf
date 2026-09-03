@@ -6,18 +6,46 @@ import {
   handleValidationError,
   handleNotFoundError,
   handlePrismaError,
-} from "../utils/errorHandler.js";
+} from "../utils/error-handler.js";
 import {
   uploadImageToS3,
   deleteImageFromS3,
   extractS3KeyFromUrl,
+  type UploadResult,
 } from "../services/upload.service.js";
+import { getOrderCatalogueProducts } from "../services/order-pricing.service.js";
+import { verifyFileContent } from "../utils/file-validation.js";
+import { logError } from "../utils/logger.js";
+
+const PRODUCT_IMAGE_MIME_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+] as const;
+
+const CRM_PRODUCT_SELECT = {
+  id: true,
+  name: true,
+  code: true,
+  imageUrl: true,
+  description: true,
+  categoryId: true,
+  active: true,
+  component: true,
+  createdAt: true,
+  updatedAt: true,
+  category: {
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  },
+} satisfies Prisma.ProductSelect;
 
 export class ProductController {
-  /**
-   * Helper: Parse and validate product ID from request params
-   * Returns null if invalid (caller should handle response)
-   */
   private parseProductId(
     id: string | undefined,
     res: Response,
@@ -27,25 +55,22 @@ export class ProductController {
       handleValidationError(res, "Product ID is required", "id", operation);
       return null;
     }
-    const productId = parseInt(id, 10);
-    if (isNaN(productId)) {
+    const productId = Number(id);
+    if (!Number.isSafeInteger(productId) || productId <= 0) {
       handleValidationError(res, "Invalid product ID", "id", operation);
       return null;
     }
     return productId;
   }
 
-  /**
-   * Helper: Get product by ID with category (returns null if not found)
-   */
   private async getProductByIdWithCategory(
     productId: number,
     res: Response,
     operation: string
-  ): Promise<any | null> {
+  ) {
     const product = await prisma.product.findUnique({
       where: { id: productId },
-      ...this.getProductIncludeOptions(),
+      select: CRM_PRODUCT_SELECT,
     });
 
     if (!product) {
@@ -56,9 +81,6 @@ export class ProductController {
     return product;
   }
 
-  /**
-   * Helper: Validate category exists
-   */
   private async validateCategory(
     categoryId: number,
     res: Response,
@@ -75,16 +97,13 @@ export class ProductController {
     return true;
   }
 
-  /**
-   * Helper: Parse boolean
-   */
-  private parseBoolean(active: any): boolean {
-    return active === true || active === "true";
+  private parseBoolean(value: unknown): boolean | undefined | null {
+    if (value === undefined) return undefined;
+    if (value === true || value === "true" || value === "1") return true;
+    if (value === false || value === "false" || value === "0") return false;
+    return null;
   }
 
-  /**
-   * Helper: Build search where clause
-   */
   private buildSearchClause(searchTerm: string) {
     return {
       OR: [
@@ -95,31 +114,39 @@ export class ProductController {
     };
   }
 
-  /**
-   * Helper: Upload product image to S3
-   */
   private async uploadProductImage(
-    file: any,
+    file: Express.Multer.File,
     productCode: string,
     res: Response
-  ): Promise<string | undefined> {
+  ): Promise<UploadResult | undefined> {
+    const verified = verifyFileContent(
+      file.buffer,
+      file.mimetype,
+      PRODUCT_IMAGE_MIME_TYPES
+    );
+    if (!verified) {
+      handleValidationError(
+        res,
+        "Image content must be a valid JPEG, PNG, or WebP file",
+        "image",
+        "Upload product image"
+      );
+      return undefined;
+    }
+
     try {
-      const uploadResult = await uploadImageToS3(
+      return await uploadImageToS3(
         file.buffer,
         "products",
         productCode,
-        file.mimetype || "image/jpeg"
+        verified.mimeType
       );
-      return uploadResult.secureUrl;
     } catch (uploadError) {
       handleError(uploadError, res, "Upload product image");
       return undefined;
     }
   }
 
-  /**
-   * Helper: Delete image from S3 (with error handling)
-   */
   private async deleteProductImage(
     imageUrl: string | null | undefined
   ): Promise<void> {
@@ -130,60 +157,61 @@ export class ProductController {
       try {
         await deleteImageFromS3(s3Key);
       } catch (deleteError) {
-        console.warn("Failed to delete image from S3:", deleteError);
-        // Don't throw - allow operation to continue even if image deletion fails
+        logError("product_image_cleanup_failed", deleteError);
       }
     }
-    // Note: Cloudinary URLs will be handled by migration script
   }
 
-  /**
-   * Helper: Get product include options (for queries that return products)
-   */
-  private getProductIncludeOptions() {
-    return {
-      include: { category: true },
-    };
-  }
-
-  /**
-   * Helper: Get product query options with category and ordering (for findMany)
-   */
   private getProductQueryOptions() {
     return {
-      include: { category: true },
+      select: CRM_PRODUCT_SELECT,
       orderBy: { createdAt: "desc" as const },
     };
   }
-  /**
-   * Get all products with filtering (admin only)
-   * GET /api/products?categoryId=1&active=true&search=keyword
-   */
+
   async getAllProducts(req: Request, res: Response) {
     try {
       const { categoryId, active, search } = req.query;
 
-      // Build where clause for filtering
-      const whereClause: any = {};
+      const whereClause: Prisma.ProductWhereInput = {};
 
-      // Filter by category
       if (categoryId) {
-        const categoryIdNum = parseInt(categoryId as string, 10);
-        if (!isNaN(categoryIdNum)) {
-          whereClause.categoryId = categoryIdNum;
+        const categoryIdNum = Number(categoryId);
+        if (!Number.isSafeInteger(categoryIdNum) || categoryIdNum <= 0) {
+          return handleValidationError(
+            res,
+            "Invalid category ID",
+            "categoryId",
+            "Get all products"
+          );
         }
+        whereClause.categoryId = categoryIdNum;
       }
 
-      // Filter by active status
       if (active !== undefined) {
-        const activeValue =
-          typeof active === "string" ? active : String(active);
-        whereClause.active = activeValue === "true" || activeValue === "1";
+        const activeValue = this.parseBoolean(active);
+        if (activeValue === null || activeValue === undefined) {
+          return handleValidationError(
+            res,
+            "active must be true or false",
+            "active",
+            "Get all products"
+          );
+        }
+        whereClause.active = activeValue;
       }
 
-      // Search functionality
       if (search && typeof search === "string" && search.trim()) {
-        Object.assign(whereClause, this.buildSearchClause(search.trim()));
+        const searchTerm = search.trim();
+        if (searchTerm.length > 200) {
+          return handleValidationError(
+            res,
+            "Search query cannot exceed 200 characters",
+            "search",
+            "Get all products"
+          );
+        }
+        Object.assign(whereClause, this.buildSearchClause(searchTerm));
       }
 
       const products = await prisma.product.findMany({
@@ -200,10 +228,6 @@ export class ProductController {
     }
   }
 
-  /**
-   * Search products (admin only)
-   * GET /api/products/search?q=keyword
-   */
   async searchProducts(req: Request, res: Response) {
     try {
       const { q } = req.query;
@@ -218,6 +242,14 @@ export class ProductController {
       }
 
       const searchTerm = q.trim();
+      if (searchTerm.length > 200) {
+        return handleValidationError(
+          res,
+          "Search query cannot exceed 200 characters",
+          "q",
+          "Search products"
+        );
+      }
 
       const products = await prisma.product.findMany({
         where: this.buildSearchClause(searchTerm),
@@ -233,16 +265,9 @@ export class ProductController {
     }
   }
 
-  /**
-   * Get active products (for program 2 page - public)
-   * GET /api/products/active
-   */
   async getActiveProducts(req: Request, res: Response) {
     try {
-      const products = await prisma.product.findMany({
-        where: { active: true },
-        ...this.getProductQueryOptions(),
-      });
+      const products = await getOrderCatalogueProducts();
 
       return res.json({
         success: true,
@@ -253,10 +278,6 @@ export class ProductController {
     }
   }
 
-  /**
-   * Get product by ID
-   * GET /api/products/:id
-   */
   async getProductById(req: Request, res: Response) {
     try {
       const productId = this.parseProductId(req.params.id, res, "Get product");
@@ -278,28 +299,57 @@ export class ProductController {
     }
   }
 
-  /**
-   * Create product (admin only)
-   * POST /api/products
-   */
   async createProduct(req: Request, res: Response) {
+    let uploadedImage: UploadResult | undefined;
     try {
       const { name, code, description, categoryId, active, component } =
         req.body;
-      const file = (req as any).file;
+      const file = req.file;
 
-      // Validate required fields
-      if (!name || !code || !categoryId) {
+      if (
+        typeof name !== "string" ||
+        !name.trim() ||
+        name.trim().length > 200 ||
+        typeof code !== "string" ||
+        !code.trim() ||
+        code.trim().length > 80 ||
+        categoryId === undefined
+      ) {
         return handleValidationError(
           res,
-          "Missing required fields: name, code, and categoryId are required",
+          "name (max 200 characters), code (max 80 characters), and categoryId are required",
           undefined,
           "Create product"
         );
       }
 
-      // Validate category exists
-      const categoryIdNum = parseInt(categoryId, 10);
+      if (description !== undefined && typeof description !== "string") {
+        return handleValidationError(
+          res,
+          "description must be text",
+          "description",
+          "Create product"
+        );
+      }
+      const normalizedDescription = description?.trim() || undefined;
+      if (normalizedDescription && normalizedDescription.length > 4000) {
+        return handleValidationError(
+          res,
+          "description cannot exceed 4000 characters",
+          "description",
+          "Create product"
+        );
+      }
+
+      const categoryIdNum = Number(categoryId);
+      if (!Number.isSafeInteger(categoryIdNum) || categoryIdNum <= 0) {
+        return handleValidationError(
+          res,
+          "Invalid category ID",
+          "categoryId",
+          "Create product"
+        );
+      }
       const isValidCategory = await this.validateCategory(
         categoryIdNum,
         res,
@@ -307,26 +357,35 @@ export class ProductController {
       );
       if (!isValidCategory) return;
 
-      // Upload image if provided
-      let imageUrl: string | undefined;
-      if (file) {
-        imageUrl = await this.uploadProductImage(file, code, res);
-        if (imageUrl === undefined) return; // Error already handled in uploadProductImage
+      const activeValue = this.parseBoolean(active);
+      const componentValue = this.parseBoolean(component);
+      if (activeValue === null || componentValue === null) {
+        return handleValidationError(
+          res,
+          "active and component must be true or false",
+          undefined,
+          "Create product"
+        );
       }
 
-      // Create product
+      if (file) {
+        uploadedImage = await this.uploadProductImage(file, code.trim(), res);
+        if (!uploadedImage) return;
+      }
+
       const product = await prisma.product.create({
         data: {
-          name,
-          code,
-          description,
+          name: name.trim(),
+          code: code.trim(),
+          description: normalizedDescription,
           categoryId: categoryIdNum,
-          active: this.parseBoolean(active),
-          component: this.parseBoolean(component),
-          imageUrl,
+          active: activeValue ?? false,
+          component: componentValue ?? false,
+          imageUrl: uploadedImage?.secureUrl,
         },
-        ...this.getProductIncludeOptions(),
+        select: CRM_PRODUCT_SELECT,
       });
+      uploadedImage = undefined;
 
       return res.status(201).json({
         success: true,
@@ -334,6 +393,13 @@ export class ProductController {
         data: product,
       });
     } catch (error) {
+      if (uploadedImage) {
+        try {
+          await deleteImageFromS3(uploadedImage.publicId);
+        } catch (cleanupError) {
+          logError("unpersisted_product_image_cleanup_failed", cleanupError);
+        }
+      }
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         handlePrismaError(error, res, "Create product");
         return;
@@ -342,11 +408,8 @@ export class ProductController {
     }
   }
 
-  /**
-   * Update product (admin only)
-   * PUT /api/products/:id
-   */
   async updateProduct(req: Request, res: Response) {
+    let uploadedImage: UploadResult | undefined;
     try {
       const productId = this.parseProductId(
         req.params.id,
@@ -357,9 +420,8 @@ export class ProductController {
 
       const { name, code, description, categoryId, active, component } =
         req.body;
-      const file = (req as any).file;
+      const file = req.file;
 
-      // Check if product exists
       const existingProduct = await prisma.product.findUnique({
         where: { id: productId },
       });
@@ -368,9 +430,16 @@ export class ProductController {
         return handleNotFoundError(res, "Product", "Update product");
       }
 
-      // Validate category if provided
       if (categoryId !== undefined) {
-        const categoryIdNum = parseInt(categoryId, 10);
+        const categoryIdNum = Number(categoryId);
+        if (!Number.isSafeInteger(categoryIdNum) || categoryIdNum <= 0) {
+          return handleValidationError(
+            res,
+            "Invalid category ID",
+            "categoryId",
+            "Update product"
+          );
+        }
         const isValidCategory = await this.validateCategory(
           categoryIdNum,
           res,
@@ -379,38 +448,99 @@ export class ProductController {
         if (!isValidCategory) return;
       }
 
-      // Handle image upload/update
-      let imageUrl: string | undefined = existingProduct.imageUrl || undefined;
-      if (file) {
-        // Delete old image if exists
-        await this.deleteProductImage(existingProduct.imageUrl);
-
-        // Upload new image
-        imageUrl = await this.uploadProductImage(
-          file,
-          code || existingProduct.code,
-          res
-        );
-        if (imageUrl === undefined) return; // Error already handled in uploadProductImage
+      const updateData: Prisma.ProductUncheckedUpdateInput = {};
+      if (name !== undefined) {
+        if (
+          typeof name !== "string" ||
+          !name.trim() ||
+          name.trim().length > 200
+        ) {
+          return handleValidationError(
+            res,
+            "name must be between 1 and 200 characters",
+            "name",
+            "Update product"
+          );
+        }
+        updateData.name = name.trim();
+      }
+      if (code !== undefined) {
+        if (
+          typeof code !== "string" ||
+          !code.trim() ||
+          code.trim().length > 80
+        ) {
+          return handleValidationError(
+            res,
+            "code must be between 1 and 80 characters",
+            "code",
+            "Update product"
+          );
+        }
+        updateData.code = code.trim();
+      }
+      if (description !== undefined) {
+        if (
+          typeof description !== "string" ||
+          description.trim().length > 4000
+        ) {
+          return handleValidationError(
+            res,
+            "description must be text no longer than 4000 characters",
+            "description",
+            "Update product"
+          );
+        }
+        updateData.description = description.trim() || null;
+      }
+      if (categoryId !== undefined) updateData.categoryId = Number(categoryId);
+      if (active !== undefined) {
+        const value = this.parseBoolean(active);
+        if (value === null || value === undefined) {
+          return handleValidationError(
+            res,
+            "active must be true or false",
+            "active",
+            "Update product"
+          );
+        }
+        updateData.active = value;
+      }
+      if (component !== undefined) {
+        const value = this.parseBoolean(component);
+        if (value === null || value === undefined) {
+          return handleValidationError(
+            res,
+            "component must be true or false",
+            "component",
+            "Update product"
+          );
+        }
+        updateData.component = value;
       }
 
-      // Build update data
-      const updateData: any = {};
-      if (name !== undefined) updateData.name = name;
-      if (code !== undefined) updateData.code = code;
-      if (description !== undefined) updateData.description = description;
-      if (categoryId !== undefined)
-        updateData.categoryId = parseInt(categoryId, 10);
-      if (active !== undefined) updateData.active = this.parseBoolean(active);
-      if (component !== undefined)
-        updateData.component = this.parseBoolean(component);
-      if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
+      if (file) {
+        uploadedImage = await this.uploadProductImage(
+          file,
+          typeof code === "string" && code.trim()
+            ? code.trim()
+            : existingProduct.code,
+          res
+        );
+        if (!uploadedImage) return;
+      }
+      if (uploadedImage) updateData.imageUrl = uploadedImage.secureUrl;
 
       const product = await prisma.product.update({
         where: { id: productId },
         data: updateData,
-        ...this.getProductIncludeOptions(),
+        select: CRM_PRODUCT_SELECT,
       });
+      uploadedImage = undefined;
+
+      if (file) {
+        await this.deleteProductImage(existingProduct.imageUrl);
+      }
 
       return res.json({
         success: true,
@@ -418,6 +548,13 @@ export class ProductController {
         data: product,
       });
     } catch (error) {
+      if (uploadedImage) {
+        try {
+          await deleteImageFromS3(uploadedImage.publicId);
+        } catch (cleanupError) {
+          logError("unpersisted_product_image_cleanup_failed", cleanupError);
+        }
+      }
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         handlePrismaError(error, res, "Update product");
         return;

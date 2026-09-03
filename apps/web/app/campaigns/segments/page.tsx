@@ -21,7 +21,7 @@ import {
   useCreateSegment,
   useUpdateSegment,
   useDeleteSegment,
-} from "@/hooks/useSegments";
+} from "@/hooks/use-segments";
 import {
   SegmentFormModal,
   SegmentFormValues,

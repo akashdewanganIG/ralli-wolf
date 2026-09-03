@@ -84,18 +84,18 @@ interface LeadTableProps {
   leads: Lead[];
   title?: string;
   onLeadClick?: (lead: Lead) => void;
-  // Pagination props
+
   currentPage?: number;
   totalPages?: number;
   totalCount?: number;
   itemsPerPage?: number;
   onPageChange?: (page: number) => void;
   onItemsPerPageChange?: (itemsPerPage: number) => void;
-  // Checkbox props
+
   showCheckboxes?: boolean;
   selectedLeads?: string[];
   onSelectionChange?: (selectedIds: string[]) => void;
-  // Filter props
+
   filters?: LeadFilterValues;
   onStatusChange?: (status: string) => void;
   onSourceChange?: (source: string) => void;
@@ -103,20 +103,15 @@ interface LeadTableProps {
   onCreatedToChange?: (date: Date | null) => void;
   onKeywordIdsChange?: (keywordIds: number[]) => void;
   onClearFilters?: () => void;
-  // Individual filter removal functions for filter badges
+
   onStatusFilterRemove?: () => void;
   onSourceFilterRemove?: () => void;
   onCreatedFromFilterRemove?: () => void;
   onCreatedToFilterRemove?: () => void;
   onKeywordIdsFilterRemove?: () => void;
-  /**
-   * Search control, rendered inside the table card's toolbar.
-   *
-   * Lead Management used to place it on its own row above the card, which is
-   * the one listing screen where search sat outside the surface it filters.
-   */
+
   search?: React.ReactNode;
-  // Search props
+
   searchQuery?: string;
   isSearchMode?: boolean;
   showAssignedAtColumn?: boolean;
@@ -137,7 +132,7 @@ export const LeadTable: React.FC<LeadTableProps> = ({
   showCheckboxes = false,
   selectedLeads = [],
   onSelectionChange,
-  // Filter props
+
   filters = {},
   onStatusChange,
   onSourceChange,
@@ -145,13 +140,13 @@ export const LeadTable: React.FC<LeadTableProps> = ({
   onCreatedToChange,
   onKeywordIdsChange,
   onClearFilters,
-  // Individual filter removal functions
+
   onStatusFilterRemove,
   onSourceFilterRemove,
   onCreatedFromFilterRemove,
   onCreatedToFilterRemove,
   onKeywordIdsFilterRemove,
-  // Search props
+
   search,
   searchQuery,
   isSearchMode = false,
@@ -246,9 +241,6 @@ export const LeadTable: React.FC<LeadTableProps> = ({
 
   const actionItems = [
     { label: "View Details", onClick: (lead: Lead) => onLeadClick?.(lead) },
-    { label: "Edit Lead", onClick: () => {} },
-    { label: "Assign Lead", onClick: () => {} },
-    { label: "Delete Lead", onClick: () => {}, className: "text-destructive" },
   ];
 
   const filterComponent = (

@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { usePricebooks } from "@/hooks/usePricebooks";
+import { usePricebooks } from "@/hooks/use-pricebooks";
 import { DataTable } from "@/components/data-table";
 import type { TableColumn } from "@/components/data-table";
 import type { PriceBook } from "@/lib/api/types";
@@ -24,7 +24,8 @@ import { SearchFilterToolbar } from "@repo/ui/components/ui/toolbar";
 import { Search } from "@repo/ui/icons";
 import { TablePageSkeleton } from "@/components/skeletons";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
-import { DataTransfer } from "@/components/data-transfer/DataTransfer";
+import { DataTransfer } from "@/components/data-transfer/data-transfer";
+import { AddPricebookModal } from "@/components/add-pricebook-modal";
 
 type SortField =
   | "id"
@@ -114,6 +115,7 @@ export default function PriceBookEntriesPage() {
   const { data, isLoading, error } = usePricebooks();
   const [searchQuery, setSearchQuery] = useState("");
   const [sortValue, setSortValue] = useState<SortValue>("id:asc");
+  const [showAddModal, setShowAddModal] = useState(false);
   const router = useRouter();
 
   const filteredAndSortedData = useMemo(() => {
@@ -121,7 +123,6 @@ export default function PriceBookEntriesPage() {
 
     let filtered = data.data;
 
-    // Filter by name if search query exists
     if (searchQuery.trim()) {
       const query = searchQuery.trim().toLowerCase();
       filtered = filtered.filter(item =>
@@ -156,10 +157,20 @@ export default function PriceBookEntriesPage() {
       <PageHeader
         title="Price books"
         description="Your price lists. These decide what a customer is charged on a quote or order."
-        actions={<DataTransfer entity="price-books" />}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              onClick={() => setShowAddModal(true)}
+              className="px-3 whitespace-nowrap"
+            >
+              New price book
+            </Button>
+            <DataTransfer entity="price-books" />
+          </div>
+        }
       />
 
-      {/* Filter and Sort Controls */}
       <SearchFilterToolbar
         search={
           <div className="relative">
@@ -207,6 +218,8 @@ export default function PriceBookEntriesPage() {
         count={filteredAndSortedData.length}
         getRowHref={item => `/sales/price-books/${item.id}`}
       />
+
+      <AddPricebookModal open={showAddModal} onOpenChange={setShowAddModal} />
     </PageShell>
   );
 }

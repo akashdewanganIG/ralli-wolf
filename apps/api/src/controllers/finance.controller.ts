@@ -7,9 +7,18 @@ import {
 } from "@prisma/client";
 import { prisma } from "@repo/db";
 
-import { handleSupplyChainError } from "../utils/supplyChainHttp.js";
+import {
+  handleSupplyChainError,
+  optionalString,
+  parseBoolean,
+  parseDate,
+  parseEnum,
+  parseOptionalId,
+  requireString,
+} from "../utils/supply-chain-http.js";
 import {
   ZERO,
+  requireNonNegative,
   roundMoney,
   toDecimal,
 } from "../services/supplyChain/decimal.js";
@@ -24,11 +33,9 @@ import {
   SEQUENCE_KEYS,
   nextDocumentNumber,
 } from "../services/supplyChain/numbering.service.js";
+import { parsePositiveInteger } from "../utils/validators.js";
 
-const parseId = (value: unknown) => {
-  const n = parseInt(String(value), 10);
-  return Number.isFinite(n) ? n : undefined;
-};
+const parseId = (value: unknown) => parsePositiveInteger(value) ?? undefined;
 
 const OPEN: InvoiceStatus[] = [
   "DRAFT",
@@ -38,13 +45,6 @@ const OPEN: InvoiceStatus[] = [
 ];
 
 export class FinanceController {
-  /**
-   * The finance overview.
-   *
-   * Answers the three questions someone opens this module to ask: what do we
-   * owe, what are we owed, and how much of either is late. Ageing is computed
-   * from due dates rather than stored, so it is correct the moment it is read.
-   */
   async dashboard(req: Request, res: Response) {
     const operation = "Finance dashboard";
     try {
@@ -87,15 +87,6 @@ export class FinanceController {
         }),
       ]);
 
-      /**
-       * Outstanding money, totalled per currency.
-       *
-       * Adding 1000 USD to 1000 INR and calling the result 2000 is not a
-       * rounding problem, it is a wrong number. So every figure here belongs
-       * to exactly one currency, and the headline is the currency carrying the
-       * most open invoices. Anything else is reported alongside rather than
-       * folded in, and `currencies` tells the caller when that has happened.
-       */
       const summarise = (rows: typeof payables | typeof receivables) => {
         const emptyAgeing = () =>
           Object.fromEntries(
@@ -157,7 +148,7 @@ export class FinanceController {
         const byCurrency = Object.fromEntries(
           [...perCurrency].map(([code, acc]) => [code, shape(code, acc)])
         );
-        // The currency the business mostly works in wins the headline.
+
         const primary =
           [...perCurrency.entries()].sort(
             (a, b) => b[1].openCount - a[1].openCount
@@ -179,8 +170,6 @@ export class FinanceController {
         };
       };
 
-      // Money in and out over the last 30 days — the closest thing to a cash
-      // view without a full bank reconciliation.
       const since = new Date(asOf.getTime() - 30 * 86_400_000);
       const flows = await prisma.payment.groupBy({
         by: ["direction", "currencyCode"],
@@ -188,8 +177,7 @@ export class FinanceController {
         _sum: { amount: true },
         _count: true,
       });
-      // Same rule as the invoices: one currency per figure. The headline is
-      // whichever currency moved the most money in that direction.
+
       const flowOf = (d: PaymentDirection) => {
         const rows = flows.filter(f => f.direction === d);
         const biggest = rows
@@ -217,9 +205,7 @@ export class FinanceController {
           asOf,
           payables: ap,
           receivables: ar,
-          // Positive means customers owe more than we owe suppliers. It is
-          // only a real number when both sides are in the same currency;
-          // otherwise there is nothing meaningful to subtract.
+
           netPosition:
             ap.currencyCode === ar.currencyCode
               ? roundMoney(
@@ -242,23 +228,23 @@ export class FinanceController {
     }
   }
 
-  /** Payables list, newest first, with the outstanding balance resolved. */
   async listPayables(req: Request, res: Response) {
     const operation = "List supplier invoices";
     try {
-      const status = req.query.status as InvoiceStatus | undefined;
-      const supplierId = parseId(req.query.supplierId);
-      const overdueOnly = req.query.overdue === "true";
+      const status = parseEnum(InvoiceStatus, req.query.status, "status");
+      const supplierId = parseOptionalId(req.query.supplierId, "supplierId");
+      const overdueOnly = parseBoolean(req.query.overdue, "overdue") ?? false;
 
       const rows = await prisma.supplierInvoice.findMany({
         where: {
           ...(status ? { status } : {}),
-          ...(supplierId ? { supplierId } : {}),
+          ...(supplierId !== null ? { supplierId } : {}),
           ...(overdueOnly
             ? { status: { in: OPEN }, dueDate: { lt: new Date() } }
             : {}),
         },
         orderBy: { invoiceDate: "desc" },
+        take: 200,
         include: {
           supplier: { select: { id: true, code: true, name: true } },
           purchaseOrder: { select: { id: true, poNumber: true } },
@@ -278,23 +264,23 @@ export class FinanceController {
     }
   }
 
-  /** Receivables list. */
   async listReceivables(req: Request, res: Response) {
     const operation = "List customer invoices";
     try {
-      const status = req.query.status as InvoiceStatus | undefined;
-      const accountId = parseId(req.query.accountId);
-      const overdueOnly = req.query.overdue === "true";
+      const status = parseEnum(InvoiceStatus, req.query.status, "status");
+      const accountId = parseOptionalId(req.query.accountId, "accountId");
+      const overdueOnly = parseBoolean(req.query.overdue, "overdue") ?? false;
 
       const rows = await prisma.customerInvoice.findMany({
         where: {
           ...(status ? { status } : {}),
-          ...(accountId ? { accountId } : {}),
+          ...(accountId !== null ? { accountId } : {}),
           ...(overdueOnly
             ? { status: { in: OPEN }, dueDate: { lt: new Date() } }
             : {}),
         },
         orderBy: { invoiceDate: "desc" },
+        take: 200,
         include: {
           account: { select: { id: true, name: true } },
           salesOrder: { select: { id: true, orderNumber: true } },
@@ -313,13 +299,6 @@ export class FinanceController {
     }
   }
 
-  /**
-   * Raises a supplier invoice, optionally pre-filled from a purchase order.
-   *
-   * Pulling the totals off the order rather than asking for them again is the
-   * point: it means the invoice is checked against what was ordered, and a
-   * mismatch is visible instead of being typed over.
-   */
   async createPayable(req: Request, res: Response) {
     const operation = "Create supplier invoice";
     try {
@@ -337,21 +316,33 @@ export class FinanceController {
         currencyCode: requestedCurrency,
       } = req.body ?? {};
 
-      let resolvedSupplier = parseId(supplierId);
-      let sub = subtotal !== undefined ? toDecimal(subtotal, "subtotal") : null;
+      const resolvedPurchaseOrderId = parseOptionalId(
+        purchaseOrderId,
+        "purchaseOrderId"
+      );
+      const resolvedGrnId = parseOptionalId(grnId, "grnId");
+      let resolvedSupplier = parseOptionalId(supplierId, "supplierId");
+      let sub =
+        subtotal !== undefined
+          ? requireNonNegative(subtotal, "subtotal")
+          : null;
       let tax =
-        taxAmount !== undefined ? toDecimal(taxAmount, "taxAmount") : null;
-      // An invoice raised on its own can name its own currency; one raised
-      // from a purchase order inherits the order's, because billing an order
-      // in a currency it was not placed in is a mistake, not an option.
-      let currencyCode =
-        typeof requestedCurrency === "string" && requestedCurrency.trim()
-          ? requestedCurrency.trim().toUpperCase()
-          : "INR";
+        taxAmount !== undefined
+          ? requireNonNegative(taxAmount, "taxAmount")
+          : null;
 
-      if (purchaseOrderId) {
+      let currencyCode = requireString(
+        requestedCurrency ?? "INR",
+        "currencyCode",
+        3
+      ).toUpperCase();
+      if (!/^[A-Z]{3}$/.test(currencyCode)) {
+        throw new DomainError("currencyCode must be a three-letter ISO code.");
+      }
+
+      if (resolvedPurchaseOrderId) {
         const po = await prisma.purchaseOrder.findUnique({
-          where: { id: parseId(purchaseOrderId)! },
+          where: { id: resolvedPurchaseOrderId },
           select: {
             id: true,
             supplierId: true,
@@ -362,7 +353,12 @@ export class FinanceController {
           },
         });
         if (!po) throw new NotFoundError("Purchase order");
-        resolvedSupplier = resolvedSupplier ?? po.supplierId;
+        if (resolvedSupplier !== null && resolvedSupplier !== po.supplierId) {
+          throw new DomainError(
+            `${po.poNumber} belongs to a different supplier.`
+          );
+        }
+        resolvedSupplier = po.supplierId;
         if (
           typeof requestedCurrency === "string" &&
           requestedCurrency.trim() &&
@@ -373,8 +369,50 @@ export class FinanceController {
           );
         }
         currencyCode = po.currencyCode;
-        sub = sub ?? toDecimal(po.subtotal, "subtotal");
-        tax = tax ?? toDecimal(po.taxAmount, "taxAmount");
+        if (sub !== null && !roundMoney(sub).equals(roundMoney(po.subtotal))) {
+          throw new DomainError(
+            `subtotal must match ${po.poNumber}'s subtotal of ${po.subtotal.toFixed(2)}.`
+          );
+        }
+        if (tax !== null && !roundMoney(tax).equals(roundMoney(po.taxAmount))) {
+          throw new DomainError(
+            `taxAmount must match ${po.poNumber}'s tax amount of ${po.taxAmount.toFixed(2)}.`
+          );
+        }
+        sub = po.subtotal;
+        tax = po.taxAmount;
+      }
+
+      if (resolvedGrnId) {
+        const grn = await prisma.goodsReceiptNote.findUnique({
+          where: { id: resolvedGrnId },
+          select: {
+            grnNumber: true,
+            supplierId: true,
+            purchaseOrderId: true,
+            status: true,
+          },
+        });
+        if (!grn) throw new NotFoundError("Goods receipt");
+        if (grn.status !== "COMPLETED") {
+          throw new DomainError(
+            `${grn.grnNumber} must be completed before it can support an invoice.`
+          );
+        }
+        if (resolvedSupplier !== null && resolvedSupplier !== grn.supplierId) {
+          throw new DomainError(
+            `${grn.grnNumber} belongs to a different supplier.`
+          );
+        }
+        if (
+          resolvedPurchaseOrderId !== null &&
+          grn.purchaseOrderId !== resolvedPurchaseOrderId
+        ) {
+          throw new DomainError(
+            `${grn.grnNumber} does not belong to the selected purchase order.`
+          );
+        }
+        resolvedSupplier = grn.supplierId;
       }
 
       if (!resolvedSupplier) {
@@ -383,9 +421,18 @@ export class FinanceController {
       if (!sub) throw new DomainError("A subtotal is required.");
 
       const total = roundMoney(sub.plus(tax ?? ZERO));
+      if (!total.greaterThan(0)) {
+        throw new DomainError("Invoice total must be greater than zero.");
+      }
+      const resolvedInvoiceDate =
+        parseDate(invoiceDate, "invoiceDate") ?? new Date();
+      const resolvedDueDate =
+        parseDate(dueDate, "dueDate") ??
+        new Date(resolvedInvoiceDate.getTime() + 30 * 86_400_000);
+      if (resolvedDueDate < resolvedInvoiceDate) {
+        throw new DomainError("dueDate cannot be earlier than invoiceDate.");
+      }
 
-      // The number is drawn inside the same transaction as the insert, so a
-      // failed create does not burn an invoice number.
       const created = await prisma.$transaction(async tx => {
         const invoiceNumber = await nextDocumentNumber(
           tx,
@@ -394,20 +441,18 @@ export class FinanceController {
         return tx.supplierInvoice.create({
           data: {
             invoiceNumber,
-            supplierRef: supplierRef ?? null,
+            supplierRef: optionalString(supplierRef, "supplierRef", 200),
             supplierId: resolvedSupplier,
-            purchaseOrderId: parseId(purchaseOrderId) ?? null,
-            grnId: parseId(grnId) ?? null,
+            purchaseOrderId: resolvedPurchaseOrderId,
+            grnId: resolvedGrnId,
             status: "AWAITING_APPROVAL",
-            invoiceDate: invoiceDate ? new Date(invoiceDate) : new Date(),
-            dueDate: dueDate
-              ? new Date(dueDate)
-              : new Date(Date.now() + 30 * 86_400_000),
+            invoiceDate: resolvedInvoiceDate,
+            dueDate: resolvedDueDate,
             currencyCode,
             subtotal: roundMoney(sub),
             taxAmount: roundMoney(tax ?? ZERO),
             totalAmount: total,
-            notes: notes ?? null,
+            notes: optionalString(notes, "notes"),
             createdById: userId,
           },
           include: { supplier: { select: { code: true, name: true } } },
@@ -420,7 +465,6 @@ export class FinanceController {
     }
   }
 
-  /** Raises a customer invoice, optionally pre-filled from a sales order. */
   async createReceivable(req: Request, res: Response) {
     const operation = "Create customer invoice";
     try {
@@ -436,35 +480,75 @@ export class FinanceController {
         currencyCode: requestedCurrency,
       } = req.body ?? {};
 
-      let resolvedAccount = parseId(accountId);
-      let sub = subtotal !== undefined ? toDecimal(subtotal, "subtotal") : null;
+      const resolvedSalesOrderId = parseOptionalId(
+        salesOrderId,
+        "salesOrderId"
+      );
+      let resolvedAccount = parseOptionalId(accountId, "accountId");
+      let sub =
+        subtotal !== undefined
+          ? requireNonNegative(subtotal, "subtotal")
+          : null;
       let tax =
-        taxAmount !== undefined ? toDecimal(taxAmount, "taxAmount") : null;
-      // Sales orders do not carry a currency of their own, so an invoice
-      // states its own and falls back to the base currency.
-      const currencyCode =
-        typeof requestedCurrency === "string" && requestedCurrency.trim()
-          ? requestedCurrency.trim().toUpperCase()
-          : "INR";
+        taxAmount !== undefined
+          ? requireNonNegative(taxAmount, "taxAmount")
+          : null;
 
-      if (salesOrderId) {
+      const currencyCode = requireString(
+        requestedCurrency ?? "INR",
+        "currencyCode",
+        3
+      ).toUpperCase();
+      if (!/^[A-Z]{3}$/.test(currencyCode)) {
+        throw new DomainError("currencyCode must be a three-letter ISO code.");
+      }
+
+      if (resolvedSalesOrderId) {
         const so = await prisma.salesOrder.findUnique({
-          where: { id: parseId(salesOrderId)! },
+          where: { id: resolvedSalesOrderId },
           select: {
             id: true,
+            orderNumber: true,
             accountId: true,
             subtotal: true,
             taxAmount: true,
           },
         });
         if (!so) throw new NotFoundError("Sales order");
-        resolvedAccount = resolvedAccount ?? so.accountId;
-        sub = sub ?? toDecimal(so.subtotal ?? 0, "subtotal");
-        tax = tax ?? toDecimal(so.taxAmount ?? 0, "taxAmount");
+        if (resolvedAccount !== null && resolvedAccount !== so.accountId) {
+          throw new DomainError(
+            `${so.orderNumber} belongs to a different customer account.`
+          );
+        }
+        resolvedAccount = so.accountId;
+        if (sub !== null && !roundMoney(sub).equals(roundMoney(so.subtotal))) {
+          throw new DomainError(
+            `subtotal must match ${so.orderNumber}'s subtotal of ${so.subtotal.toFixed(2)}.`
+          );
+        }
+        if (tax !== null && !roundMoney(tax).equals(roundMoney(so.taxAmount))) {
+          throw new DomainError(
+            `taxAmount must match ${so.orderNumber}'s tax amount of ${so.taxAmount.toFixed(2)}.`
+          );
+        }
+        sub = so.subtotal;
+        tax = so.taxAmount;
       }
 
       if (!resolvedAccount) throw new DomainError("An account is required.");
       if (!sub) throw new DomainError("A subtotal is required.");
+      const total = roundMoney(sub.plus(tax ?? ZERO));
+      if (!total.greaterThan(0)) {
+        throw new DomainError("Invoice total must be greater than zero.");
+      }
+      const resolvedInvoiceDate =
+        parseDate(invoiceDate, "invoiceDate") ?? new Date();
+      const resolvedDueDate =
+        parseDate(dueDate, "dueDate") ??
+        new Date(resolvedInvoiceDate.getTime() + 30 * 86_400_000);
+      if (resolvedDueDate < resolvedInvoiceDate) {
+        throw new DomainError("dueDate cannot be earlier than invoiceDate.");
+      }
 
       const created = await prisma.$transaction(async tx => {
         const invoiceNumber = await nextDocumentNumber(
@@ -475,17 +559,15 @@ export class FinanceController {
           data: {
             invoiceNumber,
             accountId: resolvedAccount,
-            salesOrderId: parseId(salesOrderId) ?? null,
+            salesOrderId: resolvedSalesOrderId,
             status: "APPROVED",
-            invoiceDate: invoiceDate ? new Date(invoiceDate) : new Date(),
-            dueDate: dueDate
-              ? new Date(dueDate)
-              : new Date(Date.now() + 30 * 86_400_000),
+            invoiceDate: resolvedInvoiceDate,
+            dueDate: resolvedDueDate,
             currencyCode,
             subtotal: roundMoney(sub),
             taxAmount: roundMoney(tax ?? ZERO),
-            totalAmount: roundMoney(sub.plus(tax ?? ZERO)),
-            notes: notes ?? null,
+            totalAmount: total,
+            notes: optionalString(notes, "notes"),
             createdById: userId,
           },
           include: { account: { select: { name: true } } },
@@ -498,7 +580,6 @@ export class FinanceController {
     }
   }
 
-  /** Approves a supplier invoice so it can be paid. */
   async approvePayable(req: Request, res: Response) {
     const operation = "Approve supplier invoice";
     try {
@@ -508,21 +589,33 @@ export class FinanceController {
         where: { id },
       });
       if (!invoice) throw new NotFoundError("Supplier invoice");
-      if (
-        invoice.status !== "AWAITING_APPROVAL" &&
-        invoice.status !== "DRAFT"
-      ) {
+      if (invoice.status !== "AWAITING_APPROVAL") {
         throw new DomainError(
           `${invoice.invoiceNumber} is ${invoice.status.toLowerCase()} and does not need approval.`
         );
       }
-      const updated = await prisma.supplierInvoice.update({
-        where: { id },
+      if (invoice.createdById === req.user!.id) {
+        throw new DomainError(
+          "The invoice author cannot approve their own payable.",
+          { status: 403, code: "SELF_APPROVAL_NOT_ALLOWED" }
+        );
+      }
+      const claimed = await prisma.supplierInvoice.updateMany({
+        where: { id, status: "AWAITING_APPROVAL" },
         data: {
           status: "APPROVED",
           approvedById: req.user!.id,
           approvedAt: new Date(),
         },
+      });
+      if (claimed.count !== 1) {
+        throw new DomainError(
+          "Invoice status changed while it was being approved.",
+          { status: 409, code: "INVOICE_STATE_CHANGED" }
+        );
+      }
+      const updated = await prisma.supplierInvoice.findUniqueOrThrow({
+        where: { id },
       });
       res.json({ data: updated });
     } catch (error) {
@@ -530,7 +623,6 @@ export class FinanceController {
     }
   }
 
-  /** Records a payment and applies it across invoices. */
   async recordPayment(req: Request, res: Response) {
     const operation = "Record payment";
     try {
@@ -551,17 +643,35 @@ export class FinanceController {
         throw new DomainError("Direction must be OUTGOING or INCOMING.");
       }
       if (amount === undefined) throw new DomainError("An amount is required.");
+      if (
+        allocations !== undefined &&
+        (!Array.isArray(allocations) || allocations.length > 100)
+      ) {
+        throw new DomainError(
+          "allocations must be an array of at most 100 rows."
+        );
+      }
+      const normalizedCurrency = requireString(
+        currencyCode ?? "INR",
+        "currencyCode",
+        3
+      ).toUpperCase();
+      if (!/^[A-Z]{3}$/.test(normalizedCurrency)) {
+        throw new DomainError("currencyCode must be a three-letter ISO code.");
+      }
 
       const payment = await recordPayment({
         direction,
-        method: (method as PaymentMethod) ?? "BANK_TRANSFER",
-        reference: reference ?? null,
-        paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
-        currencyCode: currencyCode ?? "INR",
+        method:
+          parseEnum(PaymentMethod, method, "method") ??
+          PaymentMethod.BANK_TRANSFER,
+        reference: optionalString(reference, "reference", 200),
+        paymentDate: parseDate(paymentDate, "paymentDate") ?? new Date(),
+        currencyCode: normalizedCurrency,
         amount,
-        supplierId: parseId(supplierId) ?? null,
-        accountId: parseId(accountId) ?? null,
-        notes: notes ?? null,
+        supplierId: parseOptionalId(supplierId, "supplierId"),
+        accountId: parseOptionalId(accountId, "accountId"),
+        notes: optionalString(notes, "notes"),
         recordedById: req.user!.id,
         allocations: Array.isArray(allocations)
           ? allocations.map((a: Record<string, unknown>) => ({
@@ -578,11 +688,14 @@ export class FinanceController {
     }
   }
 
-  /** Payment history. */
   async listPayments(req: Request, res: Response) {
     const operation = "List payments";
     try {
-      const direction = req.query.direction as PaymentDirection | undefined;
+      const direction = parseEnum(
+        PaymentDirection,
+        req.query.direction,
+        "direction"
+      );
       const rows = await prisma.payment.findMany({
         where: direction ? { direction } : {},
         orderBy: { paymentDate: "desc" },
@@ -605,13 +718,6 @@ export class FinanceController {
     }
   }
 
-  /**
-   * Documents that could be invoiced but have not been.
-   *
-   * This is the working list for whoever raises invoices: received purchase
-   * orders with no supplier invoice against them, and delivered sales orders
-   * with nothing billed.
-   */
   async uninvoiced(req: Request, res: Response) {
     const operation = "Uninvoiced documents";
     try {

@@ -6,7 +6,7 @@ import { Input } from "@repo/ui/components/ui/input";
 import Link from "next/link";
 import { Alert } from "@repo/ui/components/ui/alert";
 import { useParams, useRouter } from "next/navigation";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   DetailRow,
   ErrorBanner,
@@ -22,7 +22,7 @@ import {
   usePurchaseRequisition,
   usePurchasingMutations,
   useSuppliers,
-} from "@/hooks/useSupplyChain";
+} from "@/hooks/use-supply-chain";
 import {
   formatDate,
   formatMoney,

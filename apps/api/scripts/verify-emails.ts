@@ -1,40 +1,40 @@
-/**
- * Renders every email the application can send and checks the result.
- *
- * Intercepts the Resend HTTP call rather than mocking the service, so what is
- * asserted on is the exact payload production would post. Needs no running
- * server and sends nothing.
- *
- * Run with: npm run verify:emails -w api
- */
-// Environment comes from the npm script (`dotenv -e ../../.env`).
+type JsonRecord = Record<string, unknown>;
 
-const sent: any[] = [];
+const sent: JsonRecord[] = [];
 const realFetch = globalThis.fetch;
-globalThis.fetch = (async (url: any, init: any) => {
+globalThis.fetch = async (...args: Parameters<typeof fetch>) => {
+  const [url, init] = args;
   if (String(url).includes("api.resend.com")) {
-    sent.push(JSON.parse(String(init?.body ?? "{}")));
+    const parsed = JSON.parse(String(init?.body ?? "{}")) as unknown;
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      Array.isArray(parsed)
+    ) {
+      throw new Error("Resend payload was not an object");
+    }
+    sent.push(parsed as JsonRecord);
     return new Response(JSON.stringify({ id: "t" }), {
       status: 200,
       headers: { "content-type": "application/json" },
     });
   }
-  return realFetch(url, init);
-}) as any;
+  return realFetch(...args);
+};
 
 const { emailService } = await import("../src/services/email.service.js");
-const sec = await import("../src/services/securityEmail.service.js");
-const otp = await import("../src/services/resendOtp.service.js");
+const sec = await import("../src/services/security-email.service.js");
+const otp = await import("../src/services/resend-otp.service.js");
 const { buildNotificationEmail } = await import(
-  "../src/services/notificationEmail.js"
+  "../src/services/notification-email.js"
 );
 const { NOTIFICATION_CATALOGUE } = await import(
-  "../src/services/notificationCatalogue.js"
+  "../src/services/notification-catalogue.js"
 );
 const to = "t@example.test";
-const ctx = { ip: "1.2.3.4", userAgent: "UA", at: new Date() } as any;
+const ctx = { ip: "1.2.3.4", userAgent: "UA", at: new Date() };
 
-const cases: Array<[string, () => Promise<any>]> = [
+const cases: Array<[string, () => Promise<unknown>]> = [
   [
     "userCreation",
     () =>
@@ -100,7 +100,6 @@ const cases: Array<[string, () => Promise<any>]> = [
           paymentTerms: null,
           deliveryTerms: null,
           notes: null,
-          pdfUrl: "https://x/q.pdf",
           lineItems: [
             {
               productName: "P",
@@ -110,6 +109,10 @@ const cases: Array<[string, () => Promise<any>]> = [
               totalPrice: 1,
             },
           ],
+        },
+        pdfAttachment: {
+          filename: "Q-1.pdf",
+          content: Buffer.from("test pdf").toString("base64"),
         },
       }),
   ],
@@ -233,10 +236,6 @@ for (const [name, run] of cases) {
     const p: string[] = [];
     if (!o) p.push("nothing sent");
     else {
-      // No email carries a link. Not in the masthead, not as an action button,
-      // not anywhere in the body: these messages state what happened and let
-      // the reader open the app themselves. An anchor appearing here is a
-      // regression, so the whole document is checked, not a region of it.
       if (/<a[\s>]/i.test(html)) p.push("*** LINK IN EMAIL ***");
       if (/https?:\/\/[^\s"'<]*onrender/i.test(html))
         p.push("*** DEPLOYMENT URL IN EMAIL ***");
@@ -248,8 +247,10 @@ for (const [name, run] of cases) {
     }
     console.log(p.length ? `✗ ${name}: ${p.join("; ")}` : `✓ ${name}`);
     if (p.length) bad++;
-  } catch (e: any) {
-    console.log(`✗ ${name}: THREW ${e.message}`);
+  } catch (error: unknown) {
+    console.log(
+      `✗ ${name}: THREW ${error instanceof Error ? error.message : "unknown"}`
+    );
     bad++;
   }
 }
@@ -260,8 +261,6 @@ console.log(
 ALL ${cases.length} TEMPLATES CLEAN — no links anywhere`
 );
 
-// Every configurable notification type must produce a usable email, because
-// the settings screen offers each one as an email people can switch on.
 console.log("\n--- notification templates (one per configurable type) ---");
 let notifBad = 0;
 for (const entry of NOTIFICATION_CATALOGUE) {

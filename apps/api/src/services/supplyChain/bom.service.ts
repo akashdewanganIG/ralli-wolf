@@ -1,12 +1,11 @@
 import { prisma } from "@repo/db";
 import { Prisma, BomStatus, BomChangeType } from "@prisma/client";
 import { DomainError, NotFoundError } from "./errors.js";
-import { ZERO, roundCost, roundQuantity, toDecimal } from "./decimal.js";
+import { ZERO, requirePositive, roundCost, roundQuantity } from "./decimal.js";
 
 type Tx = Prisma.TransactionClient;
 type Client = Tx | typeof prisma;
 
-/** Guard against a pathological or self-referencing structure. */
 const MAX_EXPLOSION_DEPTH = 25;
 
 export interface ExplodedComponent {
@@ -19,9 +18,9 @@ export interface ExplodedComponent {
   productName: string;
   itemType: string;
   uomCode: string | null;
-  /** Quantity for one unit of the top-level parent, scrap included. */
+
   quantityPerParent: Prisma.Decimal;
-  /** Quantity for the requested build size. */
+
   requiredQuantity: Prisma.Decimal;
   scrapPercent: Prisma.Decimal;
   isPhantom: boolean;
@@ -70,10 +69,6 @@ const BOM_INCLUDE = {
   },
 } as const;
 
-/**
- * Resolve the BOM that should be used for a product: the caller's explicit
- * choice, else the product's default, else its only active BOM.
- */
 export async function resolveBomForProduct(
   productId: number,
   bomId?: number | null,
@@ -136,21 +131,12 @@ async function loadActiveBomFor(
   return bom;
 }
 
-/**
- * Expand a multi-level BOM into a flat component list.
- *
- * `scrapPercent` inflates demand at each level and compounds down the tree,
- * which is how a 2% loss on a sub-assembly really does cost more raw material
- * than 2% at the top. Phantom assemblies are expanded through without being
- * listed as demand of their own. The visiting-set check turns a circular
- * structure into a clear error instead of a stack overflow.
- */
 export async function explodeBom(
   options: {
     productId: number;
     bomId?: number | null;
     quantity?: Prisma.Decimal | number | string;
-    /** Stop after this many levels; 0 means the immediate components only. */
+
     maxLevels?: number;
   },
   client: Client = prisma
@@ -159,14 +145,7 @@ export async function explodeBom(
   components: ExplodedComponent[];
   totalMaterialCost: Prisma.Decimal;
 }> {
-  const buildQuantity = options.quantity
-    ? toDecimal(options.quantity, "quantity")
-    : new Prisma.Decimal(1);
-  if (buildQuantity.lessThanOrEqualTo(0)) {
-    throw new DomainError("quantity must be greater than zero", {
-      code: "VALIDATION_ERROR",
-    });
-  }
+  const buildQuantity = requirePositive(options.quantity ?? 1, "quantity");
 
   const rootBom = await resolveBomForProduct(
     options.productId,
@@ -190,10 +169,10 @@ export async function explodeBom(
       );
     }
 
-    // The parent BOM may produce more than one unit per run.
-    const perOutputUnit = bom.outputQuantity.isZero()
-      ? new Prisma.Decimal(1)
-      : bom.outputQuantity;
+    const perOutputUnit = requirePositive(
+      bom.outputQuantity,
+      `BOM ${bom.bomNumber} outputQuantity`
+    );
 
     for (const component of bom.components) {
       const scrapMultiplier = new Prisma.Decimal(1).plus(
@@ -291,14 +270,6 @@ export async function explodeBom(
   };
 }
 
-/**
- * Roll the material cost of a BOM up from its leaves.
- *
- * A component that is itself manufactured contributes its own rolled-up cost,
- * not its standard cost, so the number reflects the real tree. The result is
- * written back to the BOM so downstream costing has a stable figure, together
- * with the timestamp it was computed at.
- */
 export async function rollUpBomCost(
   bomId: number,
   options: { persist?: boolean; changedById?: number } = {},
@@ -377,7 +348,6 @@ export async function rollUpBomCost(
         },
       });
       if (childBom) {
-        // Recurse so a stale child figure does not silently poison the parent.
         const childResult = await rollUpBomCost(
           childBom.id,
           { persist: options.persist, changedById: options.changedById },
@@ -454,10 +424,6 @@ export async function rollUpBomCost(
   };
 }
 
-/**
- * Reject a component before it is saved if adding it would create a cycle —
- * directly, or through any BOM further down the tree.
- */
 export async function assertNoCircularReference(
   parentProductId: number,
   componentProductId: number,
@@ -508,10 +474,6 @@ export async function assertNoCircularReference(
   }
 }
 
-/**
- * Where-used: every BOM that consumes this item, so an engineer can see the
- * blast radius of a component change before making it.
- */
 export async function whereUsed(productId: number, client: Client = prisma) {
   const components = await client.bomComponent.findMany({
     where: { componentProductId: productId },
@@ -578,12 +540,6 @@ export async function whereUsed(productId: number, client: Client = prisma) {
   };
 }
 
-/**
- * Create the next revision of a BOM: a full copy of the structure at a new
- * version number, linked back to the one it supersedes. The original is left
- * untouched so historic production orders still reference what was actually
- * built.
- */
 export async function reviseBom(
   tx: Tx,
   bomId: number,
@@ -679,7 +635,6 @@ export async function reviseBom(
   return created;
 }
 
-/** Record a structural or header change so a BOM's history is auditable. */
 export async function logBomChange(
   tx: Tx,
   input: {

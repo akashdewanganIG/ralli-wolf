@@ -1,9 +1,8 @@
 import { Request, Response } from "express";
 import { prisma } from "@repo/db";
-import { handleError } from "../utils/errorHandler.js";
+import { handleError } from "../utils/error-handler.js";
 import { LeadSource, LeadStatus } from "@prisma/client";
 
-// Lead source display labels
 const leadSourceLabels: Record<LeadSource, string> = {
   [LeadSource.MANUAL]: "Manual",
   [LeadSource.IMPORT]: "Import",
@@ -20,7 +19,6 @@ export class DashboardController {
     try {
       const { period = "week", startDate, endDate } = req.query;
 
-      // Calculate date range
       const now = new Date();
       let start: Date,
         end: Date = now;
@@ -42,15 +40,13 @@ export class DashboardController {
         start.setUTCHours(0, 0, 0, 0);
       }
 
-      // Fetch only timestamps and aggregate by calendar day below. Grouping by
-      // createdAt directly groups each unique timestamp, not each day.
       const leadsInRange = await prisma.lead.findMany({
         where: {
           createdAt: {
             gte: start,
             lte: end,
           },
-          deletedAt: null, // Exclude deleted leads
+          deletedAt: null,
         },
         select: { createdAt: true },
         orderBy: {
@@ -63,7 +59,6 @@ export class DashboardController {
         countsByDay.set(key, (countsByDay.get(key) || 0) + 1);
       });
 
-      // Format data for chart
       const chartData = {
         labels: [] as string[],
         datasets: [
@@ -78,7 +73,6 @@ export class DashboardController {
         ],
       };
 
-      // Generate labels and data for each day
       const currentDate = new Date(start);
       while (currentDate <= end) {
         const dayLabel = currentDate.toLocaleDateString("en-US", {
@@ -104,14 +98,12 @@ export class DashboardController {
 
   async getConversionRate(req: Request, res: Response) {
     try {
-      // Get total leads count (excluding deleted)
       const totalLeads = await prisma.lead.count({
         where: {
           deletedAt: null,
         },
       });
 
-      // Get converted leads count considering both linked contacts and explicit converted status (excluding deleted)
       const convertedLeads = await prisma.lead.count({
         where: {
           OR: [
@@ -144,7 +136,6 @@ export class DashboardController {
 
   async getLeadSources(req: Request, res: Response) {
     try {
-      // Get leads grouped by source (excluding deleted)
       const leadsBySource = await prisma.lead.groupBy({
         by: ["source"],
         where: {
@@ -160,7 +151,6 @@ export class DashboardController {
         },
       });
 
-      // Format data for donut chart
       const chartData = {
         labels: [] as string[],
         datasets: [
@@ -173,7 +163,6 @@ export class DashboardController {
         ],
       };
 
-      // Add sources to chart data
       leadsBySource.forEach(source => {
         chartData.labels.push(getLeadSourceLabel(source.source));
         if (chartData.datasets[0]) {
@@ -193,7 +182,6 @@ export class DashboardController {
       const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-      // Calculate metrics for current month
       const [
         totalLeadsCurrent,
         totalLeadsLastMonth,
@@ -208,7 +196,6 @@ export class DashboardController {
         chatbotInteractionsCurrent,
         chatbotInteractionsLastMonth,
       ] = await Promise.all([
-        // Total Leads (excluding deleted)
         prisma.lead.count({
           where: {
             createdAt: {
@@ -226,7 +213,7 @@ export class DashboardController {
             deletedAt: null,
           },
         }),
-        // Landing Signups (Form Submissions)
+
         prisma.formSubmission.count({
           where: {
             submittedAt: {
@@ -242,7 +229,7 @@ export class DashboardController {
             },
           },
         }),
-        // Active Campaigns
+
         prisma.campaign.count({
           where: {
             OR: [{ endDate: null }, { endDate: { gte: now } }],
@@ -256,7 +243,7 @@ export class DashboardController {
             },
           },
         }),
-        // Email Opens
+
         prisma.analyticsEvent.count({
           where: {
             eventType: "email_open",
@@ -274,7 +261,7 @@ export class DashboardController {
             },
           },
         }),
-        // WhatsApp Engagements
+
         prisma.analyticsEvent.count({
           where: {
             eventType: {
@@ -296,7 +283,7 @@ export class DashboardController {
             },
           },
         }),
-        // Chatbot Interactions
+
         prisma.botSession.count({
           where: {
             startedAt: {
@@ -314,7 +301,6 @@ export class DashboardController {
         }),
       ]);
 
-      // Helper function to calculate percentage change
       const calculateChange = (
         current: number,
         previous: number

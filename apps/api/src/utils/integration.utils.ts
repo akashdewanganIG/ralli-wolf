@@ -1,18 +1,25 @@
 import { prisma } from "@repo/db";
-import { decryptSecret } from "./crypto.utils.js";
+import { decryptSecret } from "@repo/db/crypto";
+import { normalizeProviderBaseUrl } from "./provider-url.js";
+
+const MSG91_CONTROL_BASE_URL = "https://control.msg91.com/api/v5";
 
 export interface Msg91Credentials {
   apiKey: string;
   baseUrl: string;
 }
 
-/**
- * Retrieves MSG91 credentials from the integration config
- * @returns MSG91 API key and base URL
- * @throws Error if credentials are not configured
- */
+export async function getMsg91BaseUrl(): Promise<string> {
+  const baseUrlConfig = await prisma.appConfig.findUnique({
+    where: { key: "whatsapp.baseUrl" },
+  });
+  return normalizeProviderBaseUrl(
+    baseUrlConfig?.plainValue || MSG91_CONTROL_BASE_URL,
+    "msg91"
+  );
+}
+
 export async function getMsg91Credentials(): Promise<Msg91Credentials> {
-  // Get the WhatsApp API key from integration credentials
   const credential = await prisma.integrationCredential.findUnique({
     where: { provider: "whatsapp" },
   });
@@ -29,22 +36,8 @@ export async function getMsg91Credentials(): Promise<Msg91Credentials> {
     credential.authTag
   );
 
-  // Get the MSG91 base URL from app config
-  const baseUrlConfig = await prisma.appConfig.findUnique({
-    where: { key: "whatsapp.baseUrl" },
-  });
-
-  console.log("Base URL config from DB:", baseUrlConfig);
-
-  const baseUrl =
-    baseUrlConfig?.plainValue ||
-    process.env.MSG91_BASE_URL ||
-    "https://control.msg91.com/api/v5";
-
-  console.log("Final base URL to be used:", baseUrl);
-
   return {
     apiKey,
-    baseUrl,
+    baseUrl: await getMsg91BaseUrl(),
   };
 }

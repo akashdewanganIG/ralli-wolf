@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { RoleGuard } from "@/components/guards/RoleGuard";
+import { RoleGuard } from "@/components/guards/role-guard";
 import { QuoteDetailPage } from "@/components/quotes/quote-detail-page";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 
@@ -11,7 +11,7 @@ export default function QuoteDetailRoutePage() {
 
   return (
     <NuqsAdapter>
-      <RoleGuard allowedRoles={["ADMIN", "ADMIN", "SALES"]}>
+      <RoleGuard allowedRoles={["ADMIN", "SALES"]}>
         <QuoteDetailPage quoteId={quoteId} />
       </RoleGuard>
     </NuqsAdapter>

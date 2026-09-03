@@ -6,7 +6,7 @@ import { Button } from "@repo/ui/components/ui/button";
 import { Input } from "@repo/ui/components/ui/input";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   DetailRow,
   ErrorBanner,
@@ -22,8 +22,8 @@ import {
   usePurchaseOrder,
   usePurchasingMutations,
   useGoodsReceiptMutations,
-} from "@/hooks/useSupplyChain";
-import { useUsersWithPagination } from "@/hooks/useUsers";
+} from "@/hooks/use-supply-chain";
+import { useUsersWithPagination } from "@/hooks/use-users";
 import {
   formatDate,
   formatDateTime,
@@ -43,8 +43,7 @@ export default function PurchaseOrderDetailPage() {
   const { data, isLoading, error } = usePurchaseOrder(orderId);
   const { submitForApproval, setOrderStatus } = usePurchasingMutations();
   const { create: createReceipt } = useGoodsReceiptMutations();
-  // Only ADMIN  can approve a purchase order, matching the
-  // rule the API enforces.
+
   const usersQuery = useUsersWithPagination({ limit: 200 });
 
   const [approverId, setApproverId] = useState("");
@@ -62,7 +61,9 @@ export default function PurchaseOrderDetailPage() {
   const approvals = order?.approvals ?? [];
 
   const approvers = (usersQuery.data ?? []).filter(
-    user => user.role === "ADMIN"
+    user =>
+      user.role === "ADMIN" ||
+      (user.role === "CUSTOM" && user.permissions?.includes("approvals.act"))
   );
 
   const receiptLines = Object.entries(receiptDraft)
@@ -122,7 +123,7 @@ export default function PurchaseOrderDetailPage() {
                     disabled={setOrderStatus.isPending}
                     className="px-3 whitespace-nowrap"
                   >
-                    Mark as sent
+                    Send to supplier
                   </Button>
                 )}
                 {order.status === "SENT" && (

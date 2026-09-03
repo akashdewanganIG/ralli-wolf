@@ -18,7 +18,7 @@ import {
 } from "@repo/ui/icons";
 import Image from "next/image";
 import { useState } from "react";
-import logo from "../app/assets/images/logos/logo_v1.png";
+import logo from "../app/assets/images/logos/logo-v1.png";
 import { Lead } from "../lib/api/types";
 import { getLeadFullName } from "../lib/name";
 import { displayPhone } from "../lib/phone-formatter";
@@ -91,7 +91,6 @@ export function SalesLeadDetail({
 
   return (
     <div>
-      {/* Header */}
       <HeaderWrapper
         icon={
           <Image
@@ -105,15 +104,12 @@ export function SalesLeadDetail({
         hideNotifications={true}
       />
 
-      {/* Content */}
       <div className="container mx-auto p-4 md:p-4 max-w-2xl">
-        {/* Back Button */}
         <Button variant="ghost" onClick={onBack} className="mb-4">
           <ArrowLeft className="h-4 w-4" />
           Back to Leads
         </Button>
 
-        {/* Lead Details Card */}
         <Card className="mb-4">
           <CardHeader>
             <CardTitle>Lead Information</CardTitle>
@@ -148,7 +144,6 @@ export function SalesLeadDetail({
           </CardContent>
         </Card>
 
-        {/* Actions Card */}
         <Card className="mb-4">
           <CardHeader>
             <CardTitle>Lead Status</CardTitle>
@@ -182,7 +177,6 @@ export function SalesLeadDetail({
           </CardContent>
         </Card>
 
-        {/* Remarks Card */}
         <Card>
           <CardHeader>
             <CardTitle>Remarks</CardTitle>

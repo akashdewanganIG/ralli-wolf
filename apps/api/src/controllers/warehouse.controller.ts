@@ -7,6 +7,7 @@ import {
 } from "../services/supplyChain/numbering.service.js";
 import { getStorageUtilisation } from "../services/supplyChain/wms.service.js";
 import { DomainError, NotFoundError } from "../services/supplyChain/errors.js";
+import { requirePositive } from "../services/supplyChain/decimal.js";
 import {
   deleteImageFromS3,
   extractS3KeyFromUrl,
@@ -18,11 +19,20 @@ import {
   parseBoolean,
   parseEnum,
   parseId,
+  parseInteger,
   parseOptionalId,
   parsePagination,
   optionalString,
   requireString,
-} from "../utils/supplyChainHttp.js";
+} from "../utils/supply-chain-http.js";
+import { verifyFileContent } from "../utils/file-validation.js";
+import { logError } from "../utils/logger.js";
+
+const WAREHOUSE_IMAGE_MIME_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+] as const;
 
 export class WarehouseController {
   private files(req: Request): Express.Multer.File[] {
@@ -38,11 +48,22 @@ export class WarehouseController {
 
     try {
       for (const [index, file] of files.entries()) {
+        const verified = verifyFileContent(
+          file.buffer,
+          file.mimetype,
+          WAREHOUSE_IMAGE_MIME_TYPES
+        );
+        if (!verified) {
+          throw new DomainError(
+            "Warehouse images must contain valid JPEG, PNG, or WebP data",
+            { status: 400, code: "INVALID_IMAGE_CONTENT" }
+          );
+        }
         const result = await uploadImageToS3(
           file.buffer,
           "warehouses",
           `${warehouseCode}-${startAt + index + 1}`,
-          file.mimetype
+          verified.mimeType
         );
         uploaded.push({ url: result.secureUrl, sortOrder: startAt + index });
       }
@@ -61,13 +82,12 @@ export class WarehouseController {
         try {
           await deleteImageFromS3(key);
         } catch (error) {
-          console.warn("Failed to clean up warehouse image:", error);
+          logError("warehouse_image_cleanup_failed", error);
         }
       })
     );
   }
 
-  /** GET /api/warehouses */
   async list(req: Request, res: Response) {
     const operation = "List warehouses";
     try {
@@ -113,7 +133,6 @@ export class WarehouseController {
     }
   }
 
-  /** GET /api/warehouses/:id */
   async getById(req: Request, res: Response) {
     const operation = "Get warehouse";
     try {
@@ -138,7 +157,6 @@ export class WarehouseController {
     }
   }
 
-  /** POST /api/warehouses */
   async create(req: Request, res: Response) {
     const operation = "Create warehouse";
     let uploadedImages: Array<{ url: string; sortOrder: number }> = [];
@@ -195,7 +213,6 @@ export class WarehouseController {
     }
   }
 
-  /** POST /api/warehouses/:id/images */
   async addImages(req: Request, res: Response) {
     const operation = "Add warehouse images";
     let uploadedImages: Array<{ url: string; sortOrder: number }> = [];
@@ -247,7 +264,6 @@ export class WarehouseController {
     }
   }
 
-  /** DELETE /api/warehouses/images/:imageId */
   async deleteImage(req: Request, res: Response) {
     const operation = "Delete warehouse image";
     try {
@@ -265,7 +281,6 @@ export class WarehouseController {
     }
   }
 
-  /** PUT /api/warehouses/:id */
   async update(req: Request, res: Response) {
     const operation = "Update warehouse";
     try {
@@ -276,7 +291,6 @@ export class WarehouseController {
       const isDefault = parseBoolean(req.body.isDefault);
       const isActive = parseBoolean(req.body.isActive);
 
-      // A warehouse still holding stock must not be switched off silently.
       if (isActive === false) {
         const held = await prisma.stockBalance.count({
           where: { warehouseId: id, quantity: { gt: 0 } },
@@ -352,7 +366,6 @@ export class WarehouseController {
     }
   }
 
-  /** GET /api/warehouses/:id/zones */
   async listZones(req: Request, res: Response) {
     const operation = "List warehouse zones";
     try {
@@ -368,7 +381,6 @@ export class WarehouseController {
     }
   }
 
-  /** POST /api/warehouses/:id/zones */
   async createZone(req: Request, res: Response) {
     const operation = "Create warehouse zone";
     try {
@@ -398,7 +410,6 @@ export class WarehouseController {
     }
   }
 
-  /** GET /api/warehouses/:id/bins */
   async listBins(req: Request, res: Response) {
     const operation = "List storage bins";
     try {
@@ -450,7 +461,6 @@ export class WarehouseController {
     }
   }
 
-  /** POST /api/warehouses/:id/bins */
   async createBin(req: Request, res: Response) {
     const operation = "Create storage bin";
     try {
@@ -478,13 +488,27 @@ export class WarehouseController {
           position: optionalString(req.body.position),
           binType:
             parseEnum(BinType, req.body.binType, "binType") ?? BinType.SHELF,
-          pickSequence: Number(req.body.pickSequence) || 0,
-          maxWeightKg: req.body.maxWeightKg
-            ? String(req.body.maxWeightKg)
-            : null,
-          maxVolumeM3: req.body.maxVolumeM3
-            ? String(req.body.maxVolumeM3)
-            : null,
+          pickSequence:
+            req.body.pickSequence === undefined
+              ? 0
+              : parseInteger(
+                  req.body.pickSequence,
+                  "pickSequence",
+                  0,
+                  1_000_000
+                ),
+          maxWeightKg:
+            req.body.maxWeightKg === undefined ||
+            req.body.maxWeightKg === null ||
+            req.body.maxWeightKg === ""
+              ? null
+              : requirePositive(req.body.maxWeightKg, "maxWeightKg"),
+          maxVolumeM3:
+            req.body.maxVolumeM3 === undefined ||
+            req.body.maxVolumeM3 === null ||
+            req.body.maxVolumeM3 === ""
+              ? null
+              : requirePositive(req.body.maxVolumeM3, "maxVolumeM3"),
           isPickFace: parseBoolean(req.body.isPickFace) ?? false,
           isReceiving:
             parseBoolean(req.body.isReceiving) ??
@@ -507,12 +531,6 @@ export class WarehouseController {
     }
   }
 
-  /**
-   * POST /api/warehouses/:id/bins/bulk
-   * Generate a rack layout in one shot. Enterprises do not enter 400 bin codes
-   * by hand, and a consistent aisle/rack/level code is what makes pick paths
-   * sortable.
-   */
   async generateBins(req: Request, res: Response) {
     const operation = "Generate storage bins";
     try {
@@ -529,23 +547,28 @@ export class WarehouseController {
         });
       }
 
-      const aisles = Number(req.body.aisles);
-      const racksPerAisle = Number(req.body.racksPerAisle);
-      const levelsPerRack = Number(req.body.levelsPerRack);
-      const positionsPerLevel = Number(req.body.positionsPerLevel) || 1;
-
-      if (
-        ![aisles, racksPerAisle, levelsPerRack, positionsPerLevel].every(
-          value => Number.isInteger(value) && value > 0
-        )
-      ) {
-        throw new DomainError(
-          "aisles, racksPerAisle, levelsPerRack and positionsPerLevel must be positive integers",
-          {
-            code: "VALIDATION_ERROR",
-          }
-        );
-      }
+      const aisles = parseInteger(req.body.aisles, "aisles", 1, 5_000);
+      const racksPerAisle = parseInteger(
+        req.body.racksPerAisle,
+        "racksPerAisle",
+        1,
+        5_000
+      );
+      const levelsPerRack = parseInteger(
+        req.body.levelsPerRack,
+        "levelsPerRack",
+        1,
+        5_000
+      );
+      const positionsPerLevel =
+        req.body.positionsPerLevel === undefined
+          ? 1
+          : parseInteger(
+              req.body.positionsPerLevel,
+              "positionsPerLevel",
+              1,
+              5_000
+            );
 
       const total = aisles * racksPerAisle * levelsPerRack * positionsPerLevel;
       if (total > 5000) {
@@ -598,8 +621,7 @@ export class WarehouseController {
                 level: levelCode,
                 position: positionCode,
                 binType,
-                // Serpentine order: even aisles run backwards so a picker
-                // walks up one aisle and down the next.
+
                 pickSequence:
                   aisle % 2 === 0
                     ? aisle * 100000 +
@@ -633,7 +655,6 @@ export class WarehouseController {
     }
   }
 
-  /** PUT /api/warehouses/bins/:binId */
   async updateBin(req: Request, res: Response) {
     const operation = "Update storage bin";
     try {
@@ -665,20 +686,29 @@ export class WarehouseController {
             ? { binType: parseEnum(BinType, req.body.binType, "binType") }
             : {}),
           ...(req.body.pickSequence !== undefined
-            ? { pickSequence: Number(req.body.pickSequence) || 0 }
+            ? {
+                pickSequence: parseInteger(
+                  req.body.pickSequence,
+                  "pickSequence",
+                  0,
+                  1_000_000
+                ),
+              }
             : {}),
           ...(req.body.maxWeightKg !== undefined
             ? {
-                maxWeightKg: req.body.maxWeightKg
-                  ? String(req.body.maxWeightKg)
-                  : null,
+                maxWeightKg:
+                  req.body.maxWeightKg === null || req.body.maxWeightKg === ""
+                    ? null
+                    : requirePositive(req.body.maxWeightKg, "maxWeightKg"),
               }
             : {}),
           ...(req.body.maxVolumeM3 !== undefined
             ? {
-                maxVolumeM3: req.body.maxVolumeM3
-                  ? String(req.body.maxVolumeM3)
-                  : null,
+                maxVolumeM3:
+                  req.body.maxVolumeM3 === null || req.body.maxVolumeM3 === ""
+                    ? null
+                    : requirePositive(req.body.maxVolumeM3, "maxVolumeM3"),
               }
             : {}),
           ...(parseBoolean(req.body.isPickFace) !== undefined
@@ -709,7 +739,6 @@ export class WarehouseController {
     }
   }
 
-  /** GET /api/warehouses/:id/utilisation */
   async utilisation(req: Request, res: Response) {
     const operation = "Get storage utilisation";
     try {
@@ -721,7 +750,6 @@ export class WarehouseController {
     }
   }
 
-  /** GET /api/warehouses/:id/pallets */
   async listPallets(req: Request, res: Response) {
     const operation = "List pallets";
     try {
@@ -760,7 +788,6 @@ export class WarehouseController {
     }
   }
 
-  /** POST /api/warehouses/:id/pallets */
   async createPallet(req: Request, res: Response) {
     const operation = "Create pallet";
     try {
@@ -805,10 +832,6 @@ export class WarehouseController {
     }
   }
 
-  /**
-   * PATCH /api/warehouses/pallets/:palletId/move
-   * Move a pallet, and everything standing on it, to another bin.
-   */
   async movePallet(req: Request, res: Response) {
     const operation = "Move pallet";
     try {
@@ -838,8 +861,6 @@ export class WarehouseController {
           });
         }
 
-        // The stock on the pallet travels with it; quantities are unchanged so
-        // the balance rows only need their location updating.
         await tx.stockBalance.updateMany({
           where: { palletId },
           data: { binId: toBinId, lastMovementAt: new Date() },

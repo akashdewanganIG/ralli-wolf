@@ -6,21 +6,27 @@ import {
   handleNotFoundError,
   handleConflictError,
   validateRequiredFields,
-} from "../utils/errorHandler.js";
+} from "../utils/error-handler.js";
+import { Prisma } from "@prisma/client";
+import { parsePositiveInteger } from "../utils/validators.js";
 
 export class KeywordController {
-  /**
-   * Get all keywords with optional search
-   * GET /api/keywords?search=term
-   */
   async getAllKeywords(req: Request, res: Response) {
     try {
       const { search } = req.query;
 
-      const whereClause: any = {};
+      const whereClause: Prisma.KeywordWhereInput = {};
 
       if (search && typeof search === "string" && search.trim()) {
         const searchTerm = search.trim().toLowerCase();
+        if (searchTerm.length > 100) {
+          return handleValidationError(
+            res,
+            "Search cannot exceed 100 characters",
+            "search",
+            "Get all keywords"
+          );
+        }
         whereClause.name = {
           contains: searchTerm,
           mode: "insensitive",
@@ -32,6 +38,7 @@ export class KeywordController {
         orderBy: {
           name: "asc",
         },
+        take: 1000,
       });
 
       return res.json({
@@ -43,25 +50,10 @@ export class KeywordController {
     }
   }
 
-  /**
-   * Get keyword by ID
-   * GET /api/keywords/:id
-   */
   async getKeywordById(req: Request, res: Response) {
     try {
-      const { id } = req.params;
-
-      if (!id) {
-        return handleValidationError(
-          res,
-          "Keyword ID is required",
-          "id",
-          "Get keyword by ID"
-        );
-      }
-
-      const keywordId = parseInt(id, 10);
-      if (isNaN(keywordId)) {
+      const keywordId = parsePositiveInteger(req.params.id);
+      if (keywordId === null) {
         return handleValidationError(
           res,
           "Invalid keyword ID",
@@ -87,11 +79,6 @@ export class KeywordController {
     }
   }
 
-  /**
-   * Create a new keyword
-   * POST /api/keywords
-   * Body: { name: string }
-   */
   async createKeyword(req: Request, res: Response) {
     try {
       if (!validateRequiredFields(req.body, ["name"], res, "Create keyword")) {
@@ -100,19 +87,22 @@ export class KeywordController {
 
       const { name } = req.body;
 
-      if (!name || typeof name !== "string" || !name.trim()) {
+      if (
+        !name ||
+        typeof name !== "string" ||
+        !name.trim() ||
+        name.trim().length > 100
+      ) {
         return handleValidationError(
           res,
-          "Keyword name is required",
+          "Keyword name must be between 1 and 100 characters",
           "name",
           "Create keyword"
         );
       }
 
-      // Convert to lowercase and trim
       const keywordName = name.trim().toLowerCase();
 
-      // Check if keyword already exists
       const existingKeyword = await prisma.keyword.findUnique({
         where: { name: keywordName },
       });
@@ -136,8 +126,11 @@ export class KeywordController {
         data: keyword,
         message: "Keyword created successfully",
       });
-    } catch (error: any) {
-      if (error.code === "P2002") {
+    } catch (error: unknown) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
         return handleConflictError(
           res,
           "Keyword already exists",
@@ -148,25 +141,10 @@ export class KeywordController {
     }
   }
 
-  /**
-   * Delete a keyword
-   * DELETE /api/keywords/:id
-   */
   async deleteKeyword(req: Request, res: Response) {
     try {
-      const { id } = req.params;
-
-      if (!id) {
-        return handleValidationError(
-          res,
-          "Keyword ID is required",
-          "id",
-          "Delete keyword"
-        );
-      }
-
-      const keywordId = parseInt(id, 10);
-      if (isNaN(keywordId)) {
+      const keywordId = parsePositiveInteger(req.params.id);
+      if (keywordId === null) {
         return handleValidationError(
           res,
           "Invalid keyword ID",
@@ -175,7 +153,6 @@ export class KeywordController {
         );
       }
 
-      // Check if keyword exists
       const keyword = await prisma.keyword.findUnique({
         where: { id: keywordId },
       });
@@ -184,7 +161,6 @@ export class KeywordController {
         return handleNotFoundError(res, "Keyword", "Delete keyword");
       }
 
-      // Delete the keyword (cascade will handle join table deletions)
       await prisma.keyword.delete({
         where: { id: keywordId },
       });

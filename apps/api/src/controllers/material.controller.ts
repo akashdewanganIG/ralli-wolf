@@ -20,9 +20,9 @@ import {
 import { DomainError, NotFoundError } from "../services/supplyChain/errors.js";
 import {
   ZERO,
+  requirePositive,
   roundCost,
   roundQuantity,
-  toDecimal,
 } from "../services/supplyChain/decimal.js";
 import {
   handleSupplyChainError,
@@ -37,14 +37,9 @@ import {
   parsePagination,
   requireArray,
   requireUserId,
-} from "../utils/supplyChainHttp.js";
+} from "../utils/supply-chain-http.js";
 
 export class MaterialController {
-  /**
-   * GET /api/materials
-   * The material master: raw materials, components, consumables and packaging,
-   * each with its live position and safety-stock status.
-   */
   async list(req: Request, res: Response) {
     const operation = "List materials";
     try {
@@ -78,6 +73,7 @@ export class MaterialController {
             id: true,
             code: true,
             name: true,
+            imageUrl: true,
             itemType: true,
             trackingType: true,
             standardCost: true,
@@ -141,11 +137,6 @@ export class MaterialController {
     }
   }
 
-  /**
-   * POST /api/materials/availability
-   * "Can we build N of this?" — explodes the BOM and checks every leaf
-   * against free stock, reporting substitutes where the answer is no.
-   */
   async availability(req: Request, res: Response) {
     const operation = "Check material availability";
     try {
@@ -162,7 +153,6 @@ export class MaterialController {
     }
   }
 
-  /** GET /api/materials/consumption */
   async consumption(req: Request, res: Response) {
     const operation = "Material consumption report";
     try {
@@ -179,9 +169,6 @@ export class MaterialController {
     }
   }
 
-  // ------------------------------------------------- material requisitions
-
-  /** GET /api/materials/requisitions */
   async listRequisitions(req: Request, res: Response) {
     const operation = "List material requisitions";
     try {
@@ -226,7 +213,6 @@ export class MaterialController {
     }
   }
 
-  /** GET /api/materials/requisitions/:id */
   async getRequisition(req: Request, res: Response) {
     const operation = "Get material requisition";
     try {
@@ -261,8 +247,6 @@ export class MaterialController {
       });
       if (!requisition) throw new NotFoundError("Material requisition");
 
-      // Show the live position next to each line so the storekeeper knows
-      // whether the issue will actually go through.
       const availability = await getAvailability(
         requisition.lines.map(line => line.productId),
         requisition.warehouseId
@@ -284,7 +268,6 @@ export class MaterialController {
     }
   }
 
-  /** POST /api/materials/requisitions */
   async createRequisition(req: Request, res: Response) {
     const operation = "Create material requisition";
     try {
@@ -322,7 +305,7 @@ export class MaterialController {
                   String(line.productId),
                   `lines[${index}].productId`
                 ),
-                requestedQuantity: toDecimal(
+                requestedQuantity: requirePositive(
                   line.requestedQuantity,
                   `lines[${index}].requestedQuantity`
                 ),
@@ -341,12 +324,6 @@ export class MaterialController {
     }
   }
 
-  /**
-   * POST /api/materials/requisitions/:id/issue
-   * Issue stock against a requisition. Only what is asked for can be issued,
-   * and the issue is posted through the stock engine so cost layers and the
-   * ledger stay right.
-   */
   async issueRequisition(req: Request, res: Response) {
     const operation = "Issue material requisition";
     try {
@@ -408,8 +385,7 @@ export class MaterialController {
           if (!line)
             throw new NotFoundError(`Requisition line ${issue.lineId}`);
 
-          const quantity = toDecimal(issue.quantity, "quantity");
-          if (quantity.lessThanOrEqualTo(0)) continue;
+          const quantity = requirePositive(issue.quantity, "quantity");
 
           const outstanding = line.requestedQuantity.minus(line.issuedQuantity);
           if (quantity.greaterThan(outstanding)) {
@@ -500,7 +476,6 @@ export class MaterialController {
     }
   }
 
-  /** PATCH /api/materials/requisitions/:id/cancel */
   async cancelRequisition(req: Request, res: Response) {
     const operation = "Cancel material requisition";
     try {
@@ -532,11 +507,6 @@ export class MaterialController {
     }
   }
 
-  /**
-   * GET /api/materials/shortages
-   * Every material sitting under its safety stock, ordered by how deep the
-   * hole is. This is the buyer's daily worklist.
-   */
   async shortages(req: Request, res: Response) {
     const operation = "Material shortages";
     try {

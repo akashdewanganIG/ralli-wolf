@@ -3,6 +3,7 @@
 import React from "react";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -17,6 +18,9 @@ export type ContactEditValues = {
   email: string;
   phone?: string;
   position?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
 };
 
 type ContactEditModalProps = {
@@ -27,14 +31,14 @@ type ContactEditModalProps = {
   onSave: (values: ContactEditValues) => Promise<void> | void;
 };
 
-export const ContactEditModal: React.FC<ContactEditModalProps> = ({
+export function ContactEditModal({
   open,
   onOpenChange,
   initialValues,
   isSaving = false,
   onSave,
-}) => {
-  const [values, setValues] = React.useState<ContactEditValues>(initialValues);
+}: ContactEditModalProps) {
+  const [values, setValues] = React.useState(initialValues);
   const [saving, setSaving] = React.useState(false);
 
   React.useEffect(() => {
@@ -42,8 +46,7 @@ export const ContactEditModal: React.FC<ContactEditModalProps> = ({
   }, [open, initialValues]);
 
   const handleSave = async () => {
-    if (!values.name?.trim()) return;
-    if (!values.email?.trim()) return;
+    if (!values.name.trim() || !values.email.trim()) return;
     setSaving(true);
     try {
       await onSave(values);
@@ -53,78 +56,67 @@ export const ContactEditModal: React.FC<ContactEditModalProps> = ({
     }
   };
 
+  const disabled = saving || isSaving;
+  const field = (
+    id: string,
+    label: string,
+    key: keyof ContactEditValues,
+    options: { type?: string; maxLength?: number } = {}
+  ) => (
+    <div className="flex flex-col gap-2">
+      <Label htmlFor={id}>{label}</Label>
+      <Input
+        id={id}
+        type={options.type}
+        maxLength={options.maxLength}
+        value={values[key] || ""}
+        onChange={event =>
+          setValues(current => ({ ...current, [key]: event.target.value }))
+        }
+      />
+    </div>
+  );
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {(() => {
-        const DialogContentAny = DialogContent as any;
-        const DialogHeaderAny = DialogHeader as any;
-        const DialogTitleAny = DialogTitle as any;
-        const DialogFooterAny = DialogFooter as any;
-        return (
-          <DialogContentAny className="text-center">
-            <DialogHeaderAny className="text-center">
-              <DialogTitleAny className="text-center">
-                Edit Contact
-              </DialogTitleAny>
-            </DialogHeaderAny>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-2">
-                  <Label>Name</Label>
-                  <Input
-                    value={values.name}
-                    onChange={e =>
-                      setValues(v => ({ ...v, name: e.target.value }))
-                    }
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label>Email</Label>
-                  <Input
-                    type="email"
-                    value={values.email}
-                    onChange={e =>
-                      setValues(v => ({ ...v, email: e.target.value }))
-                    }
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label>Phone</Label>
-                  <Input
-                    value={values.phone || ""}
-                    onChange={e =>
-                      setValues(v => ({ ...v, phone: e.target.value }))
-                    }
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label>Position</Label>
-                  <Input
-                    value={values.position || ""}
-                    onChange={e =>
-                      setValues(v => ({ ...v, position: e.target.value }))
-                    }
-                  />
-                </div>
-              </div>
-            </div>
-            <DialogFooterAny>
-              <Button
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={saving || isSaving}
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleSave} disabled={saving || isSaving}>
-                {saving || isSaving ? "Saving..." : "Save"}
-              </Button>
-            </DialogFooterAny>
-          </DialogContentAny>
-        );
-      })()}
+      <DialogContent className="gap-0 overflow-hidden">
+        <DialogHeader>
+          <DialogTitle>Edit contact</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {field("contact-name", "Name", "name", { maxLength: 255 })}
+            {field("contact-email", "Email", "email", {
+              type: "email",
+              maxLength: 254,
+            })}
+            {field("contact-phone", "Phone", "phone", { maxLength: 32 })}
+            {field("contact-position", "Position", "position", {
+              maxLength: 255,
+            })}
+            {field("contact-city", "City", "city", { maxLength: 100 })}
+            {field("contact-state", "State", "state", { maxLength: 100 })}
+            {field("contact-pincode", "Pincode", "pincode", { maxLength: 6 })}
+          </div>
+        </DialogBody>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={disabled}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={disabled || !values.name.trim() || !values.email.trim()}
+          >
+            {disabled ? "Saving…" : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
     </Dialog>
   );
-};
+}
 
 export default ContactEditModal;

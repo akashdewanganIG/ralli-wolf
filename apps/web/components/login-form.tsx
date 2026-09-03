@@ -9,27 +9,15 @@ import { Button } from "@repo/ui/components/ui/button";
 import { Input } from "@repo/ui/components/ui/input";
 import { cn } from "@repo/ui/lib/utils";
 import ralliWolfLogo from "../app/assets/images/logos/ralli-wolf-logo.png";
-import { useAuth } from "../contexts/AuthContext";
-import { isSignedIn, type ApiError } from "../lib/api/types";
+import { useAuth } from "../contexts/auth-context";
+import type { ApiError } from "../lib/api/types";
 import { validateEmailBasic } from "../lib/validation";
 import { toast } from "@/lib/toast";
-import LoginShowcase from "./LoginShowcase";
-import LoginProviders from "./LoginProviders";
-import LoginFaq from "./LoginFaq";
-import LoginFooter from "./LoginFooter";
+import LoginShowcase from "./login-showcase";
+import LoginProviders from "./login-providers";
+import LoginFaq from "./login-faq";
+import LoginFooter from "./login-footer";
 
-/**
- * Sign-in has one step or two, and only the server knows which.
- *
- * An account with just a password is signed in by `/login` itself. An account
- * with a second factor gets a challenge to confirm. An account that turned its
- * password off starts at that challenge instead — which is why the password
- * field is optional here.
- *
- * The form must therefore read what came back rather than assume a challenge:
- * assuming one is what put an authenticator prompt in front of accounts that
- * had never enrolled an authenticator.
- */
 type Step = "credentials" | "code";
 type Factor = "totp" | "email";
 
@@ -41,13 +29,6 @@ function asApiError(error: unknown): ApiError | null {
     : null;
 }
 
-/**
- * Turns a sign-in failure into copy that names what the user can act on.
- *
- * Bad credentials stay deliberately vague: the API will not say whether the
- * email or the password was wrong, because that would let anyone test which
- * addresses hold accounts. Every other failure is named precisely.
- */
 function describeLoginError(error: unknown): {
   title: string;
   description: string;
@@ -110,7 +91,6 @@ function describeLoginError(error: unknown): {
   };
 }
 
-/** Same idea for the second step, where the failure modes are all about the code. */
 function describeOtpError(error: unknown): {
   title: string;
   description: string;
@@ -240,30 +220,23 @@ export function LoginForm({
     setIsSubmitting(true);
     clearError();
     try {
-      const result = await login({ email: normalizedEmail, password });
-
-      // An account whose only sign-in method is its password is already
-      // signed in at this point — there is no second step to show. Going to
-      // the code screen anyway is what made an authenticator prompt appear
-      // for accounts that have never enrolled one.
-      if (isSignedIn(result)) {
+      const challenge = await login({ email: normalizedEmail, password });
+      if (!challenge.mfaRequired) {
         toast.success("Welcome back", {
           description: "You are signed in to Ralli Wolf.",
         });
         router.replace(
-          result.user.role?.toUpperCase() === "SALES" ? "/sales-user" : "/"
+          challenge.user.role?.toUpperCase() === "SALES" ? "/sales-user" : "/"
         );
         return;
       }
-
-      const challenge = result;
       setMfaToken(challenge.mfaToken);
       setMaskedEmail(challenge.maskedEmail);
       setFactor(challenge.factor);
       setAvailableFactors(challenge.availableFactors ?? []);
       setOtp("");
       setStep("code");
-      // Only an emailed code has a delivery to wait on.
+
       setResendIn(challenge.factor === "email" ? RESEND_COOLDOWN_SECONDS : 0);
       if (challenge.factor === "email") {
         toast.info("Check your email for a code", {
@@ -352,17 +325,11 @@ export function LoginForm({
   return (
     <div
       className={cn(
-        // `login-page` scopes the page's own surface tokens; everything
-        // above the footer shares one flat colour.
         "login-page flex min-h-svh w-full flex-col bg-[var(--login-bg)]",
         className
       )}
       {...props}
     >
-      {/* Brand top-left, theme switch top-right, both clear of the form. */}
-
-      {/* Form on the left, video panel on the right. The panel is portrait,
-          so the right column is the narrower of the two. */}
       <div className="mx-auto grid min-h-svh w-full max-w-[100rem] flex-1 items-stretch gap-8 p-5 sm:p-6 lg:grid-cols-[minmax(0,0.78fr)_minmax(0,1.22fr)] lg:gap-6 lg:p-6">
         <main className="flex flex-col">
           <Image
@@ -374,7 +341,7 @@ export function LoginForm({
             className="h-6 w-auto shrink-0 self-start object-contain"
           />
 
-          <div className="my-auto w-full lg:pl-12">
+          <div className="my-auto w-full lg:pl-20 xl:pl-28">
             <div className="mx-auto w-full max-w-[22rem] pt-10">
               <div>
                 <h1 className="font-brand text-xl tracking-tight text-foreground">
@@ -382,9 +349,7 @@ export function LoginForm({
                     ? "Partner portal"
                     : "Confirm it is you"}
                 </h1>
-                {/* Only the second factor gets a sub-line, and only because it
-                    has to say where the code went. The first step stands on the
-                    heading alone. */}
+
                 {step === "credentials" ? null : (
                   <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
                     {factor === "totp" ? (

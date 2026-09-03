@@ -11,28 +11,12 @@ import {
 } from "@repo/ui/components/ui/tooltip";
 import { cn } from "@repo/ui/lib/utils";
 
-/**
- * The supplementary half of a "title + description" pair.
- *
- * Card descriptions explain what a panel is, which matters the first time and
- * is noise every time after. Folding them behind an info icon keeps the
- * explanation one hover away while giving the card back a single-line header.
- *
- * It is a real `<button>`, not a hoverable `<span>`: Radix opens the tooltip on
- * focus as well as hover, so the text is reachable from the keyboard, and
- * screen readers get it through `aria-label` whether or not the tooltip opens.
- *
- * Do not use this for anything a person needs in order to complete the action
- * in front of them — required formats, destructive warnings, and field
- * constraints stay visible.
- */
 export function InfoHint({
   label,
   className,
   side = "top",
   align = "center",
 }: {
-  /** The description that used to sit under the title. */
   label: React.ReactNode;
   className?: string;
   side?: "top" | "right" | "bottom" | "left";
@@ -40,7 +24,6 @@ export function InfoHint({
 }) {
   if (!label) return null;
 
-  // Screen readers get the text directly; the tooltip is the visual affordance.
   const accessibleText = typeof label === "string" ? label : undefined;
 
   return (
@@ -49,8 +32,6 @@ export function InfoHint({
         <TooltipTrigger asChild>
           <button
             type="button"
-            // `tabIndex` is implicit, but the explicit aria-label matters:
-            // without it the control announces as an unnamed button.
             aria-label={
               accessibleText
                 ? `More information: ${accessibleText}`

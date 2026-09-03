@@ -1,13 +1,3 @@
-/**
- * End-to-end verification of the sign-in and password-reset flows.
- *
- * Requires the API to be running (`npm run dev -w api`, or `npm start` against
- * a built dist). Creates one throwaway account, exercises the real HTTP routes
- * against the real database and the real mail transport, then removes the
- * account again — including when an assertion fails.
- *
- * Run with: npm run verify:auth -w api
- */
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 const prisma = new PrismaClient({ log: [] });
@@ -22,7 +12,7 @@ const ok = (c: boolean, label: string, extra = "") => {
   if (c) pass++;
   else fail++;
 };
-const post = async (p: string, body: any) => {
+const post = async (p: string, body: unknown) => {
   const r = await fetch(`${API}${p}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -41,7 +31,6 @@ const user = await prisma.user.create({
   },
 });
 try {
-  // A second factor is opt-in, so a new account starts on its password alone.
   ok(!user.emailOtpVerifiedAt, "new account starts with no second factor");
 
   const soloLogin = await post("/api/auth/login", { email, password });
@@ -55,8 +44,6 @@ try {
     "no code is demanded when no second factor is enrolled"
   );
 
-  // Everything below exercises the emailed-code machinery, so enrol it first
-  // rather than relying on a default that no longer exists.
   await prisma.user.update({
     where: { id: user.id },
     data: { emailOtpVerifiedAt: new Date() },

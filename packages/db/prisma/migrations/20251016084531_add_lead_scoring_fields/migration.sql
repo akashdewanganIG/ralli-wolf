@@ -1,4 +1,4 @@
--- AlterTable
+
 ALTER TABLE "leads" ADD COLUMN     "company_location" TEXT,
 ADD COLUMN     "company_name" TEXT,
 ADD COLUMN     "completeness_score" INTEGER NOT NULL DEFAULT 0,

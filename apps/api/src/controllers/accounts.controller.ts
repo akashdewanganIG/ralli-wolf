@@ -4,18 +4,34 @@ import {
   handleError,
   handleValidationError,
   handleNotFoundError,
-} from "../utils/errorHandler.js";
-import { buildFullName } from "../utils/nameHelpers.js";
+} from "../utils/error-handler.js";
+import { buildFullName } from "../utils/name-helpers.js";
+import {
+  normalizeHttpUrl,
+  parseBoundedInteger,
+  parsePositiveInteger,
+} from "../utils/validators.js";
+import { Prisma } from "@prisma/client";
 
 export class AccountController {
   async getAllAccounts(req: Request, res: Response) {
     try {
-      const pageParam = req.query.page as string;
-      const limitParam = req.query.limit as string;
-      const page = Math.max(1, parseInt(pageParam) || 1);
-      const requestedLimit = parseInt(limitParam);
+      const page =
+        req.query.page === undefined
+          ? 1
+          : parseBoundedInteger(req.query.page, 1, 1_000_000);
       const limit =
-        requestedLimit >= 1 && requestedLimit <= 100 ? requestedLimit : 10;
+        req.query.limit === undefined
+          ? 10
+          : parseBoundedInteger(req.query.limit, 1, 100);
+      if (page === null || limit === null) {
+        return handleValidationError(
+          res,
+          "page must be positive and limit must be between 1 and 100",
+          undefined,
+          "Get all accounts"
+        );
+      }
       const skip = (page - 1) * limit;
 
       const totalItems = await prisma.account.count();
@@ -61,8 +77,8 @@ export class AccountController {
 
   async getAccountDetails(req: Request, res: Response) {
     try {
-      const { accountId } = req.params;
-      if (!accountId) {
+      const accountId = parsePositiveInteger(req.params.accountId);
+      if (accountId === null) {
         return handleValidationError(
           res,
           "Account ID is required",
@@ -72,7 +88,7 @@ export class AccountController {
       }
 
       const account = await prisma.account.findUnique({
-        where: { id: parseInt(accountId) },
+        where: { id: accountId },
         include: {
           contacts: {
             include: {
@@ -128,10 +144,10 @@ export class AccountController {
 
   async searchAccountContacts(req: Request, res: Response) {
     try {
-      const { accountId } = req.params;
+      const accountId = parsePositiveInteger(req.params.accountId);
       const { q } = req.query;
 
-      if (!accountId) {
+      if (accountId === null) {
         return handleValidationError(
           res,
           "Account ID is required",
@@ -140,7 +156,7 @@ export class AccountController {
         );
       }
 
-      if (!q) {
+      if (typeof q !== "string" || !q.trim() || q.trim().length > 200) {
         return handleValidationError(
           res,
           'Search query "q" is required',
@@ -151,14 +167,15 @@ export class AccountController {
 
       const contacts = await prisma.contact.findMany({
         where: {
-          accountId: parseInt(accountId),
+          accountId,
           OR: [
-            { name: { contains: q as string, mode: "insensitive" } },
-            { email: { contains: q as string, mode: "insensitive" } },
-            { phone: { contains: q as string, mode: "insensitive" } },
-            { position: { contains: q as string, mode: "insensitive" } },
+            { name: { contains: q.trim(), mode: "insensitive" } },
+            { email: { contains: q.trim(), mode: "insensitive" } },
+            { phone: { contains: q.trim(), mode: "insensitive" } },
+            { position: { contains: q.trim(), mode: "insensitive" } },
           ],
         },
+        take: 50,
         include: {
           account: true,
           convertedLeads: {
@@ -175,9 +192,6 @@ export class AccountController {
         },
       });
 
-      console.log(
-        `Search found ${contacts.length} contacts for account ${accountId} with query: "${q}"`
-      );
       const normalizedContacts = contacts.map(contact => ({
         ...contact,
         convertedLeads: contact.convertedLeads.map(lead => ({
@@ -188,7 +202,6 @@ export class AccountController {
 
       res.json(normalizedContacts);
     } catch (error) {
-      console.error("Search Account Contacts Error:", error);
       handleError(error, res, "Search account contacts");
     }
   }
@@ -197,7 +210,7 @@ export class AccountController {
     try {
       const { q } = req.query;
 
-      if (!q) {
+      if (typeof q !== "string" || !q.trim() || q.trim().length > 200) {
         return handleValidationError(
           res,
           'Search query "q" is required',
@@ -209,11 +222,12 @@ export class AccountController {
       const accounts = await prisma.account.findMany({
         where: {
           OR: [
-            { name: { contains: q as string, mode: "insensitive" } },
-            { industry: { contains: q as string, mode: "insensitive" } },
-            { website: { contains: q as string, mode: "insensitive" } },
+            { name: { contains: q.trim(), mode: "insensitive" } },
+            { industry: { contains: q.trim(), mode: "insensitive" } },
+            { website: { contains: q.trim(), mode: "insensitive" } },
           ],
         },
+        take: 50,
         include: {
           contacts: {
             select: {
@@ -228,30 +242,16 @@ export class AccountController {
         },
       });
 
-      console.log(
-        `Search found ${accounts.length} accounts with query: "${q}"`
-      );
       res.json(accounts);
     } catch (error) {
-      console.error("Search Accounts Error:", error);
       handleError(error, res, "Search accounts");
     }
   }
 
   async updateAccount(req: Request, res: Response) {
     try {
-      const { id } = req.params;
-      if (!id) {
-        return handleValidationError(
-          res,
-          "Account ID is required",
-          "id",
-          "Update account"
-        );
-      }
-
-      const accountId = parseInt(id);
-      if (isNaN(accountId)) {
+      const accountId = parsePositiveInteger(req.params.id);
+      if (accountId === null) {
         return handleValidationError(
           res,
           "Account ID must be a valid number",
@@ -262,11 +262,35 @@ export class AccountController {
 
       const { name, website, phone, description, industry } = req.body || {};
 
-      // Minimal validation for common fields
+      if (
+        [name, website, phone, description, industry].every(
+          value => value === undefined
+        )
+      ) {
+        return handleValidationError(
+          res,
+          "At least one account field is required",
+          undefined,
+          "Update account"
+        );
+      }
+
       if (name !== undefined && typeof name !== "string") {
         return handleValidationError(
           res,
           "Name must be a string",
+          "name",
+          "Update account"
+        );
+      }
+      const normalizedName = typeof name === "string" ? name.trim() : undefined;
+      if (
+        normalizedName !== undefined &&
+        (normalizedName.length < 1 || normalizedName.length > 255)
+      ) {
+        return handleValidationError(
+          res,
+          "Name must contain between 1 and 255 characters",
           "name",
           "Update account"
         );
@@ -279,10 +303,37 @@ export class AccountController {
           "Update account"
         );
       }
+      let normalizedWebsite: string | null | undefined;
+      if (website !== undefined) {
+        try {
+          normalizedWebsite = normalizeHttpUrl(website);
+        } catch (error) {
+          return handleValidationError(
+            res,
+            error instanceof Error ? error.message : "Website is invalid",
+            "website",
+            "Update account"
+          );
+        }
+      }
       if (phone !== undefined && typeof phone !== "string") {
         return handleValidationError(
           res,
           "Phone must be a string",
+          "phone",
+          "Update account"
+        );
+      }
+      const normalizedPhone =
+        typeof phone === "string" ? phone.trim() || null : undefined;
+      if (
+        typeof normalizedPhone === "string" &&
+        (normalizedPhone.length > 32 ||
+          !/^[0-9+().\-\s]+$/.test(normalizedPhone))
+      ) {
+        return handleValidationError(
+          res,
+          "Phone must contain at most 32 valid phone characters",
           "phone",
           "Update account"
         );
@@ -295,6 +346,21 @@ export class AccountController {
           "Update account"
         );
       }
+      const normalizedDescription =
+        typeof description === "string"
+          ? description.trim() || null
+          : undefined;
+      if (
+        typeof normalizedDescription === "string" &&
+        normalizedDescription.length > 5000
+      ) {
+        return handleValidationError(
+          res,
+          "Description cannot exceed 5000 characters",
+          "description",
+          "Update account"
+        );
+      }
       if (industry !== undefined && typeof industry !== "string") {
         return handleValidationError(
           res,
@@ -303,24 +369,42 @@ export class AccountController {
           "Update account"
         );
       }
+      const normalizedIndustry =
+        typeof industry === "string" ? industry.trim() || null : undefined;
+      if (
+        typeof normalizedIndustry === "string" &&
+        normalizedIndustry.length > 255
+      ) {
+        return handleValidationError(
+          res,
+          "Industry cannot exceed 255 characters",
+          "industry",
+          "Update account"
+        );
+      }
+
+      const data: Prisma.AccountUpdateInput = {};
+      if (normalizedName !== undefined) data.name = normalizedName;
+      if (website !== undefined) data.website = normalizedWebsite;
+      if (normalizedPhone !== undefined) data.phone = normalizedPhone;
+      if (normalizedDescription !== undefined)
+        data.description = normalizedDescription;
+      if (normalizedIndustry !== undefined) data.industry = normalizedIndustry;
 
       const updated = await prisma.account.update({
         where: { id: accountId },
-        data: {
-          ...(name !== undefined ? { name } : {}),
-          ...(website !== undefined ? { website } : {}),
-          ...(phone !== undefined ? { phone } : {}),
-          ...(description !== undefined ? { description } : {}),
-          ...(industry !== undefined ? { industry } : {}),
-        },
+        data,
         include: {
           contacts: true,
         },
       });
 
       return res.json(updated);
-    } catch (error: any) {
-      if (error?.code === "P2025") {
+    } catch (error: unknown) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2025"
+      ) {
         return handleNotFoundError(res, "Account", "Update account");
       }
       handleError(error, res, "Update account");

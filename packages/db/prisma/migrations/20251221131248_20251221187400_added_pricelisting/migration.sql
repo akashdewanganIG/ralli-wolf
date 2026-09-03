@@ -1,7 +1,7 @@
--- AlterTable
+
 ALTER TABLE "products" ADD COLUMN     "component" BOOLEAN NOT NULL DEFAULT false;
 
--- CreateTable
+
 CREATE TABLE "price_books" (
     "id" SERIAL NOT NULL,
     "price_book_name" TEXT NOT NULL,
@@ -13,7 +13,7 @@ CREATE TABLE "price_books" (
     CONSTRAINT "price_books_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
+
 CREATE TABLE "price_book_entries" (
     "id" SERIAL NOT NULL,
     "list_price" DOUBLE PRECISION NOT NULL,
@@ -26,7 +26,7 @@ CREATE TABLE "price_book_entries" (
     CONSTRAINT "price_book_entries_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
+
 CREATE TABLE "product_options" (
     "id" SERIAL NOT NULL,
     "configured_product" TEXT NOT NULL,
@@ -40,17 +40,17 @@ CREATE TABLE "product_options" (
     CONSTRAINT "product_options_pkey" PRIMARY KEY ("id")
 );
 
--- CreateIndex
+
 CREATE UNIQUE INDEX "price_book_entries_product_id_price_book_id_key" ON "price_book_entries"("product_id", "price_book_id");
 
--- AddForeignKey
+
 ALTER TABLE "price_book_entries" ADD CONSTRAINT "price_book_entries_product_id_fkey" FOREIGN KEY ("product_id") REFERENCES "products"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- AddForeignKey
+
 ALTER TABLE "price_book_entries" ADD CONSTRAINT "price_book_entries_price_book_id_fkey" FOREIGN KEY ("price_book_id") REFERENCES "price_books"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- AddForeignKey
+
 ALTER TABLE "product_options" ADD CONSTRAINT "product_options_product_id_fkey" FOREIGN KEY ("product_id") REFERENCES "products"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
--- AddForeignKey
+
 ALTER TABLE "product_options" ADD CONSTRAINT "product_options_parent_id_fkey" FOREIGN KEY ("parent_id") REFERENCES "product_options"("id") ON DELETE SET NULL ON UPDATE CASCADE;

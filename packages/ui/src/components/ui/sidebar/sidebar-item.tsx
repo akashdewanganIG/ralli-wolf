@@ -30,7 +30,7 @@ export function SidebarItem({
   const { open } = useSidebar();
   const className = cn(
     "flex h-9 min-h-9 items-center rounded-md text-[0.8125rem] font-medium text-sidebar-foreground outline-none transition-[background-color,color] duration-150 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring/25",
-    // Collapsed rail: centre the icon instead of leaving it hugging the left edge.
+
     open ? "gap-2.5 px-2.5" : "justify-center px-0",
     active &&
       "bg-sidebar-primary text-sidebar-primary-foreground font-semibold hover:bg-sidebar-primary hover:text-sidebar-primary-foreground"

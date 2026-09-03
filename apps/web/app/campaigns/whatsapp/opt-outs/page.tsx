@@ -10,6 +10,7 @@ import {
 } from "@repo/ui/components/ui/card";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -44,10 +45,6 @@ interface OptOut {
 
 interface OptOutStats {
   total: number;
-  byChannel: Array<{
-    channel: string;
-    count: number;
-  }>;
 }
 
 export default function OptOutsPage() {
@@ -62,10 +59,8 @@ export default function OptOutsPage() {
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
   const [selectedOptOut, setSelectedOptOut] = useState<OptOut | null>(null);
 
-  // Form state for adding opt-out
   const [newOptOut, setNewOptOut] = useState({
     phone: "",
-    channel: "whatsapp",
     reason: "",
   });
 
@@ -77,7 +72,6 @@ export default function OptOutsPage() {
         take: itemsPerPage.toString(),
         sortBy: "optedOutAt",
         sortOrder: "desc",
-        channel: "whatsapp", // Always filter by WhatsApp
       });
 
       if (searchQuery) {
@@ -90,7 +84,6 @@ export default function OptOutsPage() {
       setOptOuts(data.data || []);
       setTotalCount(data.pagination.total);
     } catch (error) {
-      console.error("Error fetching opt-outs:", error);
       toast.error(error, "Error");
     }
   };
@@ -99,8 +92,8 @@ export default function OptOutsPage() {
     try {
       const response = await apiClient.get("/api/whatsapp/optouts/stats");
       setStats(response.data);
-    } catch (error) {
-      console.error("Error fetching stats:", error);
+    } catch {
+      setStats(null);
     }
   };
 
@@ -115,11 +108,10 @@ export default function OptOutsPage() {
 
       toast.success("Phone number added to opt-out list");
       setAddDialogOpen(false);
-      setNewOptOut({ phone: "", channel: "whatsapp", reason: "" });
+      setNewOptOut({ phone: "", reason: "" });
       fetchOptOuts();
       fetchStats();
     } catch (error) {
-      console.error("Error adding opt-out:", error);
       toast.error(error, "Error");
     }
   };
@@ -131,7 +123,6 @@ export default function OptOutsPage() {
       await apiClient.delete("/api/whatsapp/optout", {
         data: {
           phone: selectedOptOut.phone,
-          channel: selectedOptOut.channel,
         },
       });
 
@@ -141,7 +132,6 @@ export default function OptOutsPage() {
       fetchOptOuts();
       fetchStats();
     } catch (error) {
-      console.error("Error removing opt-out:", error);
       toast.error(error, "Error");
     }
   };
@@ -205,14 +195,14 @@ export default function OptOutsPage() {
                 Add Opt-Out
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="gap-0 overflow-hidden">
               <DialogHeader>
                 <DialogTitle>Add Phone to WhatsApp Opt-Out List</DialogTitle>
                 <DialogDescription>
                   Manually add a phone number to the WhatsApp opt-out list
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-4">
+              <DialogBody className="space-y-3">
                 <div>
                   <Label htmlFor="phone">Phone Number</Label>
                   <Input
@@ -238,7 +228,7 @@ export default function OptOutsPage() {
                     }
                   />
                 </div>
-              </div>
+              </DialogBody>
               <DialogFooter>
                 <Button
                   variant="outline"
@@ -253,7 +243,6 @@ export default function OptOutsPage() {
         }
       />
 
-      {/* Stats Card */}
       {stats && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -263,10 +252,7 @@ export default function OptOutsPage() {
             <Ban className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-4xl font-bold">
-              {stats.byChannel.find(c => c.channel === "whatsapp")?.count ||
-                stats.total}
-            </div>
+            <div className="text-4xl font-bold">{stats.total}</div>
             <p className="text-xs text-muted-foreground mt-2">
               Phone numbers that have opted out of WhatsApp communications
             </p>
@@ -274,7 +260,6 @@ export default function OptOutsPage() {
         </Card>
       )}
 
-      {/* Search */}
       <Card>
         <CardHeader>
           <CardTitle>Search Opt-Outs</CardTitle>
@@ -299,7 +284,6 @@ export default function OptOutsPage() {
         </CardContent>
       </Card>
 
-      {/* Data Table */}
       <DataTable
         data={optOuts}
         columns={columns}
@@ -328,9 +312,8 @@ export default function OptOutsPage() {
         )}
       />
 
-      {/* Remove Opt-Out Dialog */}
       <Dialog open={removeDialogOpen} onOpenChange={setRemoveDialogOpen}>
-        <DialogContent>
+        <DialogContent className="gap-0 overflow-hidden">
           <DialogHeader>
             <DialogTitle>Remove Opt-Out</DialogTitle>
             <DialogDescription>
@@ -338,17 +321,19 @@ export default function OptOutsPage() {
               list? They will be able to receive communications again.
             </DialogDescription>
           </DialogHeader>
-          {selectedOptOut && (
-            <div className="space-y-2">
-              <p>
-                <strong>Phone:</strong> +{selectedOptOut.phone}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                This will remove the phone number from the WhatsApp opt-out
-                list.
-              </p>
-            </div>
-          )}
+          <DialogBody>
+            {selectedOptOut && (
+              <div className="space-y-2">
+                <p>
+                  <strong>Phone:</strong> +{selectedOptOut.phone}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  This will remove the phone number from the WhatsApp opt-out
+                  list.
+                </p>
+              </div>
+            )}
+          </DialogBody>
           <DialogFooter>
             <Button
               variant="outline"

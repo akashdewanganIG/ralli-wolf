@@ -127,29 +127,10 @@ import {
 } from "@phosphor-icons/react/ssr";
 import type { Icon, IconProps, IconWeight } from "@phosphor-icons/react";
 
-/**
- * The single source of truth for every icon in the product.
- *
- * Nothing outside this file may import from an icon package directly — import
- * the named icon from `@repo/ui/icons` instead. Swapping a glyph, or the whole
- * icon set, then happens in one place.
- *
- * Every icon renders in Phosphor’s **duotone** weight by default. Pass an
- * explicit `weight` prop to opt a single instance out.
- */
-
 export type { IconProps, IconWeight };
 
-/** The shape every exported icon conforms to. Use this to type icon props. */
 export type IconComponent = Icon;
 
-/**
- * Wraps a Phosphor icon so it defaults to the duotone weight.
- *
- * Each call carries a pure annotation so bundlers can drop the icons a
- * given entry point never references, despite this barrel re-exporting all of
- * them.
- */
 function duotone(Base: Icon, displayName: string): IconComponent {
   const Wrapped = React.forwardRef<SVGSVGElement, IconProps>(
     ({ weight = "duotone", ...props }, ref) => (

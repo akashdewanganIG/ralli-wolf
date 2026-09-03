@@ -7,6 +7,7 @@ import { Badge } from "@repo/ui/components/ui/badge";
 import { Button } from "@repo/ui/components/ui/button";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -39,7 +40,6 @@ interface UserStats {
   totalRemaining: number;
 }
 
-// Helper function to format region for display
 const formatRegion = (region?: string): string => {
   if (!region) return "-";
   const regionMap: Record<string, string> = {
@@ -68,10 +68,10 @@ export function AssignLeadsModal({
   );
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [statsWarning, setStatsWarning] = React.useState<string | null>(null);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedRegion, setSelectedRegion] = React.useState<string>("all");
 
-  // Fetch sales users and their stats when modal opens
   React.useEffect(() => {
     if (open) {
       fetchAssignableUsersAndStats();
@@ -82,6 +82,7 @@ export function AssignLeadsModal({
     try {
       setLoading(true);
       setError(null);
+      setStatsWarning(null);
 
       const usersResponse = await userService.getAllUsers({ role: "SALES" });
       const users = usersResponse?.data || [];
@@ -113,15 +114,13 @@ export function AssignLeadsModal({
           !Array.isArray(assignmentStatsRaw) &&
           assignmentStatsRaw !== undefined
         ) {
-          console.warn(
-            "Unexpected assignment stats response:",
-            assignmentStatsRaw
+          setStatsWarning(
+            "Workload statistics are unavailable; assignments still work."
           );
         }
-      } catch (statsError) {
-        console.warn(
-          "Failed to load assignment stats. Falling back to zeroed stats.",
-          statsError
+      } catch {
+        setStatsWarning(
+          "Workload statistics are unavailable; assignments still work."
         );
       }
 
@@ -138,8 +137,6 @@ export function AssignLeadsModal({
 
       setUserStats(stats);
     } catch (err) {
-      console.error("Failed to fetch users and stats for assignment:", err);
-
       const apiError = err as ApiError | undefined;
       if (apiError?.status === 403) {
         setError("You do not have permission to assign leads.");
@@ -166,16 +163,13 @@ export function AssignLeadsModal({
     }
   };
 
-  // Filter users based on search query and region
   const filteredUsers = React.useMemo(() => {
     let filtered = assignableUsers;
 
-    // Filter by region first
     if (selectedRegion && selectedRegion !== "all") {
       filtered = filtered.filter(user => user.region === selectedRegion);
     }
 
-    // Then filter by search query
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(user => {
@@ -197,21 +191,20 @@ export function AssignLeadsModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[37.5rem]">
-        <div>
-          <DialogHeader className="text-center">
-            <DialogTitle className="flex items-center justify-center gap-2">
-              <Users className="h-5 w-5" />
-              Assign Leads to User
-            </DialogTitle>
-            <DialogDescription className="text-center">
-              Select a user (Admin or Sales) to assign {selectedLeadsCount}{" "}
-              selected lead{selectedLeadsCount > 1 ? "s" : ""} to.
-            </DialogDescription>
-          </DialogHeader>
+      <DialogContent className="gap-0 overflow-hidden sm:max-w-[37.5rem]">
+        <DialogHeader className="text-center">
+          <DialogTitle className="flex items-center justify-center gap-2">
+            <Users className="h-5 w-5" />
+            Assign Leads to User
+          </DialogTitle>
+          <DialogDescription className="text-center">
+            Select a sales user to assign {selectedLeadsCount} selected lead
+            {selectedLeadsCount > 1 ? "s" : ""} to.
+          </DialogDescription>
+        </DialogHeader>
 
-          {/* Search Bar and Region Filter */}
-          <div className="space-y-3 mt-4">
+        <DialogBody className="space-y-3">
+          <div className="space-y-3">
             <div className="relative">
               <Search className="absolute left-3 inset-y-0 my-auto h-fit h-4 w-4 text-muted-foreground" />
               <Input
@@ -249,7 +242,7 @@ export function AssignLeadsModal({
             </div>
           </div>
 
-          <div className="space-y-2 max-h-[25rem] overflow-y-auto mt-4">
+          <div className="space-y-2">
             {loading && (
               <div className="flex items-center justify-center py-8"></div>
             )}
@@ -265,6 +258,12 @@ export function AssignLeadsModal({
                 >
                   Try Again
                 </Button>
+              </div>
+            )}
+
+            {!error && statsWarning && (
+              <div className="rounded-lg border border-warning-border bg-warning-surface p-3 text-sm text-warning-foreground">
+                {statsWarning}
               </div>
             )}
 
@@ -357,40 +356,41 @@ export function AssignLeadsModal({
                         </div>
                       </div>
 
-                      {/* Statistics - Horizontal Layout */}
-                      <div className="flex items-center gap-4 text-xs">
-                        <div className="flex flex-col items-center">
-                          <span className="text-muted-foreground">Total</span>
-                          <span className="font-semibold">
-                            {stats.totalLeads}
-                          </span>
+                      {!statsWarning && (
+                        <div className="flex items-center gap-4 text-xs">
+                          <div className="flex flex-col items-center">
+                            <span className="text-muted-foreground">Total</span>
+                            <span className="font-semibold">
+                              {stats.totalLeads}
+                            </span>
+                          </div>
+                          <div className="flex flex-col items-center">
+                            <span className="text-muted-foreground">
+                              Converted
+                            </span>
+                            <span className="font-semibold text-success-foreground">
+                              {stats.totalConverted}
+                            </span>
+                          </div>
+                          <div className="flex flex-col items-center">
+                            <span className="text-muted-foreground">
+                              Remaining
+                            </span>
+                            <span className="font-semibold text-warning-foreground">
+                              {stats.totalRemaining}
+                            </span>
+                          </div>
+                          <div className="flex flex-col items-center">
+                            <span className="text-muted-foreground flex items-center gap-1">
+                              <TrendingUp className="h-3 w-3" />
+                              Rate
+                            </span>
+                            <span className="font-semibold">
+                              {stats.conversionRate.toFixed(1)}%
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex flex-col items-center">
-                          <span className="text-muted-foreground">
-                            Converted
-                          </span>
-                          <span className="font-semibold text-success-foreground">
-                            {stats.totalConverted}
-                          </span>
-                        </div>
-                        <div className="flex flex-col items-center">
-                          <span className="text-muted-foreground">
-                            Remaining
-                          </span>
-                          <span className="font-semibold text-warning-foreground">
-                            {stats.totalRemaining}
-                          </span>
-                        </div>
-                        <div className="flex flex-col items-center">
-                          <span className="text-muted-foreground flex items-center gap-1">
-                            <TrendingUp className="h-3 w-3" />
-                            Rate
-                          </span>
-                          <span className="font-semibold">
-                            {stats.conversionRate.toFixed(1)}%
-                          </span>
-                        </div>
-                      </div>
+                      )}
 
                       {selectedSalesPerson === person.id && (
                         <div className="h-4 w-4 rounded-full bg-primary flex items-center justify-center">
@@ -402,30 +402,30 @@ export function AssignLeadsModal({
                 );
               })}
           </div>
+        </DialogBody>
 
-          <DialogFooter className="flex justify-center gap-2 mt-4">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleAssign}
-              disabled={!selectedSalesPerson || loading}
-            >
-              Assign to{" "}
-              {selectedSalesPerson
-                ? (() => {
-                    const p = assignableUsers.find(
-                      p => p.id === selectedSalesPerson
-                    );
-                    return (
-                      [p?.firstName, p?.lastName].filter(Boolean).join(" ") ||
-                      "User"
-                    );
-                  })()
-                : "User"}
-            </Button>
-          </DialogFooter>
-        </div>
+        <DialogFooter className="flex justify-center gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleAssign}
+            disabled={!selectedSalesPerson || loading}
+          >
+            Assign to{" "}
+            {selectedSalesPerson
+              ? (() => {
+                  const p = assignableUsers.find(
+                    p => p.id === selectedSalesPerson
+                  );
+                  return (
+                    [p?.firstName, p?.lastName].filter(Boolean).join(" ") ||
+                    "User"
+                  );
+                })()
+              : "User"}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

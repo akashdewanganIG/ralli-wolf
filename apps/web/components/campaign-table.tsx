@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Badge,
   Button,
   DropdownMenu,
   DropdownMenuContent,
@@ -25,17 +24,17 @@ export interface Campaign {
   name: string;
   channel: "Email" | "WhatsApp";
   status: string;
-  startDate: string;
-  startDateRaw?: string; // Raw ISO date string for filtering
-  endDate: string;
+  startDate?: string;
+  startDateRaw?: string;
+  endDate?: string;
   createdAt?: string;
   createdBy: string;
   subject?: string;
-  fromEmail?: string; // Email-specific field
-  replyToEmail?: string; // Email-specific field
+  fromEmail?: string;
+  replyToEmail?: string;
   previewText?: string;
-  templateName?: string; // WhatsApp template name
-  numMessages: number; // WhatsApp-specific field
+  templateName?: string;
+  numMessages: number;
   openRate: number;
   clickRate: number;
   deliveryStats?: {
@@ -49,7 +48,6 @@ export interface Campaign {
   };
 }
 
-// Helper function to format time and date
 const formatTimeThenDate = (value?: string) => {
   if (!value) return "-";
   const d = new Date(value);
@@ -66,7 +64,6 @@ const formatTimeThenDate = (value?: string) => {
   return `${time} · ${date}`;
 };
 
-// Column configuration helper function
 const getCampaignColumns = (
   channel: "Email" | "WhatsApp"
 ): TableColumn<Campaign>[] => {
@@ -110,7 +107,6 @@ const getCampaignColumns = (
     ];
   }
 
-  // Email columns
   return [
     { key: "name", label: "Campaign Name" },
     {
@@ -119,7 +115,7 @@ const getCampaignColumns = (
       render: (_v, item) => <StatusBadge status={item.status} />,
     },
     {
-      key: "templateName",
+      key: "subject",
       label: "Subject / Template",
       className: "text-muted-foreground",
       render: v => v || "-",
@@ -177,6 +173,9 @@ interface CampaignTableProps {
   subtitle?: string;
   titleClassName?: string;
   headerActions?: React.ReactNode;
+  statusOptions?: ReadonlyArray<{ value: string; label: string }>;
+  searchEnabled?: boolean;
+  dateFiltersEnabled?: boolean;
 }
 
 export const CampaignTable: React.FC<CampaignTableProps> = ({
@@ -203,13 +202,14 @@ export const CampaignTable: React.FC<CampaignTableProps> = ({
   subtitle,
   titleClassName,
   headerActions,
+  statusOptions,
+  searchEnabled = true,
+  dateFiltersEnabled = true,
 }) => {
-  // Derive channel type from channelFilter for backward compatibility
   const channel: "Email" | "WhatsApp" =
     channelFilter === "WhatsApp" ? "WhatsApp" : "Email";
   const columns = React.useMemo(() => getCampaignColumns(channel), [channel]);
 
-  // Show skeleton when loading
   if (isLoading) {
     return <TablePageSkeleton filters={1} rows={10} />;
   }
@@ -218,11 +218,13 @@ export const CampaignTable: React.FC<CampaignTableProps> = ({
     <SearchFilterToolbar
       className="min-w-0 flex-1 md:flex-nowrap"
       search={
-        <SearchInput
-          placeholder="Search campaign..."
-          value={searchQuery}
-          onChange={e => onSearchChange?.(e.target.value)}
-        />
+        searchEnabled ? (
+          <SearchInput
+            placeholder="Search campaign..."
+            value={searchQuery}
+            onChange={e => onSearchChange?.(e.target.value)}
+          />
+        ) : undefined
       }
       filters={
         onFilterChange ? (
@@ -240,6 +242,8 @@ export const CampaignTable: React.FC<CampaignTableProps> = ({
             }
             onClearFilters={() => onFilterChange({})}
             onApplyFilters={newFilters => onFilterChange(newFilters)}
+            statusOptions={statusOptions}
+            showDateFilters={dateFiltersEnabled}
           />
         ) : undefined
       }
@@ -248,7 +252,9 @@ export const CampaignTable: React.FC<CampaignTableProps> = ({
 
   const renderActions = (item: Campaign) => {
     const isDraft = item.status?.toLowerCase() === "draft";
-    const isPending = item.status?.toLowerCase() === "pending";
+    const isPending = ["pending", "queued"].includes(
+      item.status?.toLowerCase()
+    );
     const canEdit = isDraft || isPending;
     const isWhatsApp = item.channel?.toLowerCase() === "whatsapp";
     return (
@@ -299,7 +305,9 @@ export const CampaignTable: React.FC<CampaignTableProps> = ({
     <div className="space-y-4">
       <PageHeader
         title={title ?? "Campaign Management"}
-        description={subtitle ?? "Your marketing campaigns and how each one is performing."}
+        description={
+          subtitle ?? "Your marketing campaigns and how each one is performing."
+        }
         titleClassName={cn(
           !titleClassName && "font-bold",
           titleClassName,

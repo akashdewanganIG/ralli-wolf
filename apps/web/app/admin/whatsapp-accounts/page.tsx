@@ -20,11 +20,11 @@ export default function WhatsappAccountsAdminPage() {
   }, []);
 
   const create = async () => {
-    const payload: any = {
+    const payload = {
       displayName: form.displayName,
       sourceHandle: form.sourceHandle,
-      credentialsJson: { apiKey: form.apiKey },
-      externalIdsJson: { appName: form.appName },
+      apiKey: form.apiKey,
+      appName: form.appName,
     };
     await whatsappService.createAccount(payload);
     setForm({ displayName: "", sourceHandle: "", apiKey: "", appName: "" });

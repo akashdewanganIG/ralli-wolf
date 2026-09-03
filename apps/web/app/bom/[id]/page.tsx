@@ -7,7 +7,7 @@ import { Input } from "@repo/ui/components/ui/input";
 import Link from "next/link";
 import { Alert } from "@repo/ui/components/ui/alert";
 import { useParams, useSearchParams } from "next/navigation";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   DetailRow,
   ErrorBanner,
@@ -21,14 +21,14 @@ import {
 import {
   ProductPicker,
   type PickedProduct,
-} from "@/components/supply-chain/ProductPicker";
-import { BomRouting } from "@/components/supply-chain/BomRouting";
+} from "@/components/supply-chain/product-picker";
+import { BomRouting } from "@/components/supply-chain/bom-routing";
 import {
   useBom,
   useBomExplosion,
   useBomHistory,
   useBomMutations,
-} from "@/hooks/useSupplyChain";
+} from "@/hooks/use-supply-chain";
 import {
   formatDate,
   formatDateTime,
@@ -39,13 +39,14 @@ import {
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { Tag } from "@repo/ui/components/ui/tag";
 import { CategorySwitcher } from "@repo/ui/components/ui/category-switcher";
+import { useAuth } from "@/contexts/auth-context";
 
 export default function BomDetailPage() {
+  const { user } = useAuth();
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const bomId = Number(params.id);
-  // The planning board links straight here when an order has no routing, so
-  // honour the tab it asks for rather than dropping the reader on Structure.
+
   const requestedTab = searchParams.get("tab");
   const [tab, setTab] = useState<
     "structure" | "routing" | "explosion" | "costing" | "history"
@@ -130,17 +131,61 @@ export default function BomDetailPage() {
                     type="button"
                     disabled={changeStatus.isPending || components.length === 0}
                     onClick={() =>
-                      changeStatus.mutate({ id: bomId, status: "ACTIVE" })
+                      changeStatus.mutate({
+                        id: bomId,
+                        status: "PENDING_APPROVAL",
+                      })
                     }
                     className="px-3 whitespace-nowrap"
                     title={
                       components.length === 0
-                        ? "Add at least one component before activating"
+                        ? "Add at least one component before submitting"
                         : undefined
                     }
                   >
-                    Activate
+                    Submit for approval
                   </Button>
+                )}
+                {bom.status === "PENDING_APPROVAL" && (
+                  <>
+                    <Button
+                      type="button"
+                      disabled={
+                        changeStatus.isPending || user?.id === bom.createdBy.id
+                      }
+                      onClick={() =>
+                        changeStatus.mutate({ id: bomId, status: "ACTIVE" })
+                      }
+                      title={
+                        user?.id === bom.createdBy.id
+                          ? "A different BOM manager must approve this BOM"
+                          : undefined
+                      }
+                      className="px-3 whitespace-nowrap"
+                    >
+                      Approve and activate
+                    </Button>
+                    <Button
+                      type="button"
+                      disabled={changeStatus.isPending}
+                      onClick={() => {
+                        const reason = window.prompt(
+                          "Why is this BOM being returned to draft?"
+                        );
+                        if (reason?.trim()) {
+                          changeStatus.mutate({
+                            id: bomId,
+                            status: "DRAFT",
+                            reason: reason.trim(),
+                          });
+                        }
+                      }}
+                      variant="outline"
+                      className="px-3 whitespace-nowrap"
+                    >
+                      Return to draft
+                    </Button>
+                  </>
                 )}
                 {bom.status === "ACTIVE" && (
                   <>

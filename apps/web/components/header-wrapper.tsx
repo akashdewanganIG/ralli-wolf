@@ -2,8 +2,8 @@
 
 import { Header } from "@repo/ui";
 import { Button } from "@repo/ui/components/ui/button";
-import { useAuth } from "../contexts/AuthContext";
-import { useSystemStatus } from "../hooks/useSystemStatus";
+import { useAuth } from "../contexts/auth-context";
+import { useSystemStatus } from "../hooks/use-system-status";
 import { SystemStatusDropdown } from "@repo/ui/components/ui/header/system-status-dropdown";
 import { useState } from "react";
 import { ChangePasswordModal } from "./change-password-modal";
@@ -27,7 +27,7 @@ export function HeaderWrapper({
 }: HeaderWrapperProps) {
   const { user, logout } = useAuth();
   const [showChangePassword, setShowChangePassword] = useState(false);
-  // Hooks must run unconditionally, so this sits above the `user` guard.
+
   const { groups: statusGroups, summaryLabel } = useSystemStatus();
 
   if (!user) return null;

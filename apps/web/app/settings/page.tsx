@@ -9,11 +9,11 @@ import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { Panel, PanelSection } from "@repo/ui/components/ui/panel";
 
 import { ChangePasswordModal } from "@/components/change-password-modal";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import CurrencySettings from "@/components/currency-settings";
 import { AuthenticationMethods } from "@/components/authentication-methods";
 import DiscountThresholdSettings from "@/components/discount-threshold-settings";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/auth-context";
 
 function getInitials(firstName?: string | null, lastName?: string | null) {
   const initials = [firstName, lastName]
@@ -44,17 +44,12 @@ export default function SettingsPage() {
 
   return (
     <ProtectedRoute>
-      {/* PageShell rather than a hand-rolled padded div: it is the container
-          every other page opens with, and it owns the only horizontal padding
-          on the page, so the heading and the panels share one left edge. */}
       <PageShell>
         <PageHeader
           title="Settings"
           description="Your sign-in security, plus settings that apply to everyone in this workspace."
         />
 
-        {/* Yours first, then everyone's — the personal settings are the ones a
-            signed-in user came here to change. */}
         <PanelSection
           id="settings-account-heading"
           title="Your account"
@@ -92,8 +87,6 @@ export default function SettingsPage() {
           </Panel>
         </PanelSection>
 
-        {/* Security stands on its own: it is a list of methods with their own
-            states and actions, not another field on the profile. */}
         <PanelSection
           id="settings-security-heading"
           title="Security"

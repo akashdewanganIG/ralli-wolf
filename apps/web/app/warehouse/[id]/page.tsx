@@ -5,8 +5,8 @@ import { Button } from "@repo/ui/components/ui/button";
 import { Input } from "@repo/ui/components/ui/input";
 import { useParams } from "next/navigation";
 import Image from "next/image";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { WarehouseImagePicker } from "@/components/supply-chain/WarehouseImagePicker";
+import { ProtectedRoute } from "@/components/protected-route";
+import { ImagePicker } from "@/components/supply-chain/image-picker";
 import { ImageIcon, Maximize2, Trash2 } from "@repo/ui/icons";
 import { ConfirmationDialog } from "@repo/ui/components/ui/confirmation-dialog";
 import { SearchFilterToolbar } from "@repo/ui/components/ui/toolbar";
@@ -35,7 +35,7 @@ import {
   useWarehouse,
   useWarehouseMutations,
   useWarehouseZones,
-} from "@/hooks/useSupplyChain";
+} from "@/hooks/use-supply-chain";
 import {
   formatPercent,
   formatQuantity,
@@ -246,10 +246,11 @@ export default function WarehouseDetailPage() {
               )}
 
               {(warehouse.images?.length ?? 0) < 8 && (
-                <WarehouseImagePicker
+                <ImagePicker
                   files={pendingImages}
                   onChange={setPendingImages}
                   existingCount={warehouse.images?.length ?? 0}
+                  itemLabel="warehouse images"
                   disabled={addImages.isPending}
                 />
               )}

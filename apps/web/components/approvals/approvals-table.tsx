@@ -11,7 +11,7 @@ type ApprovalsTableProps = {
   title: string;
   onQuoteNoClick?: (approval: Approval) => void;
   columnPreferenceKey?: string;
-  /** Rendered to the left of the Columns button */
+
   headerLeadingContent?: React.ReactNode;
   count: number;
   currentPage: number;

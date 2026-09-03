@@ -51,14 +51,6 @@ export interface CalculatedLine {
   requisitionLineId: number | null;
 }
 
-/**
- * The price in force for a supplier/item on a given date and quantity.
- *
- * Quantity break tiers win over the header price when one applies. Nothing is
- * assumed: if the item is not in the supplier's catalogue the caller must
- * supply a price, because guessing what a vendor charges is how POs go out
- * wrong.
- */
 export async function resolveSupplierPrice(
   input: {
     supplierId: number;
@@ -95,13 +87,6 @@ export async function resolveSupplierPrice(
   return { unitPrice: catalogue.unitPrice, source: "CATALOGUE" };
 }
 
-/**
- * Price out purchase lines and total the document.
- *
- * Discount applies to the extended line, tax applies after discount, and every
- * step rounds explicitly, so the header total always equals the sum of the
- * lines rather than drifting by a rounding cent.
- */
 export async function calculatePurchaseLines(
   input: { supplierId: number; lines: PurchaseLineInput[]; orderDate?: Date },
   client: Client = prisma
@@ -130,8 +115,8 @@ export async function calculatePurchaseLines(
       where: { id: line.productId },
     });
     if (!product) throw new NotFoundError(`Product ${line.productId}`);
-    if (!product.isPurchasable) {
-      throw new DomainError(`${product.code} is not marked as purchasable`, {
+    if (!product.active || !product.isPurchasable) {
+      throw new DomainError(`${product.code} is not active and purchasable`, {
         code: "NOT_PURCHASABLE",
       });
     }
@@ -177,6 +162,11 @@ export async function calculatePurchaseLines(
         { code: "VALIDATION_ERROR" }
       );
     }
+    if (taxPercent.greaterThan(100)) {
+      throw new DomainError(`lines[${index}].taxPercent cannot exceed 100`, {
+        code: "VALIDATION_ERROR",
+      });
+    }
 
     const gross = roundMoney(quantity.times(unitPrice));
     const discountAmount = roundMoney(
@@ -215,7 +205,6 @@ export async function calculatePurchaseLines(
   };
 }
 
-/** Recompute and store a purchase order's totals from its lines. */
 export async function recalculatePurchaseOrderTotals(
   tx: Tx,
   purchaseOrderId: number
@@ -260,7 +249,7 @@ export interface GrnLineInput {
   purchaseOrderLineId?: number | null;
   productId: number;
   receivedQuantity: Prisma.Decimal | number | string;
-  /** Omit to accept everything received; QC can reject later. */
+
   acceptedQuantity?: Prisma.Decimal | number | string | null;
   rejectedQuantity?: Prisma.Decimal | number | string | null;
   unitCost?: Prisma.Decimal | number | string | null;
@@ -273,14 +262,6 @@ export interface GrnLineInput {
   putawayBinId?: number | null;
 }
 
-/**
- * Create a goods receipt against a purchase order.
- *
- * The GRN is recorded but no stock moves yet — posting is a separate step, so
- * a receipt can sit in QC before it becomes sellable inventory. Over-receipt
- * beyond the ordered quantity is rejected outright: silently accepting more
- * than was bought is how three-way match breaks.
- */
 export async function createGoodsReceipt(
   tx: Tx,
   input: {
@@ -344,8 +325,6 @@ export async function createGoodsReceipt(
 
   const receivedDate = input.receivedDate ?? new Date();
 
-  // On-time is measured against the promised date the supplier committed to,
-  // falling back to the expected date on the order.
   let isOnTime: boolean | null = null;
   let delayDays: number | null = null;
   const dueDate =
@@ -535,15 +514,6 @@ export async function createGoodsReceipt(
   return grn;
 }
 
-/**
- * Post a goods receipt into stock.
- *
- * Only the accepted quantity becomes inventory; rejected units stay on the
- * GRN as a quality record and never inflate on-hand. Each accepted line
- * creates its cost layer at the price actually paid, raises a putaway task,
- * and advances the purchase order line. Posting is idempotent per line, so a
- * retried request cannot double-count a receipt.
- */
 export async function postGoodsReceipt(
   tx: Tx,
   input: { grnId: number; userId: number; createPutawayTasks?: boolean }
@@ -579,7 +549,6 @@ export async function postGoodsReceipt(
     quantity: Prisma.Decimal;
   }> = [];
 
-  // Deterministic order so concurrent postings lock stock in the same sequence.
   const orderedLines = [...grn.lines].sort((a, b) => a.productId - b.productId);
 
   for (const line of orderedLines) {
@@ -594,8 +563,6 @@ export async function postGoodsReceipt(
 
     const lotIds: number[] = [];
 
-    // Serial-tracked items become one lot per unit so each serial can be
-    // tracked, picked and traced individually.
     if (
       line.product.trackingType === "SERIAL" &&
       line.serialNumbers.length > 0
@@ -714,7 +681,6 @@ export async function postGoodsReceipt(
   return { grnId: grn.id, grnNumber: grn.grnNumber, postedLines };
 }
 
-/** Roll a purchase order's status forward from the state of its lines. */
 export async function refreshPurchaseOrderStatus(
   tx: Tx,
   purchaseOrderId: number
@@ -749,13 +715,6 @@ export async function refreshPurchaseOrderStatus(
   });
 }
 
-/**
- * Record a quality inspection against a receipt line.
- *
- * The inspection decides how much of what arrived becomes stock. Parameters
- * are checked against their specification where numeric limits are given, so
- * the pass/fail is derived from the readings rather than asserted.
- */
 export async function recordQualityCheck(
   tx: Tx,
   input: {
@@ -776,6 +735,9 @@ export async function recordQualityCheck(
     }>;
   }
 ) {
+  await tx.$queryRaw`
+    SELECT "id" FROM "goods_receipt_lines" WHERE "id" = ${input.grnLineId} FOR UPDATE
+  `;
   const grnLine = await tx.goodsReceiptLine.findUnique({
     where: { id: input.grnLineId },
     include: { grn: true, product: { select: { code: true } } },
@@ -790,30 +752,56 @@ export async function recordQualityCheck(
     );
   }
 
-  const inspectedQuantity = requirePositive(
-    input.inspectedQuantity,
-    "inspectedQuantity"
+  const inspectedQuantity = roundQuantity(
+    requirePositive(input.inspectedQuantity, "inspectedQuantity")
   );
-  const acceptedQuantity = requireNonNegative(
-    input.acceptedQuantity,
-    "acceptedQuantity"
+  const acceptedQuantity = roundQuantity(
+    requireNonNegative(input.acceptedQuantity, "acceptedQuantity")
   );
-  const rejectedQuantity = input.rejectedQuantity
-    ? requireNonNegative(input.rejectedQuantity, "rejectedQuantity")
-    : roundQuantity(inspectedQuantity.minus(acceptedQuantity));
+  const rejectedQuantity =
+    input.rejectedQuantity !== undefined && input.rejectedQuantity !== null
+      ? roundQuantity(
+          requireNonNegative(input.rejectedQuantity, "rejectedQuantity")
+        )
+      : roundQuantity(inspectedQuantity.minus(acceptedQuantity));
 
-  if (
-    acceptedQuantity
-      .plus(rejectedQuantity)
-      .greaterThan(grnLine.receivedQuantity)
-  ) {
+  if (inspectedQuantity.greaterThan(grnLine.receivedQuantity)) {
     throw new DomainError(
-      `Accepted plus rejected (${acceptedQuantity.plus(rejectedQuantity).toFixed(4)}) exceeds the ${grnLine.receivedQuantity.toFixed(4)} received for ${grnLine.product.code}`,
+      `Inspected quantity exceeds the ${grnLine.receivedQuantity.toFixed(4)} received for ${grnLine.product.code}`,
+      { code: "QUANTITY_MISMATCH" }
+    );
+  }
+  if (!acceptedQuantity.plus(rejectedQuantity).equals(inspectedQuantity)) {
+    throw new DomainError(
+      "acceptedQuantity plus rejectedQuantity must equal inspectedQuantity",
       { code: "QUANTITY_MISMATCH" }
     );
   }
 
-  const parameterRows = (input.parameters ?? []).map(parameter => {
+  const sampleSize =
+    input.sampleSize === undefined || input.sampleSize === null
+      ? ZERO
+      : roundQuantity(requirePositive(input.sampleSize, "sampleSize"));
+  if (sampleSize.greaterThan(inspectedQuantity)) {
+    throw new DomainError("sampleSize cannot exceed inspectedQuantity", {
+      code: "QUANTITY_MISMATCH",
+    });
+  }
+
+  if ((input.parameters?.length ?? 0) > 100) {
+    throw new DomainError("parameters cannot contain more than 100 rows", {
+      code: "VALIDATION_ERROR",
+    });
+  }
+
+  const parameterRows = (input.parameters ?? []).map((parameter, index) => {
+    const parameterName = parameter.parameterName.trim();
+    if (parameterName.length === 0 || parameterName.length > 200) {
+      throw new DomainError(
+        `parameters[${index}].parameterName is required and cannot exceed 200 characters`,
+        { code: "VALIDATION_ERROR" }
+      );
+    }
     const min =
       parameter.minValue !== undefined && parameter.minValue !== null
         ? toDecimal(parameter.minValue, "minValue")
@@ -822,25 +810,33 @@ export async function recordQualityCheck(
       parameter.maxValue !== undefined && parameter.maxValue !== null
         ? toDecimal(parameter.maxValue, "maxValue")
         : null;
+    if (min !== null && max !== null && min.greaterThan(max)) {
+      throw new DomainError(
+        `parameters[${index}].minValue cannot exceed maxValue`,
+        { code: "VALIDATION_ERROR" }
+      );
+    }
 
-    // A reading only counts as a pass when it actually sits inside the spec.
     let isPassed = true;
     if (min !== null || max !== null) {
-      const observed = parameter.observedValue
-        ? Number(parameter.observedValue)
-        : Number.NaN;
-      if (Number.isNaN(observed)) {
+      if (
+        parameter.observedValue === undefined ||
+        parameter.observedValue === null ||
+        parameter.observedValue.trim() === ""
+      ) {
         isPassed = false;
       } else {
-        if (min !== null && new Prisma.Decimal(observed).lessThan(min))
-          isPassed = false;
-        if (max !== null && new Prisma.Decimal(observed).greaterThan(max))
-          isPassed = false;
+        const observed = toDecimal(
+          parameter.observedValue,
+          `parameters[${index}].observedValue`
+        );
+        if (min !== null && observed.lessThan(min)) isPassed = false;
+        if (max !== null && observed.greaterThan(max)) isPassed = false;
       }
     }
 
     return {
-      parameterName: parameter.parameterName,
+      parameterName,
       specification: parameter.specification ?? null,
       minValue: min,
       maxValue: max,
@@ -867,12 +863,10 @@ export async function recordQualityCheck(
       qcNumber,
       grnId: grnLine.grnId,
       grnLineId: grnLine.id,
-      sampleSize: input.sampleSize
-        ? toDecimal(input.sampleSize, "sampleSize")
-        : ZERO,
-      inspectedQuantity: roundQuantity(inspectedQuantity),
-      acceptedQuantity: roundQuantity(acceptedQuantity),
-      rejectedQuantity: roundQuantity(rejectedQuantity),
+      sampleSize,
+      inspectedQuantity,
+      acceptedQuantity,
+      rejectedQuantity,
       result,
       defectType: input.defectType ?? null,
       remarks: input.remarks ?? null,
@@ -886,13 +880,12 @@ export async function recordQualityCheck(
     where: { id: grnLine.id },
     data: {
       qcResult: result,
-      acceptedQuantity: roundQuantity(acceptedQuantity),
-      rejectedQuantity: roundQuantity(rejectedQuantity),
+      acceptedQuantity,
+      rejectedQuantity,
       rejectionReason: input.defectType ?? grnLine.rejectionReason,
     },
   });
 
-  // Keep the header totals in step with the inspected lines.
   const lines = await tx.goodsReceiptLine.findMany({
     where: { grnId: grnLine.grnId },
   });

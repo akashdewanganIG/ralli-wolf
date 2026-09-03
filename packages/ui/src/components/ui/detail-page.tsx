@@ -9,10 +9,10 @@ import { Tag, type TagTone } from "@repo/ui/components/ui/tag";
 interface DetailPageHeaderProps {
   title: string;
   status?: string;
-  /** Semantic tone for the status tag. */
+
   statusTone?: TagTone;
   onBack?: () => void;
-  /** Rendered on the right, to the left of the action buttons */
+
   headerRight?: React.ReactNode;
   actions?: {
     label: string;

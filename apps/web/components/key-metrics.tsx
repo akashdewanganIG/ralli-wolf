@@ -3,7 +3,7 @@
 import React from "react";
 import { Card, CardContent } from "@repo/ui";
 import { TrendingUp, TrendingDown } from "@repo/ui/icons";
-import { useKeyMetrics } from "../hooks/useDashboard";
+import { useKeyMetrics } from "../hooks/use-dashboard";
 import { StatGridSkeleton } from "./skeletons";
 
 interface MetricCardProps {

@@ -17,13 +17,6 @@ interface DeleteTemplateModalProps {
   loading?: boolean;
 }
 
-/**
- * Destructive confirmation for a WhatsApp template.
- *
- * On the shared `Dialog` rather than a hand-rolled fixed overlay: that is what
- * supplies the focus trap, Escape handling, focus returning to the trigger, and
- * `aria-modal` — none of which the previous div-with-a-backdrop had.
- */
 export function DeleteTemplateModal({
   templateName,
   onClose,
@@ -34,7 +27,6 @@ export function DeleteTemplateModal({
     <Dialog
       open
       onOpenChange={next => {
-        // Escape and outside-click both route through the one close handler.
         if (!next && !loading) onClose();
       }}
     >

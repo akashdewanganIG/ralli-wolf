@@ -1,41 +1,73 @@
 import type { Request, Response } from "express";
-import { handleError, handleValidationError } from "../utils/errorHandler.js";
+import { handleError, handleValidationError } from "../utils/error-handler.js";
 import { prisma } from "@repo/db";
-import { BrevoService } from "../services/brevo.service.js";
-import { normalizeEmail } from "../utils/validators.js";
+import { BrevoProviderError, BrevoService } from "../services/brevo.service.js";
 import {
-  SyncLeadsRequest,
+  parseBoundedInteger,
+  parsePositiveInteger,
+  parseUniquePositiveIntegerArray,
+} from "../utils/validators.js";
+import {
+  BrevoContact,
   SyncLeadsResponse,
-  SendCampaignRequest,
   SendCampaignResponse,
   BrevoAnalyticsResponse,
-  BrevoWebhookPayload,
-  BrevoUpdateCampaignRequest,
-  BrevoUpdateCampaignStatusRequest,
 } from "../utils/brevo.types.js";
-import crypto from "crypto";
-function deriveKey(): Buffer {
-  const key = process.env.ENCRYPTION_KEY || "";
-  const raw = key.startsWith("base64:")
-    ? Buffer.from(key.slice(7), "base64")
-    : key.startsWith("hex:")
-      ? Buffer.from(key.slice(4), "hex")
-      : Buffer.from(key, "utf8");
-  return raw.length === 32
-    ? raw
-    : crypto.createHash("sha256").update(raw).digest();
+import { decryptSecret } from "@repo/db/crypto";
+import {
+  claimWebhookReceipt,
+  releaseWebhookReceipt,
+  verifyWebhookRequest,
+} from "../utils/webhook-auth.js";
+import {
+  BrevoWebhookPayloadError,
+  ingestBrevoWebhookEvents,
+  parseBrevoWebhookPayload,
+} from "../services/brevo-webhook.service.js";
+import { logError } from "../utils/logger.js";
+import { normalizeWhatsAppPhone } from "../services/whatsapp/phone.js";
+import {
+  brevoDeliveryIdempotencyKey,
+  claimBrevoDelivery,
+  completeBrevoDelivery,
+  ensureLocalBrevoCampaign,
+  failBrevoDelivery,
+  prepareBrevoDeliveries,
+} from "../services/brevo-campaign.service.js";
+import {
+  BrevoRequestError,
+  parseBrevoCampaignFilterStatus,
+  parseBrevoCampaignStatusAction,
+  parseBrevoCampaignUpdate,
+} from "../services/brevo-validation.js";
+
+function safeBrevoOperationError(error: unknown): string {
+  return error instanceof BrevoProviderError
+    ? error.message
+    : "The operation could not be completed";
 }
-function decryptGCM(cipherText: string, iv: string, authTag: string): string {
-  const key = deriveKey();
-  const ivBuf = Buffer.from(iv, "base64");
-  const tagBuf = Buffer.from(authTag, "base64");
-  const decipher = crypto.createDecipheriv("aes-256-gcm", key, ivBuf);
-  decipher.setAuthTag(tagBuf);
-  const decrypted = Buffer.concat([
-    decipher.update(Buffer.from(cipherText, "base64")),
-    decipher.final(),
-  ]);
-  return decrypted.toString("utf8");
+
+function handleBrevoProviderResponse(error: unknown, res: Response): boolean {
+  if (!(error instanceof BrevoProviderError)) return false;
+  if (error.status === 404) {
+    res
+      .status(404)
+      .json({ error: "Brevo campaign not found", code: "NOT_FOUND" });
+    return true;
+  }
+  if (error.status === 400) {
+    res.status(400).json({ error: error.message, code: "PROVIDER_REJECTED" });
+    return true;
+  }
+  if (error.status === 429) {
+    res.status(429).json({ error: error.message, code: "PROVIDER_RATE_LIMIT" });
+    return true;
+  }
+  res.status(error.retryable ? 503 : 502).json({
+    error: error.message,
+    code: error.retryable ? "PROVIDER_UNAVAILABLE" : "PROVIDER_ERROR",
+  });
+  return true;
 }
 
 export class BrevoController {
@@ -45,124 +77,91 @@ export class BrevoController {
     this.brevoService = new BrevoService();
   }
 
-  /**
-   * Sync selected leads to Brevo
-   * POST /api/brevo/sync-leads
-   */
   syncLeadsToBrevo = async (req: Request, res: Response) => {
     try {
-      console.log("=== BREVO LEAD SYNC STARTED ===");
-
-      const { leadIds }: SyncLeadsRequest = req.body;
-
-      if (!leadIds || !Array.isArray(leadIds) || leadIds.length === 0) {
+      const leadIds = parseUniquePositiveIntegerArray(req.body?.leadIds, 500);
+      if (!leadIds) {
         return handleValidationError(
           res,
-          'Request body must contain a "leadIds" array with at least one lead ID',
+          '"leadIds" must contain 1 to 500 unique positive integer IDs',
           "leadIds",
           "Brevo sync leads"
         );
       }
 
-      console.log(`Syncing ${leadIds.length} leads to Brevo...`);
-
       const successful: SyncLeadsResponse["successful"] = [];
       const failed: SyncLeadsResponse["failed"] = [];
+      const leads = await prisma.lead.findMany({
+        where: {
+          id: { in: leadIds },
+          deletedAt: null,
+          emailOptOut: false,
+        },
+        select: {
+          id: true,
+          email: true,
+          phone: true,
+          firstName: true,
+          lastName: true,
+          companyName: true,
+          source: true,
+          score: true,
+        },
+      });
+      const leadById = new Map(leads.map(lead => [lead.id, lead]));
 
-      // Process each lead
       for (const leadId of leadIds) {
-        let leadEmail = "unknown";
-        try {
-          console.log(`Processing lead ID: ${leadId}`);
-
-          // Get lead from database
-          const lead = await prisma.lead.findUnique({
-            where: { id: leadId },
-            include: { owner: true },
+        const lead = leadById.get(leadId);
+        if (!lead) {
+          failed.push({
+            leadId,
+            email: "unknown",
+            error: "Lead is missing, deleted, or opted out of email",
           });
-
-          if (!lead) {
-            failed.push({
-              leadId,
-              email: "unknown",
-              error: "Lead not found",
-            });
-            continue;
-          }
-
-          leadEmail = lead.email;
-
-          // Helper function to validate phone number for Brevo
-          const formatPhoneNumber = (
-            phone: string | null | undefined
-          ): string => {
-            if (!phone) return "";
-
-            // Remove common separators
-            let cleaned = phone.replace(/[-\s()]+/g, "");
-
-            // Remove non-digit characters except + at the start
-            cleaned = cleaned.replace(/[^\d+]/g, "");
-
-            // Check if it looks like a valid phone number
-            // Brevo expects phone numbers to be E.164 format (e.g., +1234567890)
-            if (cleaned.length < 10 || cleaned.length > 15) {
-              console.log(`Skipping invalid phone number: ${phone}`);
-              return "";
-            }
-
-            return cleaned;
-          };
-
-          // Prepare Brevo contact data
-          const phoneNumber = formatPhoneNumber(lead.phone);
-          const brevoContact: any = {
+          continue;
+        }
+        try {
+          const phoneNumber = lead.phone
+            ? normalizeWhatsAppPhone(lead.phone)
+            : null;
+          const brevoContact: BrevoContact = {
             email: lead.email,
             attributes: {
-              FIRSTNAME: (lead as any).firstName || "",
-              LASTNAME: (lead as any).lastName || "",
-              COMPANY: (lead as any).companyName || "",
-              SOURCE: (lead as any).source || "CRM",
+              FIRSTNAME: lead.firstName,
+              LASTNAME: lead.lastName || "",
+              COMPANY: lead.companyName || "",
+              SOURCE: lead.source,
+              LEAD_SCORE: lead.score,
             },
             updateEnabled: true,
+            getId: true,
           };
 
-          // Only add SMS if phone number is valid
-          if (phoneNumber && phoneNumber.length >= 10) {
-            brevoContact.attributes.SMS = phoneNumber;
+          if (phoneNumber) {
+            brevoContact.attributes!.SMS = `+${phoneNumber}`;
           }
 
-          // Optionally add LEAD_SCORE if it's a number
-          if (typeof lead.score === "number") {
-            brevoContact.attributes.LEAD_SCORE = lead.score;
-          }
-
-          // Create or update contact in Brevo
           const brevoResponse =
             await this.brevoService.createOrUpdateContact(brevoContact);
 
-          // Update lead with Brevo contact ID
-          await prisma.lead.update({
-            where: { id: leadId },
+          const updated = await prisma.lead.updateMany({
+            where: { id: leadId, deletedAt: null, emailOptOut: false },
             data: { brevoContactId: brevoResponse.id.toString() },
           });
+          if (updated.count !== 1) {
+            throw new Error("Lead eligibility changed while syncing");
+          }
 
           successful.push({
             leadId,
             brevoContactId: brevoResponse.id,
             email: lead.email,
           });
-
-          console.log(
-            `✓ Lead ${leadId} synced successfully to Brevo contact ${brevoResponse.id}`
-          );
-        } catch (error: any) {
-          console.error(`✗ Failed to sync lead ${leadId}:`, error.message);
-
+        } catch (error: unknown) {
           failed.push({
             leadId,
-            email: leadEmail,
-            error: error.message,
+            email: lead.email,
+            error: safeBrevoOperationError(error),
           });
         }
       }
@@ -173,11 +172,6 @@ export class BrevoController {
         failed: failed.length,
       };
 
-      console.log("=== BREVO LEAD SYNC SUMMARY ===");
-      console.log(
-        `Total: ${summary.total}, Successful: ${summary.successful}, Failed: ${summary.failed}`
-      );
-
       const response: SyncLeadsResponse = {
         successful,
         failed,
@@ -186,74 +180,63 @@ export class BrevoController {
 
       res.status(200).json(response);
     } catch (error) {
-      console.error("=== BREVO LEAD SYNC ERROR ===", error);
       handleError(error, res, "Brevo sync leads");
     }
   };
 
-  /**
-   * Get all campaigns from Brevo
-   * GET /api/brevo/campaigns
-   */
   getCampaigns = async (req: Request, res: Response) => {
     try {
-      const limit = parseInt(req.query.limit as string) || 50;
-      const offset = parseInt(req.query.offset as string) || 0;
-      const status = req.query.status as string;
-
-      console.log(
-        `Fetching Brevo campaigns: limit=${limit}, offset=${offset}, status=${status}`
-      );
-
-      const campaigns = await this.brevoService.getAllCampaigns(limit, offset);
-
-      // Filter by status if provided
-      let filteredCampaigns = campaigns.campaigns;
-      if (status) {
-        filteredCampaigns = campaigns.campaigns.filter(
-          campaign => campaign.status.toLowerCase() === status.toLowerCase()
+      const limit =
+        req.query.limit === undefined
+          ? 50
+          : parseBoundedInteger(req.query.limit, 1, 100);
+      const offset =
+        req.query.offset === undefined
+          ? 0
+          : parseBoundedInteger(req.query.offset, 0, 1_000_000);
+      const status = parseBrevoCampaignFilterStatus(req.query.status);
+      if (limit === null || offset === null) {
+        return handleValidationError(
+          res,
+          "limit must be between 1 and 100 and offset must be non-negative",
+          undefined,
+          "Brevo get campaigns"
         );
       }
+      const campaigns = await this.brevoService.getAllCampaigns(
+        limit,
+        offset,
+        status
+      );
 
       res.json({
-        campaigns: filteredCampaigns,
-        count: filteredCampaigns.length,
+        campaigns: campaigns.campaigns,
+        count: campaigns.campaigns.length,
         total: campaigns.count,
       });
-    } catch (error) {
-      console.error("Error fetching Brevo campaigns:", error);
+    } catch (error: unknown) {
+      if (error instanceof BrevoRequestError) {
+        return handleValidationError(
+          res,
+          error.message,
+          "status",
+          "Brevo get campaigns"
+        );
+      }
+      if (handleBrevoProviderResponse(error, res)) return;
       handleError(error, res, "Brevo get campaigns");
     }
   };
 
-  /**
-   * Get active campaigns only
-   * GET /api/brevo/campaigns/active
-   */
-  getActiveCampaigns = async (req: Request, res: Response) => {
-    try {
-      console.log("Fetching active Brevo campaigns...");
-
-      const campaigns = await this.brevoService.getActiveCampaigns();
-
-      res.json({
-        campaigns,
-        count: campaigns.length,
-      });
-    } catch (error) {
-      console.error("Error fetching active Brevo campaigns:", error);
-      handleError(error, res, "Brevo get active campaigns");
-    }
-  };
-
-  /**
-   * Get specific campaign details
-   * GET /api/brevo/campaigns/:id
-   */
   getCampaignDetails = async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const statistics = req.query.statistics as string | undefined;
+      const statistics =
+        req.query.statistics === undefined
+          ? undefined
+          : typeof req.query.statistics === "string"
+            ? req.query.statistics
+            : null;
 
       if (!id) {
         return handleValidationError(
@@ -264,9 +247,9 @@ export class BrevoController {
         );
       }
 
-      const campaignId = parseInt(id);
+      const campaignId = parsePositiveInteger(id);
 
-      if (isNaN(campaignId)) {
+      if (campaignId === null) {
         return handleValidationError(
           res,
           "Invalid campaign ID",
@@ -275,7 +258,14 @@ export class BrevoController {
         );
       }
 
-      // Validate statistics parameter if provided
+      if (statistics === null) {
+        return handleValidationError(
+          res,
+          "statistics must be a single string value",
+          "statistics",
+          "Brevo get campaign details"
+        );
+      }
       if (statistics) {
         const validStatistics = [
           "globalStats",
@@ -294,115 +284,34 @@ export class BrevoController {
         }
       }
 
-      console.log(
-        `Fetching Brevo campaign details: ${campaignId}${statistics ? ` with statistics=${statistics}` : ""}`
-      );
-
       const campaign = await this.brevoService.getCampaignById(
         campaignId,
         statistics
       );
 
       res.json(campaign);
-    } catch (error: any) {
-      console.error(`Error fetching Brevo campaign ${req.params.id}:`, {
-        message: error?.message,
-        status: error?.response?.status,
-        statusText: error?.response?.statusText,
-        data: error?.response?.data,
-        code: error?.code,
-      });
-
-      // Handle Brevo API specific errors
-      if (error?.response) {
-        const status = error.response.status;
-        const message =
-          error.response.data?.message ||
-          error.message ||
-          "Failed to fetch campaign details";
-
-        // If it's a 404, campaign doesn't exist
-        if (status === 404) {
-          return res.status(404).json({
-            error: "Campaign not found",
-            details: message,
-            code: "NOT_FOUND",
-          });
-        }
-
-        // If it's a 400, it might be an invalid request (e.g., statistics not available)
-        if (status === 400) {
-          return res.status(400).json({
-            error: "Invalid request to Brevo API",
-            details: message,
-            code: "BAD_REQUEST",
-          });
-        }
-
-        // For other Brevo API errors, return the status code
-        return res.status(status).json({
-          error: "Failed to fetch campaign details from Brevo",
-          details: message,
-          code: "BREVO_API_ERROR",
-        });
-      }
-
-      // Handle network/connection errors
-      if (
-        error?.code === "ECONNRESET" ||
-        error?.code === "ETIMEDOUT" ||
-        error?.code === "ECONNREFUSED"
-      ) {
-        return res.status(503).json({
-          error: "Failed to connect to Brevo API",
-          details:
-            "The service is temporarily unavailable. Please try again later.",
-          code: "SERVICE_UNAVAILABLE",
-        });
-      }
-
-      // Default error handling
+    } catch (error: unknown) {
+      if (handleBrevoProviderResponse(error, res)) return;
       handleError(error, res, "Brevo get campaign details");
     }
   };
 
-  /**
-   * Send campaign to selected leads
-   * POST /api/brevo/send-campaign
-   */
   sendCampaign = async (req: Request, res: Response) => {
     try {
-      console.log("=== BREVO CAMPAIGN SEND STARTED ===");
-
-      const { campaignId, leadIds }: SendCampaignRequest = req.body;
-
-      if (
-        !campaignId ||
-        !leadIds ||
-        !Array.isArray(leadIds) ||
-        leadIds.length === 0
-      ) {
+      const campaignId = parsePositiveInteger(req.body?.campaignId);
+      const leadIds = parseUniquePositiveIntegerArray(req.body?.leadIds, 500);
+      if (campaignId === null || !leadIds) {
         return handleValidationError(
           res,
-          'Request body must contain "campaignId" and "leadIds" array',
+          '"campaignId" must be a positive integer and "leadIds" must contain 1 to 500 unique positive integer IDs',
           "campaignId",
           "Brevo send campaign"
         );
       }
 
-      console.log(
-        `Sending campaign ${campaignId} to ${leadIds.length} leads...`
-      );
-
       const successful: SendCampaignResponse["successful"] = [];
       const failed: SendCampaignResponse["failed"] = [];
 
-      // Get leads with Brevo contact IDs.
-      //
-      // Filtered on more than the Brevo id: this route sends marketing content
-      // through Brevo's *transactional* endpoint, which does not consult the
-      // unsubscribe list a campaign send would honour. Nothing else would stop
-      // an opted-out or deleted lead being mailed, so it is enforced here.
       const leads = await prisma.lead.findMany({
         where: {
           id: { in: leadIds },
@@ -410,23 +319,11 @@ export class BrevoController {
           emailOptOut: false,
           deletedAt: null,
         },
+        select: { id: true, email: true },
+        orderBy: { id: "asc" },
       });
-
-      const leadsWithBrevoIds = leads.map(lead => ({
-        leadId: lead.id,
-        email: lead.email,
-        brevoContactId: lead.brevoContactId!,
-      }));
-
-      // Find leads without Brevo contact IDs
-      const leadsWithoutBrevoIds = leadIds.filter(
-        id => !leadsWithBrevoIds.some(lead => lead.leadId === id)
-      );
-
-      // Add failed entries for leads that were filtered out above. The reason
-      // is deliberately vague between the three causes because the caller
-      // supplied the ids and can look up which applies.
-      for (const leadId of leadsWithoutBrevoIds) {
+      const eligibleIds = new Set(leads.map(lead => lead.id));
+      for (const leadId of leadIds.filter(id => !eligibleIds.has(id))) {
         failed.push({
           leadId,
           email: "unknown",
@@ -435,14 +332,7 @@ export class BrevoController {
         });
       }
 
-      // Fetched once rather than per recipient: it is the same campaign every
-      // time, and this is a call to an external API inside the send loop.
       const campaign = await this.brevoService.getCampaignById(campaignId);
-
-      // Brevo's transactional endpoint requires a body — htmlContent,
-      // textContent or a templateId. This request previously carried none of
-      // them, so every send was rejected. Fail here with something the caller
-      // can act on rather than once per recipient with Brevo's 400.
       if (!campaign.htmlContent) {
         return handleValidationError(
           res,
@@ -451,19 +341,70 @@ export class BrevoController {
           "Brevo send campaign"
         );
       }
+      if (!req.user?.id) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+      const localCampaignId = await ensureLocalBrevoCampaign(
+        campaign,
+        req.user.id
+      );
+      const deliveries = await prepareBrevoDeliveries(
+        localCampaignId,
+        leads.map(lead => ({ leadId: lead.id, email: lead.email }))
+      );
+      const representedLeadIds = new Set(
+        deliveries
+          .map(delivery => delivery.leadId)
+          .filter((id): id is number => id !== null && eligibleIds.has(id))
+      );
+      for (const lead of leads) {
+        if (!representedLeadIds.has(lead.id)) {
+          failed.push({
+            leadId: lead.id,
+            email: lead.email,
+            error: "Another requested lead has the same email address",
+          });
+        }
+      }
 
-      // Send campaign to leads with Brevo contact IDs
-      for (const lead of leadsWithBrevoIds) {
+      for (const delivery of deliveries) {
+        if (delivery.leadId === null || !eligibleIds.has(delivery.leadId)) {
+          continue;
+        }
+        if (
+          delivery.status === "SENT" ||
+          delivery.status === "DELIVERED" ||
+          delivery.status === "READ"
+        ) {
+          successful.push({
+            leadId: delivery.leadId,
+            email: delivery.address,
+            messageId: delivery.providerMessageId || "previously-sent",
+          });
+          continue;
+        }
+        const claimed = await claimBrevoDelivery(delivery.id);
+        if (!claimed) {
+          failed.push({
+            leadId: delivery.leadId,
+            email: delivery.address,
+            error:
+              delivery.errorCode === "OUTCOME_UNKNOWN"
+                ? "A previous send has an uncertain outcome and requires manual review"
+                : "Delivery is already processing or exhausted its retry limit",
+          });
+          continue;
+        }
+
         try {
-          console.log(
-            `Sending campaign to lead ${lead.leadId} (${lead.email})`
-          );
-
           const emailRequest = {
-            to: [{ email: lead.email }],
+            to: [{ email: delivery.address }],
             subject: campaign.subject || "Campaign Email",
             sender: campaign.sender,
             htmlContent: campaign.htmlContent,
+            headers: {
+              "Idempotency-Key": brevoDeliveryIdempotencyKey(delivery.id),
+            },
             ...(campaign.replyTo
               ? { replyTo: { email: campaign.replyTo } }
               : {}),
@@ -471,33 +412,28 @@ export class BrevoController {
 
           const result =
             await this.brevoService.sendTransactionalEmail(emailRequest);
-
-          // Record campaign member activity
-          await prisma.campaignMember.create({
-            data: {
-              campaignId: campaignId, // This should be your CRM campaign ID
-              leadId: lead.leadId,
-              status: "sent",
-            },
-          });
-
-          successful.push({
-            leadId: lead.leadId,
-            email: lead.email,
-            messageId: result.messageId,
-          });
-
-          console.log(`✓ Campaign sent to lead ${lead.leadId}`);
-        } catch (error: any) {
-          console.error(
-            `✗ Failed to send campaign to lead ${lead.leadId}:`,
-            error.message
+          await completeBrevoDelivery(
+            localCampaignId,
+            delivery.id,
+            delivery.leadId,
+            result.messageId
           );
 
+          successful.push({
+            leadId: delivery.leadId,
+            email: delivery.address,
+            messageId: result.messageId,
+          });
+        } catch (error: unknown) {
+          const outcomeUnknown =
+            !(error instanceof BrevoProviderError) || error.retryable;
+          await failBrevoDelivery(delivery.id, outcomeUnknown);
           failed.push({
-            leadId: lead.leadId,
-            email: lead.email,
-            error: error.message,
+            leadId: delivery.leadId,
+            email: delivery.address,
+            error: outcomeUnknown
+              ? "Send outcome is uncertain and requires manual review"
+              : safeBrevoOperationError(error),
           });
         }
       }
@@ -508,11 +444,6 @@ export class BrevoController {
         failed: failed.length,
       };
 
-      console.log("=== BREVO CAMPAIGN SEND SUMMARY ===");
-      console.log(
-        `Total: ${summary.total}, Successful: ${summary.successful}, Failed: ${summary.failed}`
-      );
-
       const response: SendCampaignResponse = {
         successful,
         failed,
@@ -521,15 +452,10 @@ export class BrevoController {
 
       res.status(200).json(response);
     } catch (error) {
-      console.error("=== BREVO CAMPAIGN SEND ERROR ===", error);
       handleError(error, res, "Brevo send campaign");
     }
   };
 
-  /**
-   * Delete campaign
-   * DELETE /api/brevo/campaigns/:id
-   */
   deleteCampaign = async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
@@ -543,9 +469,9 @@ export class BrevoController {
         );
       }
 
-      const campaignId = parseInt(id);
+      const campaignId = parsePositiveInteger(id);
 
-      if (isNaN(campaignId)) {
+      if (campaignId === null) {
         return handleValidationError(
           res,
           "Invalid campaign ID",
@@ -554,25 +480,18 @@ export class BrevoController {
         );
       }
 
-      console.log(`Deleting Brevo campaign: ${campaignId}`);
-
       await this.brevoService.deleteCampaign(campaignId);
 
       res.status(204).send();
     } catch (error) {
-      console.error(`Error deleting Brevo campaign ${req.params.id}:`, error);
       handleError(error, res, "Brevo delete campaign");
     }
   };
 
-  /**
-   * Update campaign
-   * PUT /api/brevo/campaigns/:id
-   */
   updateCampaign = async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const updateData: BrevoUpdateCampaignRequest = req.body;
+      const updateData = parseBrevoCampaignUpdate(req.body);
 
       if (!id) {
         return handleValidationError(
@@ -583,9 +502,9 @@ export class BrevoController {
         );
       }
 
-      const campaignId = parseInt(id);
+      const campaignId = parsePositiveInteger(id);
 
-      if (isNaN(campaignId)) {
+      if (campaignId === null) {
         return handleValidationError(
           res,
           "Invalid campaign ID",
@@ -593,20 +512,6 @@ export class BrevoController {
           "Brevo update campaign"
         );
       }
-
-      if (!updateData || Object.keys(updateData).length === 0) {
-        return handleValidationError(
-          res,
-          "Update data is required",
-          "body",
-          "Brevo update campaign"
-        );
-      }
-
-      console.log(
-        `Updating Brevo campaign: ${campaignId}`,
-        JSON.stringify(updateData, null, 2)
-      );
 
       const updatedCampaign = await this.brevoService.updateCampaign(
         campaignId,
@@ -614,31 +519,24 @@ export class BrevoController {
       );
 
       res.json(updatedCampaign);
-    } catch (error: any) {
-      console.error(`Error updating Brevo campaign ${req.params.id}:`, error);
-
-      // Provide more detailed error information
-      if (error.response?.data) {
-        const brevoError = error.response.data;
-        return res.status(error.response.status || 500).json({
-          error: brevoError.message || "Failed to update campaign",
-          code: brevoError.code,
-          details: brevoError,
-        });
+    } catch (error: unknown) {
+      if (error instanceof BrevoRequestError) {
+        return handleValidationError(
+          res,
+          error.message,
+          "body",
+          "Brevo update campaign"
+        );
       }
-
+      if (handleBrevoProviderResponse(error, res)) return;
       handleError(error, res, "Brevo update campaign");
     }
   };
 
-  /**
-   * Update campaign status
-   * PUT /api/brevo/campaigns/:id/status
-   */
   updateCampaignStatus = async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const { status }: BrevoUpdateCampaignStatusRequest = req.body;
+      const status = parseBrevoCampaignStatusAction(req.body);
 
       if (!id) {
         return handleValidationError(
@@ -649,9 +547,9 @@ export class BrevoController {
         );
       }
 
-      const campaignId = parseInt(id);
+      const campaignId = parsePositiveInteger(id);
 
-      if (isNaN(campaignId)) {
+      if (campaignId === null) {
         return handleValidationError(
           res,
           "Invalid campaign ID",
@@ -660,213 +558,107 @@ export class BrevoController {
         );
       }
 
-      if (!status) {
-        return handleValidationError(
-          res,
-          "Status is required",
-          "status",
-          "Brevo update campaign status"
-        );
-      }
-
-      const validStatuses = [
-        "suspended",
-        "archive",
-        "darchive",
-        "sent",
-        "queued",
-        "replicate",
-        "replicateTemplate",
-        "draft",
-      ];
-      if (!validStatuses.includes(status)) {
-        return handleValidationError(
-          res,
-          `Invalid status. Must be one of: ${validStatuses.join(", ")}`,
-          "status",
-          "Brevo update campaign status"
-        );
-      }
-
-      console.log(`Updating Brevo campaign ${campaignId} status to: ${status}`);
-
       await this.brevoService.updateCampaignStatus(campaignId, status);
 
       res.status(204).send();
-    } catch (error) {
-      console.error(
-        `Error updating Brevo campaign ${req.params.id} status:`,
-        error
-      );
+    } catch (error: unknown) {
+      if (error instanceof BrevoRequestError) {
+        return handleValidationError(
+          res,
+          error.message,
+          "status",
+          "Brevo update campaign status"
+        );
+      }
+      if (handleBrevoProviderResponse(error, res)) return;
       handleError(error, res, "Brevo update campaign status");
     }
   };
 
-  /**
-   * Handle Brevo webhook events
-   * POST /api/brevo/webhooks
-   */
   handleWebhook = async (req: Request, res: Response) => {
+    let receiptDigest: string | null = null;
     try {
-      console.log("=== BREVO WEBHOOK RECEIVED ===");
-
-      const signature = req.headers["x-brevo-signature"] as string;
-      const payload = JSON.stringify(req.body);
-
-      // Verify webhook signature using DB-managed secret
       const row = await prisma.appConfig.findUnique({
         where: { key: "email.webhookSecret" },
       });
       const secret =
         row?.encryptedValue && row.iv && row.authTag
-          ? decryptGCM(row.encryptedValue, row.iv, row.authTag)
+          ? decryptSecret(row.encryptedValue, row.iv, row.authTag)
           : process.env.BREVO_WEBHOOK_SECRET || "";
-      if (secret) {
-        const expectedSignature = crypto
-          .createHmac("sha256", secret)
-          .update(payload, "utf8")
-          .digest("hex");
-        const providedSignature = (signature || "").replace("sha256=", "");
-        const valid =
-          providedSignature &&
-          crypto.timingSafeEqual(
-            Buffer.from(expectedSignature, "hex"),
-            Buffer.from(providedSignature, "hex")
-          );
-        if (!valid) {
-          console.error("Invalid webhook signature");
-          return res.status(401).json({ error: "Invalid signature" });
-        }
-      } else {
-        console.warn(
-          "Brevo webhook secret not configured; skipping signature verification"
-        );
+      if (!secret) {
+        return res.status(503).json({ error: "Webhook is not configured" });
+      }
+      if (!verifyWebhookRequest(req, secret, ["x-brevo-signature"])) {
+        return res
+          .status(401)
+          .json({ error: "Invalid webhook authentication" });
+      }
+      if (!req.rawBody) {
+        return res
+          .status(400)
+          .json({ error: "Raw webhook body is unavailable" });
+      }
+      const events = parseBrevoWebhookPayload(req.body);
+      receiptDigest = await claimWebhookReceipt("brevo", req.rawBody);
+      if (!receiptDigest) {
+        return res.status(200).json({ message: "Webhook already received" });
       }
 
-      // Parse webhook payload
-      const webhookData: BrevoWebhookPayload =
-        this.brevoService.parseWebhookPayload(payload);
-      const event = webhookData.event;
-
-      console.log(
-        `Processing webhook event: ${event.event} for ${event.email}`
-      );
-
-      // Find lead by email. Normalised to match how lead emails are stored;
-      // an event whose address differs only in case belongs to the same lead.
-      const lead = await prisma.lead.findFirst({
-        where: { email: normalizeEmail(event.email) ?? event.email },
+      const result = await ingestBrevoWebhookEvents(events);
+      res.status(200).json({
+        message: "Webhook processed successfully",
+        ...result,
       });
-
-      if (!lead) {
-        console.log(`Lead not found for email: ${event.email}`);
-        return res.status(200).json({ message: "Lead not found" });
-      }
-
-      // Calculate engagement score
-      const scoreChange = this.brevoService.getEngagementScore(event.event);
-
-      if (scoreChange !== 0) {
-        // Update lead score
-        const newScore = Math.max(0, Math.min(100, lead.score + scoreChange));
-
-        await prisma.lead.update({
-          where: { id: lead.id },
-          data: { score: newScore },
-        });
-
-        console.log(
-          `Updated lead ${lead.id} score: ${lead.score} -> ${newScore} (${scoreChange > 0 ? "+" : ""}${scoreChange})`
-        );
-      }
-
-      // Store analytics event
-      let campaignId: number | null = null;
-
-      // Try to find campaign by Brevo campaign ID
-      if (event.campaign_id) {
-        const campaignChannel = await prisma.campaignChannel.findFirst({
-          where: {
-            channelType: "brevo",
-            externalId: event.campaign_id.toString(),
-          },
-        });
-
-        if (campaignChannel) {
-          campaignId = campaignChannel.campaignId;
-        }
-      }
-
-      await prisma.analyticsEvent.create({
-        data: {
-          campaignId: campaignId || 1, // Default campaign ID if not found
-          leadId: lead.id,
-          eventType: `brevo_${event.event}`,
-          eventData: event as any,
-        },
-      });
-
-      console.log(`✓ Webhook event processed for lead ${lead.id}`);
-
-      res.status(200).json({ message: "Webhook processed successfully" });
     } catch (error) {
-      console.error("=== BREVO WEBHOOK ERROR ===", error);
+      if (error instanceof BrevoWebhookPayloadError) {
+        return res.status(400).json({
+          error: error.message,
+          code: "INVALID_WEBHOOK_PAYLOAD",
+        });
+      }
+      if (receiptDigest) {
+        await releaseWebhookReceipt("brevo", receiptDigest).catch(
+          releaseError => {
+            logError("brevo_webhook_receipt_release_failed", releaseError);
+          }
+        );
+      }
       handleError(error, res, "Brevo webhook");
     }
   };
 
-  /**
-   * Get Brevo analytics
-   * GET /api/brevo/analytics
-   */
   getBrevoAnalytics = async (req: Request, res: Response) => {
     try {
-      console.log("Fetching Brevo analytics...");
+      const [stats, totalCampaigns, sentCampaigns] = await Promise.all([
+        this.brevoService.getAggregatedEmailStatistics(),
+        this.brevoService.getCampaignCount(),
+        this.brevoService.getCampaignCount("sent"),
+      ]);
 
-      // Get account statistics
-      const accountStats = await this.brevoService.getAccountStatistics();
-
-      // Get campaigns count
-      const campaigns = await this.brevoService.getAllCampaigns(100, 0);
-      const activeCampaigns = campaigns.campaigns.filter(
-        c => c.status === "sent"
-      );
-
-      // Calculate rates
-      const stats = accountStats.statistics;
+      const totalBounced = stats.hardBounces + stats.softBounces;
       const deliveryRate =
-        stats.totalSent > 0
-          ? (stats.totalDelivered / stats.totalSent) * 100
-          : 0;
+        stats.requests > 0 ? (stats.delivered / stats.requests) * 100 : 0;
       const openRate =
-        stats.totalDelivered > 0
-          ? (stats.totalOpened / stats.totalDelivered) * 100
-          : 0;
+        stats.delivered > 0 ? (stats.opens / stats.delivered) * 100 : 0;
       const clickRate =
-        stats.totalDelivered > 0
-          ? (stats.totalClicked / stats.totalDelivered) * 100
-          : 0;
+        stats.delivered > 0 ? (stats.clicks / stats.delivered) * 100 : 0;
       const bounceRate =
-        stats.totalSent > 0 ? (stats.totalBounced / stats.totalSent) * 100 : 0;
+        stats.requests > 0 ? (totalBounced / stats.requests) * 100 : 0;
       const unsubscribeRate =
-        stats.totalDelivered > 0
-          ? (stats.totalUnsubscribed / stats.totalDelivered) * 100
-          : 0;
+        stats.delivered > 0 ? (stats.unsubscribed / stats.delivered) * 100 : 0;
       const spamRate =
-        stats.totalDelivered > 0
-          ? (stats.totalSpam / stats.totalDelivered) * 100
-          : 0;
+        stats.delivered > 0 ? (stats.spamReports / stats.delivered) * 100 : 0;
 
       const analytics: BrevoAnalyticsResponse = {
-        totalCampaigns: campaigns.count,
-        activeCampaigns: activeCampaigns.length,
-        totalSent: stats.totalSent,
-        totalDelivered: stats.totalDelivered,
-        totalOpened: stats.totalOpened,
-        totalClicked: stats.totalClicked,
-        totalBounced: stats.totalBounced,
-        totalUnsubscribed: stats.totalUnsubscribed,
-        totalSpam: stats.totalSpam,
+        totalCampaigns,
+        sentCampaigns,
+        totalSent: stats.requests,
+        totalDelivered: stats.delivered,
+        totalOpened: stats.opens,
+        totalClicked: stats.clicks,
+        totalBounced,
+        totalUnsubscribed: stats.unsubscribed,
+        totalSpam: stats.spamReports,
         deliveryRate: Math.round(deliveryRate * 100) / 100,
         openRate: Math.round(openRate * 100) / 100,
         clickRate: Math.round(clickRate * 100) / 100,
@@ -877,37 +669,18 @@ export class BrevoController {
 
       res.json(analytics);
     } catch (error) {
-      console.error("Error fetching Brevo analytics:", error);
       handleError(error, res, "Brevo analytics");
     }
   };
 
-  /**
-   * Test Brevo connection
-   * GET /api/brevo/test-connection
-   */
   testConnection = async (req: Request, res: Response) => {
     try {
-      console.log("Testing Brevo API connection...");
-
-      // Hit /account and return details
-      const account = await this.brevoService.getAccountStatistics();
-      console.log("Brevo account:", JSON.stringify(account, null, 2));
-      if (account) {
-        res.json({
-          status: "success",
-          message: "Brevo API connection successful",
-          account: account,
-        });
-      } else {
-        res.status(500).json({
-          status: "error",
-          message: "Brevo API connection failed",
-          account: null,
-        });
-      }
+      await this.brevoService.getAccountDetails();
+      res.json({
+        status: "success",
+        message: "Brevo API connection successful",
+      });
     } catch (error) {
-      console.error("Brevo connection test error:", error);
       handleError(error, res, "Brevo test connection");
     }
   };

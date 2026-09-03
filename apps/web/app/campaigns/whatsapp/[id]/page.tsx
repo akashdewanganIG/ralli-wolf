@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { CampaignDetailPage } from "@/components/campaign-detail-page";
 import { whatsappService } from "@/lib/api/services";
@@ -8,10 +8,18 @@ import { Alert } from "@repo/ui/components/ui/alert";
 import { Button } from "@repo/ui/components/ui/button";
 import { DetailPageSkeleton } from "@/components/skeletons";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
+import type { Campaign } from "@/components/campaign-table";
+import type { MessageTemplate } from "@/lib/api/types";
+
+type DisplayCampaign = Campaign & {
+  template?: MessageTemplate;
+  messageParams?: Record<string, unknown>;
+};
 
 function formatDate(date: string | Date | null | undefined): string {
   if (!date) return "-";
   const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return "-";
   return d.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -22,6 +30,7 @@ function formatDate(date: string | Date | null | undefined): string {
 function getStatusFromDeliveryStats(stats: {
   total: number;
   pending: number;
+  processing?: number;
   queued: number;
   sent: number;
   delivered: number;
@@ -32,7 +41,7 @@ function getStatusFromDeliveryStats(stats: {
   if (stats.pending === stats.total) return "Pending";
   if (stats.failed === stats.total) return "Failed";
   if (stats.delivered > 0 || stats.read > 0 || stats.sent > 0) return "Sent";
-  if (stats.queued > 0) return "Sending";
+  if (stats.queued > 0 || (stats.processing ?? 0) > 0) return "Sending";
   return "Active";
 }
 
@@ -41,26 +50,27 @@ export default function WhatsappCampaignDetailPage() {
   const params = useParams();
   const idParam = params?.id as string;
   const id = Number(idParam);
-  const [campaign, setCampaign] = useState<any>(null);
-  const [deliveries, setDeliveries] = useState<any[]>([]);
-  const [events, setEvents] = useState<any[]>([]);
+  const [campaign, setCampaign] = useState<DisplayCampaign | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [hasLoaded, setHasLoaded] = useState(false);
-  const intervalRef = useRef<any>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hasLoadedRef = useRef(false);
+  const requestInFlightRef = useRef(false);
+  const mountedRef = useRef(false);
 
   const handleBack = () => {
     router.push("/campaigns/whatsapp");
   };
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    if (!Number.isSafeInteger(id) || id <= 0 || requestInFlightRef.current) {
+      return;
+    }
+    requestInFlightRef.current = true;
     try {
-      if (!hasLoaded) setLoading(true);
-      const [campaignData, d, e] = await Promise.all([
-        whatsappService.getCampaignById(id),
-        whatsappService.listDeliveries(id),
-        whatsappService.listEvents(id),
-      ]);
+      if (!hasLoadedRef.current && mountedRef.current) setLoading(true);
+      const campaignData = await whatsappService.getCampaignById(id);
+      if (!mountedRef.current) return;
 
       const stats = campaignData.deliveryStats || {
         total: 0,
@@ -73,20 +83,22 @@ export default function WhatsappCampaignDetailPage() {
       };
       const status = getStatusFromDeliveryStats(stats);
 
-      // Map campaign data to the expected format
-      const mappedCampaign = {
+      const creatorName = [
+        campaignData.creator.firstName,
+        campaignData.creator.lastName,
+      ]
+        .filter(Boolean)
+        .join(" ");
+      const mappedCampaign: DisplayCampaign = {
         id: String(campaignData.id),
         name: campaignData.name || "Untitled Campaign",
         channel: "WhatsApp",
         status,
-        // For drafts, hide the start time in the detail header (will render as "-").
+
         startDate:
           status === "Draft" ? "-" : formatDate(campaignData.startDate),
         endDate: formatDate(campaignData.endDate),
-        createdBy:
-          campaignData.creator?.name ||
-          campaignData.creator?.email ||
-          "Unknown",
+        createdBy: creatorName || campaignData.creator.email || "Unknown",
         numMessages: stats.total || 0,
         openRate:
           stats.total > 0
@@ -96,35 +108,41 @@ export default function WhatsappCampaignDetailPage() {
         deliveryStats: stats,
         templateName: campaignData.templateName,
         template: campaignData.template,
-        messageParams: campaignData.messageParams,
+        messageParams: campaignData.messageParams ?? undefined,
       };
 
       setCampaign(mappedCampaign);
-      setDeliveries(d);
-      setEvents(e);
       setError(null);
-      setHasLoaded(true);
-    } catch (err: any) {
-      setError(err?.message || "Failed to load campaign data");
+      hasLoadedRef.current = true;
+    } catch (err: unknown) {
+      if (mountedRef.current) {
+        setError(
+          err instanceof Error ? err.message : "Failed to load campaign data"
+        );
+      }
     } finally {
-      setLoading(false);
+      requestInFlightRef.current = false;
+      if (mountedRef.current) setLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
-    if (!id || isNaN(id)) return;
-    let canceled = false;
-
-    const loadData = async () => {
-      if (canceled) return;
-      await load();
-    };
+    mountedRef.current = true;
+    hasLoadedRef.current = false;
+    setCampaign(null);
+    setError(null);
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      setLoading(false);
+      return () => {
+        mountedRef.current = false;
+      };
+    }
 
     const startPolling = () => {
       if (intervalRef.current) return;
       intervalRef.current = setInterval(() => {
         if (document.visibilityState === "visible") {
-          loadData();
+          void load();
         }
       }, 5000);
     };
@@ -138,23 +156,23 @@ export default function WhatsappCampaignDetailPage() {
 
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
-        loadData();
+        void load();
         startPolling();
       } else {
         stopPolling();
       }
     };
 
-    loadData();
+    void load();
     startPolling();
     document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
-      canceled = true;
+      mountedRef.current = false;
       stopPolling();
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [id]);
+  }, [id, load]);
 
   if (loading && !campaign) {
     return <DetailPageSkeleton />;
@@ -199,8 +217,6 @@ export default function WhatsappCampaignDetailPage() {
       template={campaign.template}
       messageParams={campaign.messageParams}
       onBack={handleBack}
-      deliveries={deliveries}
-      events={events}
       loading={loading}
       error={error}
       onRetry={load}

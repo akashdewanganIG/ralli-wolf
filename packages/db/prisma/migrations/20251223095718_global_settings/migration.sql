@@ -1,4 +1,4 @@
--- CreateTable
+
 CREATE TABLE "global_settings" (
     "key" TEXT NOT NULL,
     "value" TEXT NOT NULL,

@@ -895,7 +895,7 @@ Database
 
 - ApprovalProcess table — tracks all approvals with: targetObjectName (OPP/QUOTE), status (PENDING/APPROVED/REJECTED), comment,
   targetRecordId, requestedToId (assigned approver), lastActorId, createdById, completedDate
-- Quote.pdfUrl — stores the S3 URL after a quote is sent to client
+- Quote PDFs are generated on demand for authenticated users and attached to client emails; no public object URL is persisted.
 - QuoteStatus cleanup — removed DENIED and NEEDS_REVISION, using REJECTED only
 
 APIs
@@ -968,7 +968,7 @@ Email notifications (Resend, all fire-and-forget)
 3.  Add to .env
     RESEND_API_KEY="re_xxxxxxxxxxxxxxxxxxxxxxxx"
     RESEND_FROM_EMAIL="Ralli Wolf <noreply@yourdomain.com>"
-    RESEND_REPLY_TO=""   # optional; omit to send with no reply address
+    RESEND_REPLY_TO="" # optional; omit to send with no reply address
 
 The sender in `RESEND_FROM_EMAIL` must be on the verified domain. CC and BCC
 are supported, as are attachments. Every send returns a message id, which the

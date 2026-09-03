@@ -13,19 +13,6 @@ import {
 } from "recharts";
 import { cn } from "@repo/ui/lib/utils";
 
-/**
- * Trend chart.
- *
- * Drawn as an area rather than a bare line: the soft fall-off under the curve
- * reads as magnitude at a glance, which a 1px stroke on its own does not.
- *
- * Colour comes from the `--chart-*` tokens, so both themes are correct from one
- * definition. Nothing here hard-codes a hex — an earlier version pinned the
- * brand red and white directly, which broke in dark mode.
- *
- * Axes carry no lines or ticks and the grid is horizontal only: at dashboard
- * size, chrome competes with the data it is supposed to frame.
- */
 interface LineChartProps {
   data: {
     labels: string[];
@@ -45,7 +32,6 @@ interface LineChartProps {
 
 const AXIS_TICK = { fill: "var(--muted-foreground)", fontSize: 11 };
 
-/** Ordinal ramp, so a second or third series stays distinguishable. */
 const SERIES_COLORS = [
   "var(--chart-mark)",
   "var(--chart-step-4)",
@@ -70,8 +56,6 @@ export function LineChart({
     ),
   }));
 
-  // Stable per-instance ids so two charts on one page cannot clash over a
-  // shared gradient definition.
   const gradientId = React.useId();
 
   return (
@@ -173,8 +157,6 @@ export function LineChart({
                   stroke={color}
                   strokeWidth={2}
                   fill={`url(#${gradientId}-${index})`}
-                  // Only the hovered point is marked; a dot on every reading
-                  // turns a trend line into a dotted mess at this width.
                   dot={false}
                   activeDot={{
                     r: 4,

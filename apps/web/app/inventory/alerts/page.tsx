@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@repo/ui/components/ui/button";
 import Link from "next/link";
 import { Alert } from "@repo/ui/components/ui/alert";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   ErrorBanner,
   PageHeader,
@@ -17,18 +17,21 @@ import {
   StatusBadge,
   DEFAULT_PAGE_SIZE,
 } from "@/components/supply-chain/shared";
-import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
-import { useInventoryMutations, useStockAlerts } from "@/hooks/useSupplyChain";
+import { WarehouseFilter } from "@/components/supply-chain/warehouse-filter";
+import {
+  useInventoryMutations,
+  useStockAlerts,
+} from "@/hooks/use-supply-chain";
 import {
   formatDateTime,
   formatQuantity,
   humanizeEnum,
 } from "@/lib/utils/decimal";
-import type { StockAlertType } from "@/lib/api/types/supplyChain";
+import type { StockAlertType } from "@/lib/api/types/supply-chain";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { DashboardToolbar } from "@repo/ui/components/ui/dashboard-toolbar";
 import { Tag } from "@repo/ui/components/ui/tag";
-import { DataTransfer } from "@/components/data-transfer/DataTransfer";
+import { DataTransfer } from "@/components/data-transfer/data-transfer";
 
 const ALERT_TYPES: StockAlertType[] = [
   "STOCKOUT",

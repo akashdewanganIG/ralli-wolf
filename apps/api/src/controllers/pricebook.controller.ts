@@ -6,7 +6,22 @@ import {
   handleValidationError,
   handleNotFoundError,
   handlePrismaError,
-} from "../utils/errorHandler.js";
+} from "../utils/error-handler.js";
+import {
+  parseBoundedInteger,
+  parsePositiveInteger,
+  parseStrictBoolean,
+} from "../utils/validators.js";
+
+const PRICE_BOOK_SELECT = {
+  id: true,
+  name: true,
+  currencyCode: true,
+  isActive: true,
+  description: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.PriceBookSelect;
 
 export class PriceBookController {
   private parsePriceBookId(
@@ -14,12 +29,8 @@ export class PriceBookController {
     res: Response,
     operation: string
   ): number | null {
-    if (!id) {
-      handleValidationError(res, "PriceBook ID is required", "id", operation);
-      return null;
-    }
-    const pricebookId = parseInt(id, 10);
-    if (isNaN(pricebookId)) {
+    const pricebookId = parsePositiveInteger(id);
+    if (pricebookId === null) {
       handleValidationError(res, "Invalid PriceBook ID", "id", operation);
       return null;
     }
@@ -29,25 +40,27 @@ export class PriceBookController {
   async getAllPriceBooks(req: Request, res: Response) {
     try {
       const { page = 1, limit = 10 } = req.query;
-      const pageNum = Number(page);
-      const limitNum = Number(limit);
+      const pageNum = parseBoundedInteger(page, 1, 1_000_000);
+      const limitNum = parseBoundedInteger(limit, 1, 100);
 
-      if (isNaN(pageNum) || isNaN(limitNum)) {
+      if (pageNum === null || limitNum === null) {
         return handleValidationError(
           res,
-          "page and limit must be numbers",
+          "page must be positive and limit must be between 1 and 100",
           undefined,
           "Get all price books"
         );
       }
 
-      const pricebooks = await prisma.priceBook.findMany({
-        skip: (pageNum - 1) * limitNum,
-        take: limitNum,
-        orderBy: { createdAt: "desc" },
-      });
-
-      const total = await prisma.priceBook.count();
+      const [pricebooks, total] = await Promise.all([
+        prisma.priceBook.findMany({
+          skip: (pageNum - 1) * limitNum,
+          take: limitNum,
+          orderBy: { createdAt: "desc" },
+          select: PRICE_BOOK_SELECT,
+        }),
+        prisma.priceBook.count(),
+      ]);
 
       return res.json({
         data: pricebooks,
@@ -74,6 +87,7 @@ export class PriceBookController {
 
       const pricebook = await prisma.priceBook.findUnique({
         where: { id: pricebookId },
+        select: PRICE_BOOK_SELECT,
       });
 
       if (!pricebook) {
@@ -90,13 +104,28 @@ export class PriceBookController {
 
   async createPriceBook(req: Request, res: Response) {
     try {
-      const { name, description } = req.body;
+      const { name, description, currencyCode } = req.body;
 
-      if (!name) {
+      if (
+        typeof name !== "string" ||
+        !name.trim() ||
+        name.trim().length > 160
+      ) {
         return handleValidationError(
           res,
-          "Name is required",
+          "Name must be between 1 and 160 characters",
           "name",
+          "Create price book"
+        );
+      }
+      if (
+        description !== undefined &&
+        (typeof description !== "string" || description.trim().length > 2000)
+      ) {
+        return handleValidationError(
+          res,
+          "Description must be text no longer than 2000 characters",
+          "description",
           "Create price book"
         );
       }
@@ -104,13 +133,38 @@ export class PriceBookController {
       const currencySetting = await prisma.globalSetting.findUnique({
         where: { key: "defaultCurrency" },
       });
+      const selectedCurrency =
+        typeof currencyCode === "string" && currencyCode.trim()
+          ? currencyCode.trim().toUpperCase()
+          : currencySetting?.value?.trim().toUpperCase() || "INR";
+      if (!/^[A-Z]{3}$/.test(selectedCurrency)) {
+        return handleValidationError(
+          res,
+          "Currency code must contain exactly three letters",
+          "currencyCode",
+          "Create price book"
+        );
+      }
+      const currency = await prisma.currency.findUnique({
+        where: { code: selectedCurrency },
+        select: { code: true },
+      });
+      if (!currency) {
+        return handleValidationError(
+          res,
+          "Unsupported currency code",
+          "currencyCode",
+          "Create price book"
+        );
+      }
 
       const pricebook = await prisma.priceBook.create({
         data: {
-          name,
-          description,
-          currencyCode: currencySetting?.value || "INR",
+          name: name.trim(),
+          description: description?.trim() || undefined,
+          currencyCode: currency.code,
         },
+        select: PRICE_BOOK_SELECT,
       });
 
       return res.status(201).json({
@@ -134,14 +188,95 @@ export class PriceBookController {
       );
       if (pricebookId === null) return;
 
-      const { name, description } = req.body;
+      const { name, description, currencyCode, isActive } = req.body;
+      if (
+        name === undefined &&
+        description === undefined &&
+        currencyCode === undefined &&
+        isActive === undefined
+      ) {
+        return handleValidationError(
+          res,
+          "At least one price book field is required",
+          undefined,
+          "Update price book"
+        );
+      }
+
+      const data: Prisma.PriceBookUpdateInput = {};
+      if (name !== undefined) {
+        if (
+          typeof name !== "string" ||
+          !name.trim() ||
+          name.trim().length > 160
+        ) {
+          return handleValidationError(
+            res,
+            "Name must be between 1 and 160 characters",
+            "name",
+            "Update price book"
+          );
+        }
+        data.name = name.trim();
+      }
+      if (description !== undefined) {
+        if (
+          typeof description !== "string" ||
+          description.trim().length > 2000
+        ) {
+          return handleValidationError(
+            res,
+            "Description must be text no longer than 2000 characters",
+            "description",
+            "Update price book"
+          );
+        }
+        data.description = description.trim() || null;
+      }
+      if (currencyCode !== undefined) {
+        if (
+          typeof currencyCode !== "string" ||
+          !/^[A-Z]{3}$/.test(currencyCode.trim().toUpperCase())
+        ) {
+          return handleValidationError(
+            res,
+            "Currency code must contain exactly three letters",
+            "currencyCode",
+            "Update price book"
+          );
+        }
+        const normalizedCurrency = currencyCode.trim().toUpperCase();
+        const currency = await prisma.currency.findUnique({
+          where: { code: normalizedCurrency },
+          select: { code: true },
+        });
+        if (!currency) {
+          return handleValidationError(
+            res,
+            "Unsupported currency code",
+            "currencyCode",
+            "Update price book"
+          );
+        }
+        data.currency = { connect: { code: currency.code } };
+      }
+      if (isActive !== undefined) {
+        const parsed = parseStrictBoolean(isActive);
+        if (parsed === null) {
+          return handleValidationError(
+            res,
+            "isActive must be true or false",
+            "isActive",
+            "Update price book"
+          );
+        }
+        data.isActive = parsed;
+      }
 
       const pricebook = await prisma.priceBook.update({
         where: { id: pricebookId },
-        data: {
-          name,
-          description,
-        },
+        data,
+        select: PRICE_BOOK_SELECT,
       });
 
       return res.json({

@@ -6,7 +6,7 @@ import { Input } from "@repo/ui/components/ui/input";
 import Link from "next/link";
 import { Alert } from "@repo/ui/components/ui/alert";
 import { useParams } from "next/navigation";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   DetailRow,
   ErrorBanner,
@@ -23,8 +23,8 @@ import {
   useProductionOrder,
   useProductionVariance,
   useMaterialMutations,
-} from "@/hooks/useSupplyChain";
-import { productionOrderService } from "@/lib/api/supplyChainServices";
+} from "@/hooks/use-supply-chain";
+import { productionOrderService } from "@/lib/api/supply-chain-services";
 import { useQuery } from "@tanstack/react-query";
 import {
   formatDate,

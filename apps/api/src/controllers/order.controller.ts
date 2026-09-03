@@ -1,24 +1,28 @@
 import { Request, Response } from "express";
 import { prisma } from "@repo/db";
-import { handleError, handleValidationError } from "../utils/errorHandler.js";
+import { handleError, handleValidationError } from "../utils/error-handler.js";
+import {
+  OrderPricingError,
+  resolveOrderLines,
+} from "../services/order-pricing.service.js";
+import {
+  nextDocumentNumber,
+  SEQUENCE_KEYS,
+} from "../services/supplyChain/numbering.service.js";
 
 export class OrderController {
-  /**
-   * Create a new order
-   * POST /api/orders
-   */
   async createOrder(req: Request, res: Response) {
     try {
-      const { subdealerId, lineItems } = req.body as {
-        subdealerId: number;
+      const { lineItems } = req.body as {
         lineItems: { productId: number; quantity: number }[];
       };
+      const subdealerId = req.subdealer?.id;
 
       if (!subdealerId) {
         return handleValidationError(
           res,
-          "Subdealer ID is required",
-          "subdealerId",
+          "Authenticated subdealer is required",
+          undefined,
           "Create Order"
         );
       }
@@ -32,79 +36,21 @@ export class OrderController {
         );
       }
 
-      // Validate subdealer exists
-      const subdealer = await prisma.subdealer.findUnique({
-        where: { id: subdealerId },
-      });
+      const priced = await resolveOrderLines(lineItems);
 
-      if (!subdealer) {
-        return handleValidationError(
-          res,
-          "Subdealer not found",
-          "subdealerId",
-          "Create Order"
-        );
-      }
-
-      // Calculate totals and validate products
-      let totalAmount = 0;
-      const orderLineItems: {
-        productId: number;
-        quantity: number;
-        unitPrice: number;
-        totalPrice: number;
-      }[] = [];
-
-      for (const item of lineItems) {
-        if (item.quantity <= 0) continue;
-
-        const product = await prisma.product.findUnique({
-          where: { id: item.productId },
-        });
-
-        if (!product) {
-          return handleValidationError(
-            res,
-            `Product with ID ${item.productId} not found`,
-            "lineItems",
-            "Create Order"
-          );
-        }
-
-        // Product doesn't have a price field - pricing is handled through PriceBookEntry
-        // For now, default to 0. TODO: Fetch price from PriceBookEntry if priceBookId is provided
-        const unitPrice = 0;
-        const totalPrice = unitPrice * item.quantity;
-        totalAmount += totalPrice;
-
-        orderLineItems.push({
-          productId: item.productId,
-          quantity: item.quantity,
-          unitPrice: unitPrice,
-          totalPrice: totalPrice,
-        });
-      }
-
-      if (orderLineItems.length === 0) {
-        return handleValidationError(
-          res,
-          "No valid items in order",
-          "lineItems",
-          "Create Order"
-        );
-      }
-
-      // Create order in transaction
       const order = await prisma.$transaction(async tx => {
-        // Generate order number (simple timestamp based for now)
-        const orderNumber = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        const orderNumber = await nextDocumentNumber(
+          tx,
+          SEQUENCE_KEYS.CUSTOMER_ORDER
+        );
 
         const newOrder = await tx.order.create({
           data: {
             orderNumber,
-            totalAmount,
+            totalAmount: priced.totalAmount,
+            subdealerId,
             lineItems: {
-              create: orderLineItems,
+              create: priced.lines,
             },
           },
           include: {
@@ -125,6 +71,14 @@ export class OrderController {
         data: order,
       });
     } catch (error) {
+      if (error instanceof OrderPricingError) {
+        return handleValidationError(
+          res,
+          error.message,
+          "lineItems",
+          "Create Order"
+        );
+      }
       handleError(error, res, "Create Order");
     }
   }

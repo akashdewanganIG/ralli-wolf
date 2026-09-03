@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@repo/ui/components/ui/button";
 import { Input } from "@repo/ui/components/ui/input";
 import { useRouter } from "next/navigation";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   ErrorBanner,
   FilterBar,
@@ -17,15 +17,15 @@ import {
   StatusBadge,
   DEFAULT_PAGE_SIZE,
 } from "@/components/supply-chain/shared";
-import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
+import { WarehouseFilter } from "@/components/supply-chain/warehouse-filter";
 import {
   ProductPicker,
   type PickedProduct,
-} from "@/components/supply-chain/ProductPicker";
+} from "@/components/supply-chain/product-picker";
 import {
   useProductionMutations,
   useProductionOrders,
-} from "@/hooks/useSupplyChain";
+} from "@/hooks/use-supply-chain";
 import {
   formatDate,
   formatMoney,
@@ -34,7 +34,7 @@ import {
 } from "@/lib/utils/decimal";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { FormDialog } from "@repo/ui/components/ui/form-dialog";
-import { DataTransfer } from "@/components/data-transfer/DataTransfer";
+import { DataTransfer } from "@/components/data-transfer/data-transfer";
 
 export default function ProductionOrdersPage() {
   const router = useRouter();
@@ -109,54 +109,44 @@ export default function ProductionOrdersPage() {
           onOpenChange={setShowForm}
           title="Plan a build"
           description="The product needs an active bill of materials in effect today."
+          onSubmit={submit}
+          bodyClassName="gap-3 md:grid-cols-4"
+          isSubmitting={create.isPending}
+          submitDisabled={!product || !warehouseId || !plannedQuantity}
+          submitLabel="Create production order"
         >
-          <form onSubmit={submit} className="grid gap-4 md:grid-cols-4">
-            <Field label="Product to build" className="md:col-span-2" composite>
-              <ProductPicker value={product} onChange={setProduct} autoFocus />
-            </Field>
-            <Field label="Build in warehouse" composite>
-              <WarehouseFilter
-                value={warehouseId}
-                onChange={setWarehouseId}
-                allowAll={false}
-                required
-              />
-            </Field>
-            <Field label="Planned quantity">
-              <Input
-                required
-                inputMode="decimal"
-                value={plannedQuantity}
-                onChange={event => setPlannedQuantity(event.target.value)}
-              />
-            </Field>
-            <Field label="Planned start">
-              <Input
-                type="date"
-                value={plannedStartDate}
-                onChange={event => setPlannedStartDate(event.target.value)}
-              />
-            </Field>
-            <Field label="Notes" className="md:col-span-3">
-              <Input
-                value={notes}
-                onChange={event => setNotes(event.target.value)}
-              />
-            </Field>
-            <div className="md:col-span-4 dialog-form-actions">
-              <Button
-                type="submit"
-                disabled={
-                  !product ||
-                  !warehouseId ||
-                  !plannedQuantity ||
-                  create.isPending
-                }
-              >
-                {create.isPending ? "Planning…" : "Create production order"}
-              </Button>
-            </div>
-          </form>
+          <Field label="Product to build" className="md:col-span-2" composite>
+            <ProductPicker value={product} onChange={setProduct} autoFocus />
+          </Field>
+          <Field label="Build in warehouse" composite>
+            <WarehouseFilter
+              value={warehouseId}
+              onChange={setWarehouseId}
+              allowAll={false}
+              required
+            />
+          </Field>
+          <Field label="Planned quantity">
+            <Input
+              required
+              inputMode="decimal"
+              value={plannedQuantity}
+              onChange={event => setPlannedQuantity(event.target.value)}
+            />
+          </Field>
+          <Field label="Planned start">
+            <Input
+              type="date"
+              value={plannedStartDate}
+              onChange={event => setPlannedStartDate(event.target.value)}
+            />
+          </Field>
+          <Field label="Notes" className="md:col-span-3">
+            <Input
+              value={notes}
+              onChange={event => setNotes(event.target.value)}
+            />
+          </Field>
         </FormDialog>
 
         <Panel

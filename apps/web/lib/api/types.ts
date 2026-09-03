@@ -1,4 +1,3 @@
-// Base types
 export interface ApiResponse<T> {
   data: T;
   message?: string;
@@ -12,7 +11,6 @@ export interface PaginatedResponse<T> {
   limit: number;
 }
 
-// Pagination metadata from backend
 export interface PaginationMeta {
   currentPage: number;
   totalPages: number;
@@ -22,13 +20,11 @@ export interface PaginationMeta {
   hasPreviousPage: boolean;
 }
 
-// Paginated response structure from backend
 export interface PaginatedApiResponse<T> {
   data: T[];
   pagination: PaginationMeta;
 }
 
-// Quote list item (GET /api/quotes response item)
 export interface QuoteListItem {
   id: number;
   quoteNumber: string;
@@ -53,7 +49,6 @@ export interface QuoteListItem {
   _count?: { lineItems: number };
 }
 
-// Quote detail (GET /api/quotes/:id single quote response)
 export interface QuoteDetail {
   id: number;
   quoteNumber: string;
@@ -91,7 +86,6 @@ export interface QuoteDetail {
   deliveryTerms?: string | null;
   notes?: string | null;
   internalNotes?: string | null;
-  pdfUrl?: string | null;
   approvalComment?: string | null;
   rejectionComment?: string | null;
   opportunityId: number;
@@ -128,7 +122,6 @@ export interface QuoteDetail {
   _count?: { lineItems: number; salesOrders: number };
 }
 
-// Quote line item (GET /api/quotes/:id/line-items response item)
 export interface QuoteLineItemApi {
   id: number;
   quoteId: number;
@@ -144,7 +137,6 @@ export interface QuoteLineItemApi {
   priceBookEntry?: { id: number; listPrice?: number | string };
 }
 
-// User and Permissions
 export interface User {
   id: number;
   firstName: string | null;
@@ -152,37 +144,24 @@ export interface User {
   email: string;
   phone?: string;
   countryCode?: string;
-  passwordHash?: string;
+  location?: string | null;
   createdAt?: string;
   updatedAt?: string;
   leads?: Lead[];
   campaigns?: Campaign[];
   role?: string;
   region?: string;
-  /** Only populated for the CUSTOM role; other roles resolve from the catalogue. */
+
   permissions?: string[];
-  isDeveloper?: boolean;
-  /** Account is still on the password an admin generated; it must be replaced. */
+
   mustChangePassword?: boolean;
 }
 
 export interface CreateUserResponse extends User {
-  credentialEmailSent: boolean;
+  invitationEmailSent: boolean;
   message: string;
 }
 
-export interface UserPermissions {
-  id: number;
-  userId: number;
-  leadManagement: boolean;
-  campaignManagement: boolean;
-  chatbotAccess: boolean;
-  whatsappCampaign: boolean;
-  emailMarketing: boolean;
-  systemAdminAccess: boolean;
-}
-
-// Lead types
 export type LeadStatus =
   | "OPEN"
   | "WORKING"
@@ -205,7 +184,7 @@ export interface Lead {
   source: string;
   status: LeadStatus;
   score: number;
-  ownerId?: number;
+  ownerId?: number | null;
   convertedToContactId?: number;
   createdAt: string;
   updatedAt: string;
@@ -238,6 +217,37 @@ export interface LeadAssignmentStats {
   conversionRate: number;
 }
 
+export interface LeadScoreBreakdown {
+  totalScore: number;
+  completenessScore: number;
+  qualityScore: number;
+  missingFields: string[];
+  invalidFields: string[];
+}
+
+export interface LeadMutationResponse {
+  lead: Lead;
+  scoreBreakdown: LeadScoreBreakdown;
+}
+
+export interface LeadConversionResult {
+  lead: Lead;
+  contact: Contact;
+  message: string;
+}
+
+export interface BulkLeadConversionResult {
+  successful: Array<
+    LeadConversionResult & {
+      leadId: number;
+      contactId: number;
+    }
+  >;
+  failed: Array<{ leadId: number | null; reason: string }>;
+  summary: { total: number; successful: number; failed: number };
+  message: string;
+}
+
 export type LeadSource = "IMPORT" | "LANDING_PAGE" | "MANUAL";
 
 export interface DashboardChartDataset {
@@ -262,7 +272,6 @@ export interface DashboardMetric {
   changeType: "positive" | "negative";
 }
 
-// Sales typed responses
 export interface SalesMyLeadsResponse {
   leads: Lead[];
   pagination: PaginationMeta;
@@ -282,7 +291,6 @@ export interface SalesMyStatsResponse {
   };
 }
 
-// Contact types
 export interface Contact {
   id: number;
   name: string;
@@ -290,7 +298,13 @@ export interface Contact {
   phone?: string;
   countryCode?: string;
   position?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
   accountId?: number;
+  emailOptOut?: boolean;
+  smsOptOut?: boolean;
+  whatsappOptOut?: boolean;
   createdAt: string;
   updatedAt: string;
   account?: Account;
@@ -298,7 +312,6 @@ export interface Contact {
   campaignMembers?: CampaignMember[];
 }
 
-// Account types
 export interface Account {
   id: number;
   name: string;
@@ -306,29 +319,11 @@ export interface Account {
   website?: string;
   phone?: string;
   description?: string;
-  annualRevenue?: string;
-  companySize?: string;
-  billingAddress?: Address;
-  shippingAddress?: Address;
-  accountOwner?: string;
-  createdBy?: string;
-  lastUpdatedBy?: string;
-  accountStatus?: string;
   createdAt: string;
   updatedAt: string;
   contacts?: Contact[];
 }
 
-export interface Address {
-  street: string;
-  city: string;
-  state: string;
-  zipCode: string;
-  country: string;
-  sameAsBilling?: boolean;
-}
-
-// Campaign types
 export interface Campaign {
   id: number;
   name: string;
@@ -355,34 +350,31 @@ export interface CampaignMember {
   lead?: Lead;
 }
 
-// Analytics types
 export interface AnalyticsEvent {
   id: number;
   campaignId?: number;
   contactId?: number;
   leadId?: number;
   eventType: string;
-  eventData: Record<string, any>;
+  eventData: Record<string, unknown>;
   occurredAt: string;
   campaign?: Campaign;
   contact?: Contact;
   lead?: Lead;
 }
 
-// Form Submission types
 export interface FormSubmission {
   id: number;
   campaignId: number;
   leadId?: number;
   contactId?: number;
-  formData: Record<string, any>;
+  formData: Record<string, unknown>;
   submittedAt: string;
   campaign?: Campaign;
   lead?: Lead;
   contact?: Contact;
 }
 
-// Landing Page Campaign types
 export interface LandingPageCampaign {
   id: number;
   name: string;
@@ -407,7 +399,7 @@ export interface Enquiry {
   id: number;
   leadId: number;
   landingPageCampaignId?: number | null;
-  customFields?: Record<string, any> | null;
+  customFields?: Record<string, unknown> | null;
   status: "UNRESOLVED" | "RESOLVED" | "IN_PROGRESS";
   enquiryCreatedAt: string;
   resolvedAt?: string | null;
@@ -431,6 +423,34 @@ export interface Enquiry {
   };
 }
 
+export interface LeadRemark {
+  id: number;
+  leadId: number;
+  userId: number;
+  remark: string;
+  createdAt: string;
+  updatedAt: string;
+  user: Pick<User, "id" | "firstName" | "lastName" | "email">;
+  lead?: Pick<Lead, "id" | "firstName" | "lastName" | "email" | "status"> & {
+    name: string;
+  };
+}
+
+export interface GlobalSetting {
+  key: string;
+  value: string;
+  description?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Currency {
+  code: string;
+  name: string;
+  symbol: string;
+  country?: string | null;
+}
+
 export interface LandingPageCampaignFilters {
   status?: "ACTIVE" | "PAUSED" | "SCHEDULED" | "CLOSED" | "ARCHIVED";
   search?: string;
@@ -445,117 +465,197 @@ export interface LandingPageCampaignStats {
   unresolvedEnquiries: number;
 }
 
-// Messaging (Generic)
 export interface MessagingAccount {
   id: number;
   provider: string;
   displayName: string;
-  credentialsJson: Record<string, any>;
   sourceHandle: string;
-  phoneNumber?: string;
+  phoneNumber: string;
   senderId?: string | null;
   businessId?: string | null;
-  status?: string;
-  externalIdsJson?: Record<string, any>;
-  isActive: boolean;
-  createdBy: number;
+  status: "ACTIVE" | "INACTIVE";
   createdAt: string;
   updatedAt?: string;
   maskedTail?: string;
-  metadata?: Record<string, any>;
+  metadata?: unknown;
 }
 
 export interface MessageTemplate {
   id: number;
-  provider?: string;
-  channel?: string;
-  providerTemplateId?: string;
+  whatsappNumberId: number;
+  providerTemplateId: string;
   name: string;
   language: string;
   languages?: Array<{
     code: string;
     status: string;
-    id: number;
+    id: string | number;
     rejection_reason?: string;
   }>;
   category?: string | null;
   status: string;
-  components?: any;
-  componentsJson?: Record<string, any>;
-  lastSyncedAt?: string;
-  messagingAccountId?: number;
+  components?: unknown;
+  lastSyncedAt?: string | null;
+  isArchived?: boolean;
   createdAt: string;
   updatedAt?: string;
+}
+
+export type WhatsAppAudience = "all" | "segment" | "upload" | "leads";
+
+export interface WhatsAppDeliveryStats {
+  total: number;
+  pending: number;
+  processing: number;
+  queued: number;
+  sent: number;
+  delivered: number;
+  read: number;
+  failed: number;
+  opted_out: number;
+}
+
+export interface WhatsAppCampaignSummary {
+  id: number;
+  name: string;
+  description?: string | null;
+  startDate: string;
+  endDate?: string | null;
+  createdBy: number;
+  createdAt: string;
+  creator: Pick<User, "id" | "firstName" | "lastName" | "email">;
+  deliveryStats: WhatsAppDeliveryStats;
+  templateName?: string;
+  scheduledAt?: string | null;
+}
+
+export interface WhatsAppCampaignDetail extends WhatsAppCampaignSummary {
+  template?: MessageTemplate;
+  messageParams?: Record<string, unknown> | null;
+  language?: string | null;
+}
+
+export interface WhatsAppCampaignConfig {
+  id: number;
+  name: string;
+  description?: string | null;
+  accountId: number;
+  templateName: string;
+  language?: string | null;
+  messageParams?: Record<string, unknown> | null;
+  audience: WhatsAppAudience;
+  segmentId?: number | null;
+  scheduledAt?: string | null;
+  batchSize: number;
+}
+
+export interface WhatsAppCreateCampaignPayload {
+  name: string;
+  description?: string;
+  accountId: number;
+  templateName: string;
+  language?: string;
+  toAudience?: WhatsAppAudience;
+  params?: Record<string, unknown>;
+  segmentId?: number;
+  csvContacts?: Array<Record<string, string>>;
+  phoneColumnName?: string;
+  isDraft?: boolean;
+  batchSize?: number;
+}
+
+export interface WhatsAppCreateTemplatePayload {
+  accountId: number;
+  template_name: string;
+  language: string;
+  category: "UTILITY" | "MARKETING" | "AUTHENTICATION";
+  button_url?: boolean;
+  message_ttl?: number;
+  ttl_in_seconds?: number | null;
+  components: Array<Record<string, unknown>>;
+}
+
+export interface WhatsAppUpdateCampaignPayload {
+  name?: string;
+  description?: string | null;
+  templateName?: string;
+  language?: string;
+  toAudience?: Exclude<WhatsAppAudience, "upload">;
+  params?: Record<string, unknown>;
+  segmentId?: number | null;
+  batchSize?: number;
+}
+
+export interface WhatsAppOptOut {
+  id: number;
+  phone: string;
+  channel: "whatsapp";
+  optedOutAt: string;
+  source?: string | null;
+  campaignId?: number | null;
+  reason?: string | null;
+  metadata?: unknown;
+  createdAt: string;
 }
 
 export interface CampaignDelivery {
   id: number;
   campaignId: number;
-  campaignMemberId: number;
+  campaignMemberId?: number | null;
+  contactId?: number | null;
+  leadId?: number | null;
   channel: string;
-  messagingAccountId: number;
+  whatsappNumberId?: number | null;
+  segmentId?: number | null;
   address: string;
-  variablesJson?: Record<string, any>;
+  csvData?: Record<string, string> | null;
   status:
-    | "pending"
-    | "queued"
-    | "sent"
-    | "delivered"
-    | "read"
-    | "failed"
-    | "paused"
-    | "opted_out";
-  errorCode?: string;
-  errorMessage?: string;
-  providerMessageId?: string;
-  sentAt?: string;
-  deliveredAt?: string;
-  readAt?: string;
+    | "PENDING"
+    | "PROCESSING"
+    | "QUEUED"
+    | "SENT"
+    | "DELIVERED"
+    | "READ"
+    | "FAILED"
+    | "OPTED_OUT";
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  providerMessageId?: string | null;
+  sentAt?: string | null;
+  deliveredAt?: string | null;
+  readAt?: string | null;
+  failedAt?: string | null;
   createdAt: string;
+  updatedAt: string;
 }
 
-// Auth types
 export interface LoginRequest {
   email: string;
   password: string;
 }
 
 export interface LoginOtpVerifyRequest {
-  /** The short-lived token handed back by the password step. */
   mfaToken: string;
   otp: string;
 }
 
-/**
- * What `POST /auth/login` returns once the password is accepted. No session
- * token is issued until the emailed code is verified.
- */
 export interface LoginMfaChallenge {
   mfaRequired: true;
   mfaToken: string;
-  /** e.g. `ak****an@example.com`, safe to show on screen. */
+
   maskedEmail: string;
   expiresIn: number;
-  /** Which challenge to show: an authenticator code, or an emailed one. */
+
   factor: "totp" | "email";
-  /** Everything this account could use, so the form can offer a switch. */
+
   availableFactors: Array<"totp" | "email">;
 }
 
-/**
- * What `POST /auth/login` actually answers with.
- *
- * An account with a second factor gets a challenge; an account whose only
- * method is its password is signed in there and then, so the session arrives
- * immediately. The caller must tell them apart before assuming a code is
- * coming — `isSignedIn` below is the check.
- */
-export type LoginResult = LoginMfaChallenge | LoginResponse;
-
-/** Narrows a login answer to the case where a session was issued outright. */
-export function isSignedIn(result: LoginResult): result is LoginResponse {
-  return "token" in result && typeof result.token === "string";
+export interface LoginSuccess extends LoginResponse {
+  mfaRequired: false;
 }
+
+export type LoginResult = LoginMfaChallenge | LoginSuccess;
 
 export interface LoginOtpResendResponse {
   success: boolean;
@@ -563,14 +663,13 @@ export interface LoginOtpResendResponse {
   expiresIn: number;
 }
 
-/** The three ways an account can authenticate. */
 export type AuthMethodName = "password" | "email" | "totp";
 
 export interface AuthMethodStatus {
   method: AuthMethodName;
   enabled: boolean;
   verified: boolean;
-  /** A secret exists but no code has proved it yet; does not count. */
+
   pendingVerification: boolean;
 }
 
@@ -578,12 +677,14 @@ export interface AuthMethodsSummary {
   minimumRequired: number;
   activeCount: number;
   methods: AuthMethodStatus[];
+
+  sessionToken?: string;
 }
 
 export interface TotpEnrolment {
   qrCodeDataUrl: string;
   otpauthUrl: string;
-  /** Shown once, for users who cannot scan a QR code. */
+
   manualKey: string;
   issuer: string;
   accountName: string;
@@ -591,31 +692,18 @@ export interface TotpEnrolment {
 
 export interface LoginResponse {
   user: User;
-  token: string;
-  isDeveloper?: boolean;
+
+  token?: string;
 }
 
-export interface SignupRequest {
-  name: string;
-  email: string;
-  password: string;
-}
-
-export interface SignupResponse {
-  user: User;
-  token: string;
-}
-
-// API Error types
 export interface ApiError {
   message: string;
   status: number;
   code?: string;
-  /** Set by the OTP verify endpoint when a code is entered incorrectly. */
+
   attemptsRemaining?: number;
 }
 
-// Filter and Query types
 export interface LeadFilters {
   status?: string;
   source?: string;
@@ -645,40 +733,8 @@ export interface CampaignFilters {
 export interface UserFilters {
   role?: string;
   region?: string;
-  permissions?: Partial<UserPermissions>;
   createdFrom?: string;
   createdTo?: string;
-}
-
-// Webhook types
-export interface WebhookPayload {
-  form_submission?: Record<string, any>;
-  lead?: Record<string, any>;
-  campaign?: Record<string, any>;
-  landing_page?: Record<string, any>;
-  custom_fields?: Record<string, any>;
-  [key: string]: any;
-}
-
-export interface WebhookResponse {
-  success: boolean;
-  message: string;
-  timestamp: string;
-  receivedData: {
-    hasBody: boolean;
-    bodyKeys: string[];
-    headers: string[];
-    queryKeys: string[];
-  };
-  leadCreated: boolean;
-  leadId?: number;
-  formSubmissionCreated: boolean;
-  formSubmissionId?: number;
-}
-
-// Brevo types
-export interface SyncLeadsRequest {
-  leadIds: number[];
 }
 
 export interface SyncLeadsResponse {
@@ -774,27 +830,6 @@ export interface BrevoCampaignStatistics {
   statsByDomain?: Record<string, BrevoCampaignStats>;
   mirrorClick?: number;
   remaining?: number;
-  // Legacy fields for backward compatibility
-  delivered?: number;
-  sent?: number;
-  processing?: number;
-  bounces?: number;
-  hardBounces?: number;
-  softBounces?: number;
-  clicks?: number;
-  uniqueClicks?: number;
-  opens?: number;
-  uniqueOpens?: number;
-  spamReports?: number;
-  unsubscriptions?: number;
-  deliveredPercentage?: number;
-  sentPercentage?: number;
-  processingPercentage?: number;
-  bouncePercentage?: number;
-  openPercentage?: number;
-  clickPercentage?: number;
-  spamPercentage?: number;
-  unsubscriptionPercentage?: number;
 }
 
 export interface BrevoCampaign {
@@ -837,24 +872,6 @@ export interface BrevoCampaign {
   sentDate?: string;
 }
 
-export interface BrevoAnalyticsResponse {
-  totalCampaigns: number;
-  activeCampaigns: number;
-  totalSent: number;
-  totalDelivered: number;
-  totalOpened: number;
-  totalClicked: number;
-  totalBounced: number;
-  totalUnsubscribed: number;
-  totalSpam: number;
-  deliveryRate: number;
-  openRate: number;
-  clickRate: number;
-  bounceRate: number;
-  unsubscribeRate: number;
-  spamRate: number;
-}
-
 export interface UpdateCampaignRequest {
   name?: string;
   subject?: string;
@@ -865,28 +882,14 @@ export interface UpdateCampaignRequest {
   recipients?: {
     listIds: number[];
   };
-  replyTo?: string; // Brevo API expects a string (email), not an object
+  replyTo?: string;
   previewText?: string;
   htmlContent?: string;
   textContent?: string;
   scheduledAt?: string;
   type?: "classic" | "trigger";
-  [key: string]: any;
 }
 
-export interface UpdateCampaignStatusRequest {
-  status:
-    | "suspended"
-    | "archive"
-    | "darchive"
-    | "sent"
-    | "queued"
-    | "replicate"
-    | "replicateTemplate"
-    | "draft";
-}
-
-// Subdealer types
 export interface Subdealer {
   id: number;
   phone: string;
@@ -911,17 +914,16 @@ export interface Subdealer {
 
 export interface GstDetails {
   legalName: string;
-  tradeName: string;
-  address: string;
-  city: string;
-  state: string;
-  pincode: string;
-  panNumber: string;
-  registrationDate: string;
-  businessType: string;
-  status: string;
-  jurisdiction: string;
-  email?: string; // Optional email field for subdealer
+  tradeName?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  panNumber?: string;
+  registrationDate?: string;
+  businessType?: string;
+  status?: string;
+  jurisdiction?: string;
   gstNumber: string;
 }
 
@@ -938,21 +940,35 @@ export interface GenerateOtpResponse {
 export interface VerifyOtpRequest {
   phone: string;
   otp: string;
-  gstDetails: GstDetails;
+  gstNumber: string;
+  email?: string;
+}
+
+export interface SubdealerSessionProfile {
+  id: number;
+  phone: string;
+  gstNumber: string;
+  legalName: string;
+  tradeName: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  pincode: string | null;
+  panNumber: string | null;
+  registrationDate: string | null;
+  businessType: string | null;
+  status: string | null;
+  jurisdiction: string | null;
+  email: string | null;
 }
 
 export interface VerifyOtpResponse {
   success: boolean;
   message: string;
-  data: {
-    id: number;
-    phone: string;
-    gstNumber: string;
-    legalName: string;
-  };
+  data: SubdealerSessionProfile;
+  token: string;
 }
 
-// Product types
 export interface ProductCategory {
   id: number;
   name: string;
@@ -1008,10 +1024,11 @@ export interface UpdateCategoryInput {
   description?: string;
 }
 
-// PriceBook types
 export interface PriceBook {
   id: number;
   name: string;
+  currencyCode: string;
+
   currencyISOCode: string;
   isActive?: boolean;
   description: string | null;
@@ -1033,13 +1050,11 @@ export interface PaginatedPriceBooksResponse {
   };
 }
 
-// PriceBookEntry types
-
 export interface PriceBookEntry {
   id: number;
   priceBookId: number;
   productId: number;
-  listPrice: number;
+  listPrice: number | string;
   isActive: boolean;
   useStandardPrice: boolean;
   createdAt: string;
@@ -1062,14 +1077,12 @@ export interface PaginatedPriceBookEntriesResponse {
   };
 }
 
-// Keyword types
 export interface Keyword {
   id: number;
   name: string;
   createdAt: string;
 }
 
-// Segment types
 export type SegmentEntityType = "CONTACT" | "LEAD";
 export type SegmentRuleType = "KEYWORD" | "CITY" | "STATE" | "PINCODE";
 export type SegmentRuleOperator = "IN" | "NOT_IN";
@@ -1135,21 +1148,24 @@ export interface SegmentPayload {
   rules: SegmentRuleInput[];
 }
 
-// Order types
-export type OrderStatus =
-  | "PENDING"
-  | "CONFIRMED"
-  | "PROCESSING"
-  | "SHIPPED"
-  | "DELIVERED"
-  | "CANCELLED";
-
 export interface Order {
   id: number;
-  subdealerId: number;
   orderNumber: string;
-  status: OrderStatus;
-  totalAmount: string | number;
+  totalAmount?: string | number | null;
+  city?: string | null;
+  contactNumber?: string | null;
+  email?: string | null;
+  firmName?: string | null;
+  ownerFirstName?: string | null;
+  ownerLastName?: string | null;
+  pincode?: string | null;
+  state?: string | null;
+  gst?: string | null;
+  salesUserId?: number | null;
+  subdealerId?: number | null;
+  archived?: boolean;
+  archivedAt?: string | null;
+  archivedBy?: number | null;
   createdAt: string;
   updatedAt: string;
   subdealer?: Subdealer;
@@ -1175,7 +1191,6 @@ export interface CreateOrderInput {
   }[];
 }
 
-// Invoice category types
 export type InvoiceCategory =
   | "PENDING"
   | "DUPLICATE"
@@ -1189,7 +1204,8 @@ export type InvoiceCategory =
 
 export interface Invoice {
   id: number;
-  pdfUrl: string;
+  fileAvailable: boolean;
+  downloadUrl: string;
   uploadedBy: number;
   category?: InvoiceCategory;
   status?: string;
@@ -1202,7 +1218,6 @@ export interface UpdateInvoiceCategoryInput {
   category: InvoiceCategory;
 }
 
-// Audit category types
 export type AuditCategory = "CAMPAIGN_MANAGEMENT" | "SALES_MANAGEMENT";
 
 export interface AuditLog {
@@ -1211,8 +1226,8 @@ export interface AuditLog {
   entityId: number;
   changedBy: number;
   action: string;
-  oldValues?: Record<string, any>;
-  newValues?: Record<string, any>;
+  oldValues?: Record<string, unknown>;
+  newValues?: Record<string, unknown>;
   category?: AuditCategory;
   changedAt: string;
   changedByUser?: {
@@ -1220,29 +1235,6 @@ export interface AuditLog {
     name?: string;
     email: string;
   };
-}
-
-// Subdealer authentication types
-export interface CheckPhoneResponse {
-  success: boolean;
-  exists: boolean;
-  data: {
-    id: number;
-    phone: string;
-    gstNumber: string;
-    legalName: string;
-    tradeName: string;
-    address: string;
-    city: string;
-    state: string;
-    pincode: string;
-    panNumber: string;
-    registrationDate: string;
-    businessType: string;
-    status: string;
-    jurisdiction: string;
-    email?: string;
-  } | null;
 }
 
 export interface SubdealerLoginRequest {
@@ -1253,27 +1245,10 @@ export interface SubdealerLoginRequest {
 export interface SubdealerAuthResponse {
   success: boolean;
   message: string;
-  data: {
-    id: number;
-    phone: string;
-    gstNumber: string;
-    legalName: string;
-    tradeName: string;
-    address: string;
-    city: string;
-    state: string;
-    pincode: string;
-    panNumber: string;
-    registrationDate: string;
-    businessType: string;
-    status: string;
-    jurisdiction: string;
-    email?: string;
-  };
+  data: SubdealerSessionProfile;
   token: string;
 }
 
-// Sales dashboard KPI types
 export interface SalesKPIResponse {
   registrations: {
     total: number;
@@ -1370,13 +1345,34 @@ export interface OpportunityDetail {
   owner: { id: number; firstName: string; lastName: string; email?: string };
   creator: { id: number; firstName: string; lastName: string };
   lineItems: OpportunityLineItem[];
-  activities: any[];
-  quotes: any[];
+  activities: OpportunityActivity[];
+  quotes: OpportunityQuoteSummary[];
   createdAt: string;
   updatedAt: string;
 }
 
-/** GET /api/opportunities/:opportunityId/quotes response item */
+export interface OpportunityActivity {
+  id: number;
+  opportunityId: number;
+  userId: number;
+  activityType: string;
+  description: string;
+  oldValue?: string | null;
+  newValue?: string | null;
+  metadata?: unknown;
+  createdAt: string;
+  user: { id: number; firstName: string; lastName: string };
+}
+
+export interface OpportunityQuoteSummary {
+  id: number;
+  quoteNumber: string;
+  name: string;
+  status: string;
+  grandTotal: number | string;
+  createdAt: string;
+}
+
 export interface OpportunityQuoteListItem {
   id: number;
   quoteNumber: string;
@@ -1406,7 +1402,6 @@ export interface OpportunityLineItem {
   updatedAt: string;
 }
 
-/** GET /api/approvals and GET /api/approvals/my response item */
 export interface ApprovalProcessApi {
   id: number;
   targetObjectName: string;
@@ -1521,7 +1516,6 @@ export interface SalesOrderDetail {
   } | null;
 }
 
-/** Shape returned by GET /api/quotes/:id/orders (single linked order) */
 export interface QuoteOrderItem {
   id: number;
   orderNumber: string;

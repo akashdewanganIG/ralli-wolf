@@ -33,6 +33,7 @@ export * from "./components/ui/alert";
 export * from "./components/ui/page-header";
 export * from "./components/ui/toolbar";
 export * from "./components/ui/metric-card";
+export * from "./components/ui/nav-card";
 export * from "./components/ui/info-hint";
 export * from "./components/ui/card-action-button";
 export * from "./components/ui/page-shell";

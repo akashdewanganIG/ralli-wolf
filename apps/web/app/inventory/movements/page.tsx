@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Input } from "@repo/ui/components/ui/input";
 import Link from "next/link";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   ErrorBanner,
   PageHeader,
@@ -12,19 +12,19 @@ import {
   SelectField,
   SimpleTable,
 } from "@/components/supply-chain/shared";
-import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
-import { useStockMovements } from "@/hooks/useSupplyChain";
+import { WarehouseFilter } from "@/components/supply-chain/warehouse-filter";
+import { useStockMovements } from "@/hooks/use-supply-chain";
 import {
   formatDateTime,
   formatMoney,
   formatQuantity,
   humanizeEnum,
 } from "@/lib/utils/decimal";
-import type { StockMovementType } from "@/lib/api/types/supplyChain";
+import type { StockMovementType } from "@/lib/api/types/supply-chain";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { DashboardToolbar } from "@repo/ui/components/ui/dashboard-toolbar";
 import { Tag } from "@repo/ui/components/ui/tag";
-import { DataTransfer } from "@/components/data-transfer/DataTransfer";
+import { DataTransfer } from "@/components/data-transfer/data-transfer";
 
 const MOVEMENT_TYPES: StockMovementType[] = [
   "OPENING_BALANCE",
@@ -45,7 +45,6 @@ const MOVEMENT_TYPES: StockMovementType[] = [
   "EXPIRY_WRITE_OFF",
 ];
 
-/** Default to the last 90 days, matching the API's own window. */
 function defaultRange() {
   const to = new Date();
   const from = new Date(to);
@@ -132,10 +131,7 @@ export default function StockLedgerPage() {
                   <option value="OUT">Out</option>
                   <option value="INTERNAL">Internal</option>
                 </SelectField>,
-                // Two adjacent date fields need naming: a date input shows
-                // "dd/mm/yyyy" either way, so a placeholder cannot say which
-                // end of the range it is. The label sits inline rather than
-                // stacked, which keeps the control on the toolbar's row.
+
                 <label
                   key="from"
                   className="flex h-9 shrink-0 items-center gap-1.5 text-xs text-muted-foreground"

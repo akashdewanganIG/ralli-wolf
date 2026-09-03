@@ -6,7 +6,7 @@ import { Input } from "@repo/ui/components/ui/input";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Alert } from "@repo/ui/components/ui/alert";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   DetailRow,
   ErrorBanner,
@@ -19,7 +19,7 @@ import {
 import {
   useMaterialMutations,
   useMaterialRequisition,
-} from "@/hooks/useSupplyChain";
+} from "@/hooks/use-supply-chain";
 import {
   formatDate,
   formatDateTime,
@@ -33,7 +33,6 @@ export default function MaterialRequisitionDetailPage() {
   const { data, isLoading, error } = useMaterialRequisition(requisitionId);
   const { issueRequisition, cancelRequisition } = useMaterialMutations();
 
-  /** Per-line issue quantity and whether it is consumption or scrap. */
   const [issueDraft, setIssueDraft] = useState<
     Record<
       number,

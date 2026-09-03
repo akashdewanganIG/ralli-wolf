@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@repo/ui/components/ui/button";
 import Link from "next/link";
 import { Alert } from "@repo/ui/components/ui/alert";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   PageHeader,
   Panel,
@@ -14,18 +14,25 @@ import {
   EmptyState,
   PanelInset,
 } from "@/components/supply-chain/shared";
-import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
+import { WarehouseFilter } from "@/components/supply-chain/warehouse-filter";
 import {
   useInventoryDashboard,
   useInventoryMutations,
   useStockAlerts,
   useWarehouses,
-} from "@/hooks/useSupplyChain";
+} from "@/hooks/use-supply-chain";
 import { formatMoney, formatQuantity, humanizeEnum } from "@/lib/utils/decimal";
 import { SeverityBadge } from "@/components/supply-chain/shared";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { CardActionButton } from "@repo/ui/components/ui/card-action-button";
 import { Tag } from "@repo/ui/components/ui/tag";
+import { NavCard } from "@repo/ui/components/ui/nav-card";
+import {
+  ArrowLeftRight,
+  PackageSearch,
+  ScanBarcode,
+  SlidersHorizontal,
+} from "@repo/ui/icons";
 
 export default function InventoryDashboardPage() {
   const [warehouseId, setWarehouseId] = useState<number | undefined>(undefined);
@@ -142,8 +149,6 @@ export default function InventoryDashboardPage() {
                 flush
                 title="Movement summary"
                 description={
-                  // `?? 0` matters: a dashboard that loads without a count
-                  // otherwise renders the literal word "undefined" mid-sentence.
                   dashboard
                     ? `Stock coming in and going out over the period you picked. ${dashboard.movementCount ?? 0} entries.`
                     : "Stock coming in and going out over the period you picked."
@@ -241,33 +246,28 @@ export default function InventoryDashboardPage() {
                   href: "/inventory/stock",
                   label: "Stock positions",
                   hint: "On hand, reserved and available",
+                  icon: PackageSearch,
                 },
                 {
                   href: "/inventory/movements",
                   label: "Stock ledger",
                   hint: "Every posted movement",
+                  icon: ArrowLeftRight,
                 },
                 {
                   href: "/inventory/reorder-rules",
                   label: "Reorder policies",
                   hint: "Safety stock and reorder points",
+                  icon: SlidersHorizontal,
                 },
                 {
                   href: "/inventory/counts",
                   label: "Stock counts",
                   hint: "Cycle counting and variance posting",
+                  icon: ScanBarcode,
                 },
               ].map(link => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="rounded-lg border p-4 shadow-sm transition-shadow hover:shadow-md"
-                >
-                  <p className="text-sm font-medium">{link.label}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {link.hint}
-                  </p>
-                </Link>
+                <NavCard key={link.href} {...link} />
               ))}
             </div>
           </>

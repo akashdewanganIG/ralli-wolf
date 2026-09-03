@@ -17,13 +17,6 @@ import {
 import { cn } from "@repo/ui/lib/utils";
 import { MENU_ITEM } from "@repo/ui/components/ui/form-control";
 
-/**
- * How a service is doing, worst-last.
- *
- * The order matters — `worstLevel` folds a list of entries down to the single
- * state the header dot has to show, and it does that by taking the maximum
- * along this scale.
- */
 export type StatusLevel =
   | "healthy"
   | "pending"
@@ -41,13 +34,6 @@ const LEVEL_RANK: Record<StatusLevel, number> = {
   error: 5,
 };
 
-/**
- * Small dots, not filled rows.
- *
- * A status list where every line carries a coloured background is unreadable at
- * a glance: the eye has nothing to lock onto because everything is emphasised.
- * The dot is the only coloured element, so scanning for a non-green one works.
- */
 const LEVEL_DOT: Record<StatusLevel, string> = {
   healthy: "bg-success",
   pending: "bg-info",
@@ -79,9 +65,9 @@ export interface SystemStatusEntry {
   id: string;
   label: string;
   level: StatusLevel;
-  /** Short state text shown on the right, e.g. "Synced 14:02". */
+
   detail?: string;
-  /** Technical detail, revealed on hover/focus of the row. */
+
   tooltip?: string;
 }
 
@@ -154,23 +140,13 @@ function StatusRow({ entry }: { entry: SystemStatusEntry }) {
   );
 }
 
-/**
- * One place to read whether the application is working.
- *
- * Connectivity, database reachability, and per-service sync state used to be
- * scattered — a badge beside the page title, a pulsing dot above the metrics,
- * an online marker inside the account menu — which meant three places to look
- * and three things to keep in sync. They are all here now, and the trigger dot
- * summarises the worst of them so nothing has to be surfaced elsewhere just to
- * be noticed.
- */
 export function SystemStatusDropdown({
   groups,
   summaryLabel,
   className,
 }: {
   groups: SystemStatusGroup[];
-  /** Overrides the derived summary line, e.g. while the first check runs. */
+
   summaryLabel?: string;
   className?: string;
 }) {

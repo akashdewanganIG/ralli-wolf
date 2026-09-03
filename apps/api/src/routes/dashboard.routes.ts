@@ -1,37 +1,21 @@
 import { Router } from "express";
 import { DashboardController } from "../controllers/dashboard.controller.js";
-import { UserRole } from "@prisma/client";
-import { requireRole } from "../middleware/auth.middleware.js";
+import {
+  requireAuth,
+  requirePermission,
+} from "../middleware/auth.middleware.js";
 
 const router = Router();
 const dashboardController = new DashboardController();
 
-// GET /api/dashboard/leads-generated
-router.get(
-  "/leads-generated",
-  requireRole([UserRole.ADMIN]),
-  dashboardController.getLeadsGeneratedOverTime
-);
+router.use(requireAuth, requirePermission("analytics.view"));
 
-// GET /api/dashboard/conversion-rate
-router.get(
-  "/conversion-rate",
-  requireRole([UserRole.ADMIN]),
-  dashboardController.getConversionRate
-);
+router.get("/leads-generated", dashboardController.getLeadsGeneratedOverTime);
 
-// GET /api/dashboard/lead-sources
-router.get(
-  "/lead-sources",
-  requireRole([UserRole.ADMIN]),
-  dashboardController.getLeadSources
-);
+router.get("/conversion-rate", dashboardController.getConversionRate);
 
-// GET /api/dashboard/key-metrics
-router.get(
-  "/key-metrics",
-  requireRole([UserRole.ADMIN]),
-  dashboardController.getKeyMetrics
-);
+router.get("/lead-sources", dashboardController.getLeadSources);
+
+router.get("/key-metrics", dashboardController.getKeyMetrics);
 
 export default router;

@@ -5,7 +5,7 @@ import { Button } from "@repo/ui/components/ui/button";
 import { Input } from "@repo/ui/components/ui/input";
 import { useParams } from "next/navigation";
 import { Alert } from "@repo/ui/components/ui/alert";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   DetailRow,
   ErrorBanner,
@@ -15,7 +15,7 @@ import {
   StatCard,
   StatusBadge,
 } from "@/components/supply-chain/shared";
-import { useInventoryMutations, useStockCount } from "@/hooks/useSupplyChain";
+import { useInventoryMutations, useStockCount } from "@/hooks/use-supply-chain";
 import {
   formatDateTime,
   formatMoney,
@@ -29,7 +29,6 @@ export default function StockCountDetailPage() {
   const { data, isLoading, error } = useStockCount(countId);
   const { recordCountLines, postCount } = useInventoryMutations();
 
-  /** Draft counted quantities, keyed by line id, before they are saved. */
   const [draft, setDraft] = useState<Record<number, string>>({});
   const [reasonCodes, setReasonCodes] = useState<Record<number, string>>({});
 

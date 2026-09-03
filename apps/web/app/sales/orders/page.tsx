@@ -2,15 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { useSalesOrdersWithPagination } from "@/hooks/useSalesOrders";
+import { ProtectedRoute } from "@/components/protected-route";
+import { useSalesOrdersWithPagination } from "@/hooks/use-sales-orders";
 import { DataTable, type TableColumn } from "@/components/data-table";
 import type { SalesOrderListItem } from "@/lib/api/types";
 import { PageHeader } from "@repo/ui/components/ui/page-header";
 import { TablePageSkeleton } from "@/components/skeletons";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { DEFAULT_PAGE_SIZE } from "@/components/data-table";
-import { DataTransfer } from "@/components/data-transfer/DataTransfer";
+import { DataTransfer } from "@/components/data-transfer/data-transfer";
 
 function formatDate(iso: string) {
   if (!iso) return "—";

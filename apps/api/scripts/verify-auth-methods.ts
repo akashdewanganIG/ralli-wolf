@@ -1,15 +1,3 @@
-/**
- * End-to-end verification of the sign-in method rules.
- *
- * Covers what an account may turn off and what sign-in looks like afterwards:
- * password is disableable, one verified method is enough, and an account can
- * never be left without something able to begin a sign-in.
- *
- * Requires the API to be running and built (`npm run build` then `npm start`).
- * Creates one throwaway account and removes it again, including on failure.
- *
- * Run with: npm run verify:auth-methods -w api
- */
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { generateToken } from "../src/utils/jwt.utils.js";
@@ -25,7 +13,12 @@ const ok = (c: boolean, label: string, extra = "") => {
   if (c) pass++;
   else fail++;
 };
-const call = async (method: string, p: string, body?: any, token?: string) => {
+const call = async (
+  method: string,
+  p: string,
+  body?: unknown,
+  token?: string
+) => {
   const r = await fetch(`${API}${p}`, {
     method,
     headers: {
@@ -46,9 +39,10 @@ const user = await prisma.user.create({
     role: "ADMIN",
   },
 });
-const token = generateToken(user.id, user.email);
+const token = generateToken(user.id, user.email, {
+  sessionVersion: user.sessionVersion,
+});
 try {
-  // A second factor is opt-in, so the account starts on its password alone.
   const fresh = await call("GET", "/api/auth/methods", undefined, token);
   ok(
     fresh.json.minimumRequired === 1,
@@ -61,7 +55,6 @@ try {
     `got ${fresh.json.activeCount}`
   );
 
-  // Enrol the emailed code so the rules below have two methods to act on.
   await prisma.user.update({
     where: { id: user.id },
     data: { emailOtpVerifiedAt: new Date() },
@@ -73,7 +66,6 @@ try {
     `got ${sum.json.activeCount}`
   );
 
-  // --- password can now be turned off, because email can take over as entry
   const off = await call(
     "DELETE",
     "/api/auth/methods/password",
@@ -91,7 +83,6 @@ try {
     `got ${off.json.activeCount}`
   );
 
-  // --- with password off, login needs no password and challenges by email
   const pwless = await call("POST", "/api/auth/login", { email });
   ok(
     pwless.status === 200,
@@ -108,7 +99,6 @@ try {
   });
   ok(otps === 1, "a code was actually sent", `got ${otps}`);
 
-  // --- a stale password hash must not grant anything
   const stale = await call("POST", "/api/auth/login", { email, password });
   ok(
     stale.status === 200 && stale.json.mfaRequired === true,
@@ -116,7 +106,6 @@ try {
     `got ${stale.status}`
   );
 
-  // --- the last remaining method cannot be removed
   const last = await call(
     "DELETE",
     "/api/auth/methods/email",
@@ -129,7 +118,6 @@ try {
     `got ${last.status}`
   );
 
-  // --- password can be set again
   const back = await call(
     "POST",
     "/api/auth/methods/password",
@@ -154,7 +142,6 @@ try {
   );
   ok(short.status === 400, "short password rejected", `got ${short.status}`);
 
-  // --- password-only account signs in with no second step
   await prisma.user.update({
     where: { id: user.id },
     data: { emailOtpVerifiedAt: null },

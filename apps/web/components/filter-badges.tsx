@@ -2,7 +2,7 @@
 
 import React from "react";
 import { LeadFilterValues } from "./lead-filter";
-import { useKeywords } from "../hooks/useKeywords";
+import { useKeywords } from "../hooks/use-keywords";
 import { Tag } from "@repo/ui/components/ui/tag";
 
 interface FilterBadgesProps {
@@ -24,7 +24,6 @@ export const FilterBadges: React.FC<FilterBadgesProps> = ({
   onKeywordIdsRemove,
   onKeywordIdRemove,
 }) => {
-  // Fetch all keywords to get their names
   const { data: allKeywords = [] } = useKeywords();
 
   const formatDate = (date: Date) => {
@@ -48,7 +47,6 @@ export const FilterBadges: React.FC<FilterBadgesProps> = ({
 
   const badges = [];
 
-  // Status filter badge
   if (filters.status) {
     badges.push(
       <Tag key="status" onRemove={onStatusRemove} removeLabel="Remove filter">
@@ -57,7 +55,6 @@ export const FilterBadges: React.FC<FilterBadgesProps> = ({
     );
   }
 
-  // Source filter badge
   if (filters.source) {
     badges.push(
       <Tag key="source" onRemove={onSourceRemove} removeLabel="Remove filter">
@@ -66,7 +63,6 @@ export const FilterBadges: React.FC<FilterBadgesProps> = ({
     );
   }
 
-  // Date range filter badges
   if (filters.createdFrom) {
     badges.push(
       <Tag
@@ -91,7 +87,6 @@ export const FilterBadges: React.FC<FilterBadgesProps> = ({
     );
   }
 
-  // Keyword filter badges - show one badge per selected keyword
   if (
     filters.keywordIds &&
     Array.isArray(filters.keywordIds) &&

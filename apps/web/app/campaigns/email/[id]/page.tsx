@@ -16,9 +16,11 @@ import {
 } from "@/components/skeletons";
 import { Button } from "@repo/ui";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { brevoReplyTo, normalizeBrevoCampaignStats } from "@/lib/brevo";
+import { getErrorMessage } from "@/lib/api/error-handler";
 
 const EditCampaignModal = dynamic(
-  () => import("@/components/EditCampaignModal"),
+  () => import("@/components/edit-campaign-modal"),
   { ssr: false }
 );
 
@@ -29,50 +31,33 @@ function formatDateTime(iso?: string) {
 }
 
 function mapBrevoToUiCampaign(c: BrevoCampaign): UICampaign {
-  const globalStats = (c as any)?.statistics?.globalStats || {};
-  const sent =
-    (c as any)?.statistics?.sent ??
-    (c as any)?.statistics?.delivered ??
-    globalStats.sent ??
-    0;
-  const opens = (c as any)?.statistics?.opens ?? globalStats.uniqueViews ?? 0;
-  const clicks =
-    (c as any)?.statistics?.clicks ?? globalStats.uniqueClicks ?? 0;
-  const safeRate = (num: number, den: number) =>
-    den > 0 ? Number(((num / den) * 100).toFixed(1)) : 0;
-  const start = (c as any).sentDate || (c as any).scheduledAt || c.createdAt;
-  const end = (c as any).modifiedAt || "";
-  const mapped = {
+  const stats = normalizeBrevoCampaignStats(c);
+  const start = c.sentDate || c.scheduledAt || c.createdAt;
+  const end = c.modifiedAt || "";
+  return {
     id: String(c.id),
-    name: (c as any).name,
+    name: c.name,
     channel: "Email",
-    status: (c as any).status,
+    status: c.status,
     startDate: formatDateTime(start),
     endDate: end ? new Date(end).toLocaleDateString() : "",
-    createdBy: (c as any).sender?.name || (c as any).sender?.email || "Brevo",
-    subject: (c as any).subject,
-    fromEmail: (c as any).sender?.email,
-    replyToEmail:
-      typeof (c as any).replyTo === "string"
-        ? (c as any).replyTo
-        : (c as any).replyTo?.email || undefined,
-    previewText: (c as any).previewText || undefined,
-    numMessages: sent,
-    openRate:
-      (c as any)?.statistics?.openPercentage ??
-      globalStats.opensRate ??
-      safeRate(opens, sent),
-    clickRate:
-      (c as any)?.statistics?.clickPercentage ?? safeRate(clicks, sent),
-  } as unknown as UICampaign;
-  return mapped;
+    createdBy: c.sender?.name || c.sender?.email || "Brevo",
+    subject: c.subject,
+    fromEmail: c.sender?.email,
+    replyToEmail: brevoReplyTo(c),
+    previewText: c.previewText,
+    numMessages: stats.sent,
+    openRate: stats.openRate,
+    clickRate: stats.clickRate,
+  };
 }
 
 export default function EmailCampaignDetailPage() {
   const router = useRouter();
   const params = useParams();
-  const id = params?.id as string;
+  const id = typeof params?.id === "string" ? params.id : "";
   const numericId = Number(id);
+  const validCampaignId = Number.isSafeInteger(numericId) && numericId > 0;
   const [data, setData] = useState<BrevoCampaign | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -82,25 +67,21 @@ export default function EmailCampaignDetailPage() {
   useEffect(() => {
     let cancelled = false;
     async function run() {
-      if (Number.isNaN(numericId)) return;
+      if (!validCampaignId) {
+        setError("Campaign ID is invalid");
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       setError(null);
       try {
-        // Try to fetch with globalStats first, fallback to without statistics if it fails
-        let res: BrevoCampaign;
-        try {
-          res = await brevoService.getCampaignDetails(numericId, "globalStats");
-        } catch (statsError: any) {
-          // If globalStats fails, try without statistics parameter
-          console.warn(
-            "Failed to fetch with globalStats, trying without statistics:",
-            statsError
-          );
-          res = await brevoService.getCampaignDetails(numericId);
-        }
+        const res = await brevoService.getCampaignDetails(
+          numericId,
+          "globalStats"
+        );
         if (!cancelled) setData(res);
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message || "Failed to load campaign");
+      } catch (error: unknown) {
+        if (!cancelled) setError(getErrorMessage(error));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -109,7 +90,7 @@ export default function EmailCampaignDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [numericId]);
+  }, [numericId, validCampaignId]);
 
   const campaign = useMemo(
     () => (data ? mapBrevoToUiCampaign(data) : undefined),
@@ -127,25 +108,17 @@ export default function EmailCampaignDetailPage() {
   };
 
   const handleEditUpdated = () => {
-    // Refetch campaign data after update
-    if (Number.isNaN(numericId)) return;
+    if (!validCampaignId) return;
     async function refetch() {
       try {
-        // Try to fetch with globalStats first, fallback to without statistics if it fails
-        let res: BrevoCampaign;
-        try {
-          res = await brevoService.getCampaignDetails(numericId, "globalStats");
-        } catch (statsError: any) {
-          // If globalStats fails, try without statistics parameter
-          console.warn(
-            "Failed to refetch with globalStats, trying without statistics:",
-            statsError
-          );
-          res = await brevoService.getCampaignDetails(numericId);
-        }
+        const res = await brevoService.getCampaignDetails(
+          numericId,
+          "globalStats"
+        );
         setData(res);
-      } catch (e: any) {
-        console.error("Failed to refetch campaign:", e);
+      } catch (error: unknown) {
+        setError(getErrorMessage(error));
+        toast.error(error, "Campaign reload failed");
       }
     }
     refetch();
@@ -153,28 +126,19 @@ export default function EmailCampaignDetailPage() {
   };
 
   const handleRefresh = async () => {
-    if (Number.isNaN(numericId)) return;
+    if (!validCampaignId) return;
     try {
       setRefreshing(true);
       setError(null);
-      // Try to fetch with globalStats first, fallback to without statistics if it fails
-      let res: BrevoCampaign;
-      try {
-        res = await brevoService.getCampaignDetails(numericId, "globalStats");
-      } catch (statsError: any) {
-        // If globalStats fails, try without statistics parameter
-        console.warn(
-          "Failed to refresh with globalStats, trying without statistics:",
-          statsError
-        );
-        res = await brevoService.getCampaignDetails(numericId);
-      }
+      const res = await brevoService.getCampaignDetails(
+        numericId,
+        "globalStats"
+      );
       setData(res);
       toast.success("Campaign statistics refreshed");
-    } catch (e: any) {
-      console.error("Failed to refresh campaign:", e);
-      setError(e?.message || "Failed to refresh campaign");
-      toast.error(e, "Campaign refresh failed");
+    } catch (error: unknown) {
+      setError(getErrorMessage(error));
+      toast.error(error, "Campaign refresh failed");
     } finally {
       setRefreshing(false);
     }
@@ -210,7 +174,7 @@ export default function EmailCampaignDetailPage() {
             {error || "Failed to load campaign"}
           </p>
           <div className="flex gap-2 justify-center">
-            <Button onClick={() => window.location.reload()} variant="outline">
+            <Button onClick={handleRefresh} variant="outline">
               Retry
             </Button>
             <Button onClick={handleBack} variant="outline">
@@ -229,7 +193,9 @@ export default function EmailCampaignDetailPage() {
         brevoCampaign={data || undefined}
         onBack={handleBack}
         onEdit={
-          data?.status?.toLowerCase() !== "draft" ? handleEdit : undefined
+          data && ["draft", "queued"].includes(data.status)
+            ? handleEdit
+            : undefined
         }
         onRefresh={handleRefresh}
         refreshing={refreshing}

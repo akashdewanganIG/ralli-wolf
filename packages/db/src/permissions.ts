@@ -1,20 +1,4 @@
-/**
- * The permission catalogue.
- *
- * Shared by the API (which enforces it) and the web app (which renders the
- * picker), so the two can never disagree about what a permission is called.
- *
- * The entries below are derived from the modules this project actually ships —
- * inventory, warehouse, materials, BOM, production, purchasing, the CRM/sales
- * pipeline, campaigns and platform administration. Adding a module means adding
- * its permissions here first.
- *
- * Naming is `<module>.<verb>`, where `view` is read-only and `manage` implies
- * `view` plus create/update/delete.
- */
-
 export const PERMISSIONS = [
-  // Supply chain
   "inventory.view",
   "inventory.manage",
   "warehouse.view",
@@ -30,7 +14,6 @@ export const PERMISSIONS = [
   "suppliers.view",
   "suppliers.manage",
 
-  // Sales and CRM
   "leads.view",
   "leads.manage",
   "accounts.view",
@@ -46,15 +29,18 @@ export const PERMISSIONS = [
   "pricebooks.manage",
   "approvals.act",
 
-  // Marketing
+  "finance.view",
+  "finance.manage",
+
   "campaigns.view",
   "campaigns.manage",
   "whatsapp.manage",
 
-  // Platform
   "analytics.view",
   "reports.export",
+  "data.import",
   "settings.manage",
+  "integrations.manage",
   "users.manage",
 ] as const;
 
@@ -62,11 +48,28 @@ export type Permission = (typeof PERMISSIONS)[number];
 
 const PERMISSION_SET = new Set<string>(PERMISSIONS);
 
+const IMPLIED_PERMISSIONS: Partial<Record<Permission, Permission[]>> = {
+  "inventory.manage": ["inventory.view"],
+  "warehouse.manage": ["warehouse.view"],
+  "materials.manage": ["materials.view"],
+  "bom.manage": ["bom.view"],
+  "production.manage": ["production.view"],
+  "purchasing.manage": ["purchasing.view"],
+  "suppliers.manage": ["suppliers.view"],
+  "leads.manage": ["leads.view"],
+  "accounts.manage": ["accounts.view"],
+  "opportunities.manage": ["opportunities.view"],
+  "quotes.manage": ["quotes.view"],
+  "salesOrders.manage": ["salesOrders.view"],
+  "products.manage": ["products.view"],
+  "campaigns.manage": ["campaigns.view"],
+  "finance.manage": ["finance.view"],
+};
+
 export function isPermission(value: unknown): value is Permission {
   return typeof value === "string" && PERMISSION_SET.has(value);
 }
 
-/** Display metadata for the permissions picker, grouped by module. */
 export const PERMISSION_GROUPS: Array<{
   group: string;
   description: string;
@@ -137,6 +140,18 @@ export const PERMISSION_GROUPS: Array<{
     ],
   },
   {
+    group: "Finance",
+    description: "Invoices, payments, balances and financial operations.",
+    permissions: [
+      { value: "finance.view", label: "View invoices and payments" },
+      {
+        value: "finance.manage",
+        label: "Manage invoices and payments",
+        hint: "Includes posting financial transactions",
+      },
+    ],
+  },
+  {
     group: "Marketing",
     description: "Outbound campaigns and messaging.",
     permissions: [
@@ -151,7 +166,17 @@ export const PERMISSION_GROUPS: Array<{
     permissions: [
       { value: "analytics.view", label: "View dashboards and analytics" },
       { value: "reports.export", label: "Export data" },
+      {
+        value: "data.import",
+        label: "Bulk import data",
+        hint: "Can create or update thousands of records at once",
+      },
       { value: "settings.manage", label: "Change workspace settings" },
+      {
+        value: "integrations.manage",
+        label: "Manage provider credentials",
+        hint: "Can replace encrypted third-party API credentials",
+      },
       {
         value: "users.manage",
         label: "Manage users and permissions",
@@ -161,10 +186,6 @@ export const PERMISSION_GROUPS: Array<{
   },
 ];
 
-/**
- * What SALES can do without any per-user configuration. Anything beyond this
- * needs the CUSTOM role, which is exactly the point of CUSTOM existing.
- */
 export const SALES_DEFAULT_PERMISSIONS: Permission[] = [
   "leads.view",
   "leads.manage",
@@ -180,20 +201,22 @@ export const SALES_DEFAULT_PERMISSIONS: Permission[] = [
   "analytics.view",
 ];
 
-/**
- * Resolve the effective permission set for an account.
- *
- * ADMIN is the top role and holds everything, so it is never stored as a list —
- * a new permission added to the catalogue applies to admins immediately rather
- * than needing a backfill.
- */
 export function resolvePermissions(
   role: string,
   stored: readonly string[] | null | undefined
 ): Permission[] {
   if (role === "ADMIN") return [...PERMISSIONS];
-  if (role === "SALES") return [...SALES_DEFAULT_PERMISSIONS];
-  return (stored ?? []).filter(isPermission);
+  const explicit =
+    role === "SALES"
+      ? SALES_DEFAULT_PERMISSIONS
+      : (stored ?? []).filter(isPermission);
+  const resolved = new Set<Permission>(explicit);
+  for (const permission of explicit) {
+    for (const implied of IMPLIED_PERMISSIONS[permission] ?? []) {
+      resolved.add(implied);
+    }
+  }
+  return [...resolved];
 }
 
 export function roleHasPermission(

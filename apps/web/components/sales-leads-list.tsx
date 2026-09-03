@@ -19,7 +19,6 @@ export function SalesLeadsList({
   onLeadClick,
   isLoading,
 }: SalesLeadsListProps) {
-  // Ensure leads is always an array
   const safeLeads = Array.isArray(leads) ? leads : [];
 
   if (isLoading) {

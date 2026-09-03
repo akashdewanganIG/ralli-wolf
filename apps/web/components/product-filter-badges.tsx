@@ -26,7 +26,6 @@ export const ProductFilterBadges: React.FC<ProductFilterBadgesProps> = ({
 
   const badges = [];
 
-  // Category filter badge
   if (filters.categoryId !== undefined) {
     const category = categories.find(c => c.id === filters.categoryId);
     const categoryName = category
@@ -43,7 +42,6 @@ export const ProductFilterBadges: React.FC<ProductFilterBadgesProps> = ({
     );
   }
 
-  // Active status filter badge
   if (filters.active !== undefined) {
     badges.push(
       <Tag key="active" onRemove={onActiveRemove} removeLabel="Remove filter">

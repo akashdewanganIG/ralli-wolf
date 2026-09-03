@@ -11,9 +11,8 @@ import {
   useNotificationPreferences,
   useUpdateNotificationPreferences,
   type NotificationPreference,
-} from "@/hooks/useNotifications";
+} from "@/hooks/use-notifications";
 
-/** Groups the list without reordering within a group. */
 function groupPreferences(rows: NotificationPreference[]) {
   const groups = new Map<string, NotificationPreference[]>();
   for (const row of rows) {
@@ -44,8 +43,6 @@ export function NotificationPreferences() {
   const server = React.useMemo(() => data?.data ?? [], [data]);
   const [draft, setDraft] = React.useState<NotificationPreference[]>([]);
 
-  // The server list is the source of truth; a fetch replaces the draft rather
-  // than merging, so a change made in another tab is not silently overwritten.
   React.useEffect(() => setDraft(server), [server]);
 
   const dirty = !sameAs(draft, server);
@@ -73,7 +70,10 @@ export function NotificationPreferences() {
   if (isLoading) {
     return (
       <Panel title="Delivery preferences">
-        <SkeletonRegion label="Loading notification preferences" className="space-y-3">
+        <SkeletonRegion
+          label="Loading notification preferences"
+          className="space-y-3"
+        >
           {Array.from({ length: 5 }).map((_, index) => (
             <div key={index} className="flex items-center gap-4">
               <div className="min-w-0 flex-1 space-y-1.5">
@@ -89,9 +89,6 @@ export function NotificationPreferences() {
     );
   }
 
-  // A failed request and an empty list are different things: without this,
-  // "could not load" would read as "there is nothing to configure", and the
-  // user would never think to retry.
   if (isError) {
     return (
       <Panel title="Delivery preferences">
@@ -123,7 +120,9 @@ export function NotificationPreferences() {
   }
 
   const allOn = (channel: "inApp" | "email") =>
-    draft.every(row => (channel === "email" && !row.supportsEmail) || row[channel]);
+    draft.every(
+      row => (channel === "email" && !row.supportsEmail) || row[channel]
+    );
 
   return (
     <Panel
@@ -175,11 +174,7 @@ export function NotificationPreferences() {
                   <span className="block">
                     {channel === "inApp" ? "In-app" : "Email"}
                   </span>
-                  {/*
-                    A column-level toggle: with five rows and two channels,
-                    "turn all email off" is the most likely intent and would
-                    otherwise take five clicks.
-                  */}
+
                   <button
                     type="button"
                     onClick={() => setAll(channel, !allOn(channel))}

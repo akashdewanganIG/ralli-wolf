@@ -6,7 +6,7 @@ import { Button } from "@repo/ui/components/ui/button";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { Tag } from "@repo/ui/components/ui/tag";
 
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   ErrorBanner,
   PageHeader,
@@ -14,9 +14,9 @@ import {
   SimpleTable,
   StatCard,
 } from "@/components/supply-chain/shared";
-import { usePayments } from "@/hooks/useFinance";
+import { usePayments } from "@/hooks/use-finance";
 import { formatDate, formatMoney } from "@/lib/utils/decimal";
-import { DataTransfer } from "@/components/data-transfer/DataTransfer";
+import { DataTransfer } from "@/components/data-transfer/data-transfer";
 
 const FILTERS = [
   { value: undefined, label: "Everything" },
@@ -36,9 +36,6 @@ export default function PaymentsPage() {
   const rows = data?.data;
   const payments = React.useMemo(() => rows ?? [], [rows]);
 
-  // Payments carry their own currency; totalling across them would produce a
-  // number that is not money. The headline is the busiest currency, and any
-  // others are named instead of being folded in.
   const totals = React.useMemo(() => {
     const per = new Map<string, { out: number; inn: number; n: number }>();
     for (const p of payments) {

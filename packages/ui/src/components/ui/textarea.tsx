@@ -8,7 +8,6 @@ import {
 } from "@repo/ui/components/ui/form-control";
 
 export interface TextareaProps extends React.ComponentProps<"textarea"> {
-  /** Padding/type scale. Shared with Input and Select. */
   size?: ControlSize;
 }
 

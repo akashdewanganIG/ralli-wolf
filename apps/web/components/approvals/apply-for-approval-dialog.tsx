@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   Button,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -13,9 +14,9 @@ import {
   SearchableSelect,
   Textarea,
 } from "@repo/ui";
-import { useAuth } from "@/contexts/AuthContext";
-import { useApprovers } from "@/hooks/useApprovals";
-import { useSubmitQuoteForApproval } from "@/hooks/useQuotes";
+import { useAuth } from "@/contexts/auth-context";
+import { useApprovers } from "@/hooks/use-approvals";
+import { useSubmitQuoteForApproval } from "@/hooks/use-quotes";
 import { toast } from "@/lib/toast";
 
 const DEVELOPER_ACCESS_NAME = "Developer Access";
@@ -118,7 +119,7 @@ export function ApplyForApprovalDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md gap-0 overflow-hidden">
         <DialogHeader>
           <DialogTitle>Apply for Approval</DialogTitle>
           <DialogDescription>
@@ -126,7 +127,7 @@ export function ApplyForApprovalDialog({
             <span className="font-semibold">{quoteNumber}</span>.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-2">
+        <DialogBody className="space-y-3">
           <div className="space-y-2">
             <Label>Assign to Admin</Label>
             {approversLoading ? (
@@ -171,7 +172,7 @@ export function ApplyForApprovalDialog({
               {errorMessage}
             </p>
           )}
-        </div>
+        </DialogBody>
         <DialogFooter>
           <Button
             variant="outline"

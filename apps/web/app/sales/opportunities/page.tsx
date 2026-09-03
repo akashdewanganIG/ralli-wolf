@@ -7,10 +7,10 @@ import { useRouter } from "next/navigation";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { useQueryStates, parseAsInteger } from "nuqs";
 import { Plus, RefreshCw } from "@repo/ui/icons";
-import { RoleGuard } from "@/components/guards/RoleGuard";
+import { RoleGuard } from "@/components/guards/role-guard";
 import { DataTable, type TableColumn } from "@/components/data-table";
 import { CreateOpportunityDialog } from "@/components/opportunities/create-opportunity-dialog";
-import { useOpportunitiesWithPagination } from "@/hooks/useOpportunities";
+import { useOpportunitiesWithPagination } from "@/hooks/use-opportunities";
 import type { OpportunityListItem } from "@/lib/api/types";
 import { TablePageSkeleton } from "@/components/skeletons";
 import { Alert } from "@repo/ui/components/ui/alert";
@@ -18,7 +18,7 @@ import { PageHeader } from "@repo/ui/components/ui/page-header";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { buttonVariants } from "@repo/ui/components/ui/button";
 import { cn } from "@repo/ui/lib/utils";
-import { DataTransfer } from "@/components/data-transfer/DataTransfer";
+import { DataTransfer } from "@/components/data-transfer/data-transfer";
 
 function OpportunitiesContent() {
   const router = useRouter();
@@ -152,7 +152,7 @@ function OpportunitiesContent() {
 
 export default function OpportunitiesPage() {
   return (
-    <RoleGuard allowedRoles={["ADMIN", "ADMIN", "SALES"]}>
+    <RoleGuard allowedRoles={["ADMIN", "SALES"]}>
       <NuqsAdapter>
         <OpportunitiesContent />
       </NuqsAdapter>

@@ -7,7 +7,6 @@ import { cn } from "@repo/ui/lib/utils";
 import { Input } from "./input";
 
 export type SearchInputProps = React.ComponentProps<typeof Input> & {
-  /** Class for the wrapper, so the control can be sized by its container. */
   wrapperClassName?: string;
 };
 

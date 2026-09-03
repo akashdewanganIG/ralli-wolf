@@ -1,16 +1,35 @@
 import { Request, Response } from "express";
+import { createHash } from "node:crypto";
 import { prisma } from "@repo/db";
-import { Prisma, QuoteStatus, UserRole } from "@prisma/client";
-import PDFDocument from "pdfkit";
+import { roleHasPermission } from "@repo/db/permissions";
+import { Prisma, QuoteStatus } from "@prisma/client";
 import {
   handleError,
   handleValidationError,
   handleNotFoundError,
   handleConflictError,
-} from "../utils/errorHandler.js";
-import { buildFullName } from "../utils/nameHelpers.js";
-import { uploadToS3 } from "../services/s3.service.js";
+} from "../utils/error-handler.js";
+import { buildFullName } from "../utils/name-helpers.js";
 import { emailService } from "../services/email.service.js";
+import { logError } from "../utils/logger.js";
+import {
+  isValidEmail,
+  normalizeEmail,
+  parseBoundedInteger,
+  parsePositiveInteger,
+  parseStrictBoolean,
+} from "../utils/validators.js";
+import {
+  nextDocumentNumber,
+  SEQUENCE_KEYS,
+} from "../services/supplyChain/numbering.service.js";
+import {
+  quotePdfInclude,
+  renderQuotePdf,
+} from "../services/quote-pdf.service.js";
+
+class QuoteSubmissionStateError extends Error {}
+const DELIVERY_CLAIM_TIMEOUT_MS = 15 * 60 * 1_000;
 
 export class QuoteController {
   private parseId(
@@ -19,71 +38,110 @@ export class QuoteController {
     label: string,
     operation: string
   ): number | null {
-    if (!id) {
-      handleValidationError(res, `${label} is required`, "id", operation);
-      return null;
-    }
-    const parsed = parseInt(id, 10);
-    if (isNaN(parsed)) {
+    const parsed = parsePositiveInteger(id);
+    if (parsed === null) {
       handleValidationError(res, `Invalid ${label}`, "id", operation);
       return null;
     }
     return parsed;
   }
 
-  /**
-   * GET /api/quotes
-   * List all quotes (paginated, filterable)
-   */
+  private pagination(
+    req: Request,
+    res: Response,
+    operation: string
+  ): { page: number; limit: number; skip: number } | null {
+    const page =
+      req.query.page === undefined
+        ? 1
+        : parseBoundedInteger(req.query.page, 1, 1_000_000);
+    const limit =
+      req.query.limit === undefined
+        ? 10
+        : parseBoundedInteger(req.query.limit, 1, 100);
+    if (page === null || limit === null) {
+      handleValidationError(
+        res,
+        "page must be positive and limit must be between 1 and 100",
+        undefined,
+        operation
+      );
+      return null;
+    }
+    return { page, limit, skip: (page - 1) * limit };
+  }
+
   async getAllQuotes(req: Request, res: Response) {
+    const operation = "Get all quotes";
     try {
-      // Extract and validate pagination parameters
-      const pageParam = req.query.page as string;
-      const limitParam = req.query.limit as string;
+      const pagination = this.pagination(req, res, operation);
+      if (!pagination) return;
+      const { page, limit, skip } = pagination;
 
-      // Validate page parameter
-      const page = Math.max(1, parseInt(pageParam) || 1);
-
-      // Validate limit parameter with custom support
-      const requestedLimit = parseInt(limitParam);
-      const limit =
-        requestedLimit >= 1 && requestedLimit <= 100 ? requestedLimit : 10;
-
-      // Calculate pagination offset
-      const skip = (page - 1) * limit;
-
-      // Extract filter parameters
       const { status, opportunityId, accountId, isPrimary, sortBy, sortOrder } =
         req.query;
 
-      // Build where clause for filtering
-      const whereClause: any = {};
+      const whereClause: Prisma.QuoteWhereInput = {};
 
       if (status) {
         const statusArray = status.toString().split(",");
+        if (
+          statusArray.some(
+            value => !Object.values(QuoteStatus).includes(value as QuoteStatus)
+          )
+        ) {
+          return handleValidationError(
+            res,
+            "Invalid quote status",
+            "status",
+            operation
+          );
+        }
         whereClause.status =
-          statusArray.length === 1 ? statusArray[0] : { in: statusArray };
+          statusArray.length === 1
+            ? (statusArray[0] as QuoteStatus)
+            : { in: statusArray as QuoteStatus[] };
       }
 
       if (opportunityId) {
-        const parsedOppId = parseInt(opportunityId as string);
-        if (!isNaN(parsedOppId)) {
-          whereClause.opportunityId = parsedOppId;
+        const parsedOppId = parsePositiveInteger(opportunityId);
+        if (parsedOppId === null) {
+          return handleValidationError(
+            res,
+            "Invalid opportunity ID",
+            "opportunityId",
+            operation
+          );
         }
+        whereClause.opportunityId = parsedOppId;
       }
 
       if (accountId) {
-        const parsedAccId = parseInt(accountId as string);
-        if (!isNaN(parsedAccId)) {
-          whereClause.accountId = parsedAccId;
+        const parsedAccId = parsePositiveInteger(accountId);
+        if (parsedAccId === null) {
+          return handleValidationError(
+            res,
+            "Invalid account ID",
+            "accountId",
+            operation
+          );
         }
+        whereClause.accountId = parsedAccId;
       }
 
       if (isPrimary !== undefined) {
-        whereClause.isPrimary = isPrimary === "true";
+        const parsed = parseStrictBoolean(isPrimary);
+        if (parsed === null) {
+          return handleValidationError(
+            res,
+            "isPrimary must be true or false",
+            "isPrimary",
+            operation
+          );
+        }
+        whereClause.isPrimary = parsed;
       }
 
-      // Build orderBy
       const allowedSortFields = [
         "createdAt",
         "quoteNumber",
@@ -96,10 +154,8 @@ export class QuoteController {
         : "createdAt";
       const orderDirection = sortOrder === "asc" ? "asc" : "desc";
 
-      // Execute count query with filters
       const totalItems = await prisma.quote.count({ where: whereClause });
 
-      // Execute paginated query with filters
       const quotes = await prisma.quote.findMany({
         where: whereClause,
         skip,
@@ -129,12 +185,10 @@ export class QuoteController {
         },
       });
 
-      // Calculate pagination metadata
       const totalPages = Math.ceil(totalItems / limit);
       const hasNextPage = page < totalPages;
       const hasPreviousPage = page > 1;
 
-      // Return standardized pagination response
       return res.json({
         data: quotes,
         pagination: {
@@ -147,15 +201,10 @@ export class QuoteController {
         },
       });
     } catch (error) {
-      handleError(error, res, "Get all quotes");
+      handleError(error, res, operation);
     }
   }
 
-  /**
-   * GET /api/quotes/:id
-   * Get a single quote by quote ID (for detail page).
-   * For quotes by opportunity use GET /api/opportunities/:opportunityId/quotes
-   */
   async getQuoteById(req: Request, res: Response) {
     const operation = "Get quote by ID";
     try {
@@ -204,10 +253,6 @@ export class QuoteController {
     }
   }
 
-  /**
-   * PATCH /api/quotes/:id
-   * Update quote status (ADMIN only)
-   */
   async updateQuoteStatus(req: Request, res: Response) {
     const operation = "Update quote status";
     try {
@@ -230,6 +275,7 @@ export class QuoteController {
         "IN_REVIEW",
         "APPROVED",
         "REJECTED",
+        "PRESENTING",
         "PRESENTED",
         "ACCEPTED",
       ];
@@ -243,23 +289,44 @@ export class QuoteController {
         );
       }
 
-      // Build update data with status-specific timestamp fields
-      const updateData: Prisma.QuoteUpdateInput = { status };
+      const quote = await prisma.quote.findUnique({
+        where: { id: quoteId },
+        select: { id: true, status: true },
+      });
+      if (!quote) {
+        return handleNotFoundError(res, "Quote", operation);
+      }
 
-      if (status === "APPROVED") {
-        updateData.approvedAt = new Date();
-        updateData.approvedBy = { connect: { id: req.user!.id } };
+      const allowedTransitions: Record<QuoteStatus, readonly QuoteStatus[]> = {
+        DRAFT: [],
+        IN_REVIEW: [],
+        APPROVED: [],
+        REJECTED: ["DRAFT"],
+        PRESENTING: [],
+        PRESENTED: ["ACCEPTED", "REJECTED"],
+        ACCEPTED: [],
+      };
+      if (!allowedTransitions[quote.status].includes(status)) {
+        return handleValidationError(
+          res,
+          `Quote cannot move from ${quote.status} to ${status}`,
+          "status",
+          operation
+        );
+      }
+
+      const updateData: Prisma.QuoteUncheckedUpdateManyInput = { status };
+      if (status === "DRAFT") {
+        updateData.rejectedAt = null;
+        updateData.rejectedById = null;
+        updateData.rejectionComment = null;
       } else if (status === "REJECTED") {
         updateData.rejectedAt = new Date();
-        updateData.rejectedBy = { connect: { id: req.user!.id } };
-      } else if (status === "PRESENTED") {
-        updateData.presentedAt = new Date();
+        updateData.rejectedById = req.user!.id;
       } else if (status === "ACCEPTED") {
         updateData.acceptedAt = new Date();
       }
 
-      // When manually resetting to DRAFT, cancel any dangling PENDING approvals so the
-      // user can re-submit for approval without hitting the APPROVAL_EXISTS conflict.
       const updatedQuote = await prisma.$transaction(async tx => {
         if (status === "DRAFT") {
           await tx.approvalProcess.updateMany({
@@ -276,9 +343,13 @@ export class QuoteController {
           });
         }
 
-        return tx.quote.update({
-          where: { id: quoteId },
+        const changed = await tx.quote.updateMany({
+          where: { id: quoteId, status: quote.status },
           data: updateData,
+        });
+        if (changed.count !== 1) return null;
+        return tx.quote.findUnique({
+          where: { id: quoteId },
           include: {
             opportunity: {
               select: { id: true, opportunityNumber: true, name: true },
@@ -293,27 +364,26 @@ export class QuoteController {
         });
       });
 
-      return res.json(updatedQuote);
-    } catch (error: any) {
-      if (error.code === "P2025") {
-        return handleNotFoundError(res, "Quote", operation);
+      if (!updatedQuote) {
+        return handleConflictError(
+          res,
+          "Quote status changed while the request was being processed",
+          operation
+        );
       }
+
+      return res.json(updatedQuote);
+    } catch (error) {
       handleError(error, res, operation);
     }
   }
 
-  /**
-   * PATCH /api/quotes/:id/set-primary
-   * Set a quote as primary (ADMIN only)
-   * Atomically unsets the current primary and sets the new one
-   */
   async setPrimaryQuote(req: Request, res: Response) {
     const operation = "Set primary quote";
     try {
       const quoteId = this.parseId(req.params.id, res, "Quote ID", operation);
       if (quoteId === null) return;
 
-      // Fetch the quote to validate it exists and check if already primary
       const quote = await prisma.quote.findUnique({
         where: { id: quoteId },
         select: { id: true, isPrimary: true, opportunityId: true },
@@ -332,14 +402,12 @@ export class QuoteController {
         );
       }
 
-      // Atomic transaction: unset old primary + set new primary
       const [, updatedQuote] = await prisma.$transaction([
-        // Unset current primary quote(s) for this opportunity
         prisma.quote.updateMany({
           where: { opportunityId: quote.opportunityId, isPrimary: true },
           data: { isPrimary: false },
         }),
-        // Set the selected quote as primary
+
         prisma.quote.update({
           where: { id: quoteId },
           data: { isPrimary: true },
@@ -363,47 +431,12 @@ export class QuoteController {
     }
   }
 
-  /**
-   * Generate order number: ORD-YYMM-XXXX
-   */
-  private async generateOrderNumber(): Promise<string> {
-    const now = new Date();
-    const yy = String(now.getFullYear()).slice(-2);
-    const mm = String(now.getMonth() + 1).padStart(2, "0");
-    const prefix = `ORD-${yy}${mm}-`;
-
-    const lastOrder = await prisma.salesOrder.findFirst({
-      where: { orderNumber: { startsWith: prefix } },
-      orderBy: { orderNumber: "desc" },
-      select: { orderNumber: true },
-    });
-
-    let sequenceNum = 1;
-    if (lastOrder && lastOrder.orderNumber) {
-      const parts = lastOrder.orderNumber.split("-");
-      if (parts.length >= 3 && parts[2]) {
-        const num = parseInt(parts[2], 10);
-        if (!isNaN(num)) {
-          sequenceNum = num + 1;
-        }
-      }
-    }
-
-    return `${prefix}${String(sequenceNum).padStart(4, "0")}`;
-  }
-
-  /**
-   * POST /api/quotes/:id/generate-order
-   * Generate a sales order from an accepted quote (ADMIN only)
-   * Copies quote data, pricing, addresses, terms, and line items into a new SalesOrder
-   */
   async generateOrder(req: Request, res: Response) {
     const operation = "Generate order from quote";
     try {
       const quoteId = this.parseId(req.params.id, res, "Quote ID", operation);
       if (quoteId === null) return;
 
-      // Fetch quote with line items
       const quote = await prisma.quote.findUnique({
         where: { id: quoteId },
         include: { lineItems: true },
@@ -413,7 +446,6 @@ export class QuoteController {
         return handleNotFoundError(res, "Quote", operation);
       }
 
-      // Only accepted quotes can generate orders
       if (quote.status !== "ACCEPTED") {
         return handleValidationError(
           res,
@@ -424,7 +456,6 @@ export class QuoteController {
         );
       }
 
-      // Check if an order already exists for this quote
       const existingOrder = await prisma.salesOrder.findFirst({
         where: { quoteId },
         select: { id: true, orderNumber: true },
@@ -438,18 +469,18 @@ export class QuoteController {
         );
       }
 
-      // Generate order number
-      const orderNumber = await this.generateOrderNumber();
-
-      // Create sales order with line items in a transaction
       const salesOrder = await prisma.$transaction(async tx => {
+        const orderNumber = await nextDocumentNumber(
+          tx,
+          SEQUENCE_KEYS.SALES_ORDER
+        );
         const newOrder = await tx.salesOrder.create({
           data: {
             orderNumber,
             name: `Order for ${quote.name}`,
             description: quote.description,
             status: "DRAFT",
-            // Pricing snapshot from quote
+
             subtotal: quote.subtotal,
             discount: quote.discount,
             discountPercent: quote.discountPercent,
@@ -457,7 +488,7 @@ export class QuoteController {
             taxPercent: quote.taxPercent,
             shippingAmount: quote.shippingAmount,
             grandTotal: quote.grandTotal,
-            // Address snapshot from quote
+
             billingName: quote.billingName,
             billingStreet: quote.billingStreet,
             billingCity: quote.billingCity,
@@ -470,17 +501,17 @@ export class QuoteController {
             shippingState: quote.shippingState,
             shippingPostalCode: quote.shippingPostalCode,
             shippingCountry: quote.shippingCountry,
-            // Terms from quote
+
             paymentTerms: quote.paymentTerms,
             deliveryTerms: quote.deliveryTerms,
             notes: quote.notes,
             internalNotes: quote.internalNotes,
-            // Foreign keys
+
             quoteId: quote.id,
             accountId: quote.accountId,
             contactId: quote.contactId,
             ownerId: req.user!.id,
-            // Line items copied from quote
+
             lineItems: {
               create: quote.lineItems.map(item => ({
                 productId: item.productId,
@@ -523,17 +554,12 @@ export class QuoteController {
     }
   }
 
-  /**
-   * GET /api/quotes/:id/line-items
-   * Get line items for a specific quote (paginated)
-   */
   async getQuoteLineItems(req: Request, res: Response) {
     const operation = "Get quote line items";
     try {
       const quoteId = this.parseId(req.params.id, res, "Quote ID", operation);
       if (quoteId === null) return;
 
-      // Verify the quote exists
       const quote = await prisma.quote.findUnique({
         where: { id: quoteId },
         select: { id: true },
@@ -543,27 +569,16 @@ export class QuoteController {
         return handleNotFoundError(res, "Quote", operation);
       }
 
-      // Extract and validate pagination parameters
-      const pageParam = req.query.page as string;
-      const limitParam = req.query.limit as string;
+      const pagination = this.pagination(req, res, operation);
+      if (!pagination) return;
+      const { page, limit, skip } = pagination;
 
-      const page = Math.max(1, parseInt(pageParam) || 1);
-
-      const requestedLimit = parseInt(limitParam);
-      const limit =
-        requestedLimit >= 1 && requestedLimit <= 100 ? requestedLimit : 10;
-
-      const skip = (page - 1) * limit;
-
-      // Build where clause
       const whereClause = { quoteId };
 
-      // Execute count query
       const totalItems = await prisma.quoteLineItem.count({
         where: whereClause,
       });
 
-      // Execute paginated query
       const lineItems = await prisma.quoteLineItem.findMany({
         where: whereClause,
         skip,
@@ -579,7 +594,6 @@ export class QuoteController {
         },
       });
 
-      // Calculate pagination metadata
       const totalPages = Math.ceil(totalItems / limit);
       const hasNextPage = page < totalPages;
       const hasPreviousPage = page > 1;
@@ -600,17 +614,12 @@ export class QuoteController {
     }
   }
 
-  /**
-   * GET /api/quotes/:id/orders
-   * Get all sales orders for a specific quote (paginated)
-   */
   async getQuoteOrders(req: Request, res: Response) {
     const operation = "Get quote orders";
     try {
       const quoteId = this.parseId(req.params.id, res, "Quote ID", operation);
       if (quoteId === null) return;
 
-      // Verify the quote exists
       const quote = await prisma.quote.findUnique({
         where: { id: quoteId },
         select: { id: true },
@@ -620,17 +629,9 @@ export class QuoteController {
         return handleNotFoundError(res, "Quote", operation);
       }
 
-      // Extract and validate pagination parameters
-      const pageParam = req.query.page as string;
-      const limitParam = req.query.limit as string;
-
-      const page = Math.max(1, parseInt(pageParam) || 1);
-
-      const requestedLimit = parseInt(limitParam);
-      const limit =
-        requestedLimit >= 1 && requestedLimit <= 100 ? requestedLimit : 10;
-
-      const skip = (page - 1) * limit;
+      const pagination = this.pagination(req, res, operation);
+      if (!pagination) return;
+      const { page, limit, skip } = pagination;
 
       const whereClause = { quoteId };
 
@@ -676,10 +677,6 @@ export class QuoteController {
     }
   }
 
-  /**
-   * GET /api/quotes/:id/pdf
-   * Generate a PDF document for the quote
-   */
   async generatePdf(req: Request, res: Response) {
     const operation = "Generate quote PDF";
     try {
@@ -688,355 +685,33 @@ export class QuoteController {
 
       const quote = await prisma.quote.findUnique({
         where: { id: quoteId },
-        include: {
-          account: { select: { id: true, name: true } },
-          contact: {
-            select: { id: true, name: true, email: true, phone: true },
-          },
-          preparedBy: {
-            select: { id: true, firstName: true, lastName: true, email: true },
-          },
-          opportunity: {
-            select: { id: true, name: true, opportunityNumber: true },
-          },
-          lineItems: {
-            orderBy: { sortOrder: "asc" },
-            include: {
-              product: { select: { id: true, name: true, code: true } },
-            },
-          },
-        },
+        include: quotePdfInclude,
       });
 
       if (!quote) {
         return handleNotFoundError(res, "Quote", operation);
       }
 
-      // Create PDF document
-      const doc = new PDFDocument({ margin: 50, size: "A4" });
-
-      // Set response headers
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader(
-        "Content-Disposition",
-        `attachment; filename="${quote.quoteNumber}.pdf"`
-      );
-      doc.pipe(res);
-
-      // --- HEADER ---
-      doc
-        .fontSize(20)
-        .font("Helvetica-Bold")
-        .text("QUOTE", { align: "center" });
-      doc.moveDown(0.5);
-      doc
-        .fontSize(12)
-        .font("Helvetica")
-        .text(quote.quoteNumber, { align: "center" });
-      doc.moveDown(1);
-
-      // --- QUOTE INFO ---
-      doc.fontSize(10).font("Helvetica-Bold").text("Quote Details");
-      doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
-      doc.moveDown(0.3);
-
-      doc.font("Helvetica").fontSize(9);
-      const infoStartY = doc.y;
-      // Left column
-      doc.text(`Name: ${quote.name}`, 50, infoStartY);
-      doc.text(`Status: ${quote.status}`, 50);
-      doc.text(`Version: ${quote.version}`, 50);
-      doc.text(
-        `Valid Until: ${quote.validUntil ? new Date(quote.validUntil).toLocaleDateString() : "N/A"}`,
-        50
+      const pdfBuffer = await renderQuotePdf(quote);
+      const safeQuoteNumber = quote.quoteNumber.replace(
+        /[^A-Za-z0-9._-]/g,
+        "_"
       );
 
-      // Right column
-      doc.text(
-        `Date: ${new Date(quote.createdAt).toLocaleDateString()}`,
-        300,
-        infoStartY
-      );
-      doc.text(`Opportunity: ${quote.opportunity.name}`, 300);
-      doc.text(`Type: ${quote.type}`, 300);
-      doc.text(`Primary: ${quote.isPrimary ? "Yes" : "No"}`, 300);
-      doc.moveDown(1);
-
-      // --- CUSTOMER INFO ---
-      const custY = doc.y;
-      doc.fontSize(10).font("Helvetica-Bold").text("Customer", 50, custY);
-      doc.moveTo(50, doc.y).lineTo(290, doc.y).stroke();
-      doc.moveDown(0.3);
-      doc.font("Helvetica").fontSize(9);
-      doc.text(`Account: ${quote.account.name}`, 50);
-      if (quote.contact) {
-        doc.text(`Contact: ${quote.contact.name}`, 50);
-        if (quote.contact.email) doc.text(`Email: ${quote.contact.email}`, 50);
-        if (quote.contact.phone) doc.text(`Phone: ${quote.contact.phone}`, 50);
-      }
-      const afterCustY = doc.y;
-
-      // --- PREPARED BY ---
-      doc.fontSize(10).font("Helvetica-Bold").text("Prepared By", 300, custY);
-      doc.moveTo(300, doc.y).lineTo(545, doc.y).stroke();
-      doc.moveDown(0.3);
-      doc.font("Helvetica").fontSize(9);
-      doc.text(
-        `${quote.preparedBy.firstName || ""} ${quote.preparedBy.lastName || ""}`.trim(),
-        300
-      );
-      doc.y = Math.max(afterCustY, doc.y);
-      doc.moveDown(1);
-
-      // --- BILLING & SHIPPING ADDRESS ---
-      if (quote.billingName || quote.shippingName) {
-        const addrY = doc.y;
-        if (quote.billingName) {
-          doc
-            .fontSize(10)
-            .font("Helvetica-Bold")
-            .text("Billing Address", 50, addrY);
-          doc.moveTo(50, doc.y).lineTo(290, doc.y).stroke();
-          doc.moveDown(0.3);
-          doc.font("Helvetica").fontSize(9);
-          if (quote.billingName) doc.text(quote.billingName, 50);
-          if (quote.billingStreet) doc.text(quote.billingStreet, 50);
-          const billingCityLine = [
-            quote.billingCity,
-            quote.billingState,
-            quote.billingPostalCode,
-          ]
-            .filter(Boolean)
-            .join(", ");
-          if (billingCityLine) doc.text(billingCityLine, 50);
-          if (quote.billingCountry) doc.text(quote.billingCountry, 50);
-        }
-        const afterBillingY = doc.y;
-
-        if (quote.shippingName) {
-          doc
-            .fontSize(10)
-            .font("Helvetica-Bold")
-            .text("Shipping Address", 300, addrY);
-          doc.moveTo(300, doc.y).lineTo(545, doc.y).stroke();
-          doc.moveDown(0.3);
-          doc.font("Helvetica").fontSize(9);
-          if (quote.shippingName) doc.text(quote.shippingName, 300);
-          if (quote.shippingStreet) doc.text(quote.shippingStreet, 300);
-          const shippingCityLine = [
-            quote.shippingCity,
-            quote.shippingState,
-            quote.shippingPostalCode,
-          ]
-            .filter(Boolean)
-            .join(", ");
-          if (shippingCityLine) doc.text(shippingCityLine, 300);
-          if (quote.shippingCountry) doc.text(quote.shippingCountry, 300);
-        }
-        doc.y = Math.max(afterBillingY, doc.y);
-        doc.moveDown(1);
-      }
-
-      // --- LINE ITEMS TABLE ---
-      doc.fontSize(10).font("Helvetica-Bold").text("Line Items", 50);
-      doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
-      doc.moveDown(0.3);
-
-      // Table header
-      const tableTop = doc.y;
-      const colX = {
-        num: 50,
-        product: 70,
-        qty: 280,
-        listPrice: 320,
-        unitPrice: 380,
-        discount: 440,
-        total: 490,
-      };
-
-      doc.fontSize(8).font("Helvetica-Bold");
-      doc.text("#", colX.num, tableTop, { width: 20 });
-      doc.text("Product", colX.product, tableTop, { width: 200 });
-      doc.text("Qty", colX.qty, tableTop, { width: 40, align: "right" });
-      doc.text("List Price", colX.listPrice, tableTop, {
-        width: 55,
-        align: "right",
-      });
-      doc.text("Unit Price", colX.unitPrice, tableTop, {
-        width: 55,
-        align: "right",
-      });
-      doc.text("Disc %", colX.discount, tableTop, {
-        width: 40,
-        align: "right",
-      });
-      doc.text("Total", colX.total, tableTop, { width: 55, align: "right" });
-
-      doc.moveDown(0.3);
-      doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
-      doc.moveDown(0.3);
-
-      // Table rows
-      doc.font("Helvetica").fontSize(8);
-      quote.lineItems.forEach((item, index) => {
-        const rowY = doc.y;
-
-        // Check if we need a new page
-        if (rowY > 700) {
-          doc.addPage();
-        }
-
-        const currentY = doc.y;
-        doc.text(`${index + 1}`, colX.num, currentY, { width: 20 });
-        doc.text(
-          item.product?.name || `Product #${item.productId}`,
-          colX.product,
-          currentY,
-          { width: 200 }
-        );
-        doc.text(`${item.quantity}`, colX.qty, currentY, {
-          width: 40,
-          align: "right",
-        });
-        doc.text(
-          `${Number(item.listPrice).toFixed(2)}`,
-          colX.listPrice,
-          currentY,
-          { width: 55, align: "right" }
-        );
-        doc.text(
-          `${Number(item.unitPrice).toFixed(2)}`,
-          colX.unitPrice,
-          currentY,
-          { width: 55, align: "right" }
-        );
-        doc.text(
-          `${Number(item.discount).toFixed(2)}`,
-          colX.discount,
-          currentY,
-          { width: 40, align: "right" }
-        );
-        doc.text(
-          `${Number(item.totalPrice).toFixed(2)}`,
-          colX.total,
-          currentY,
-          { width: 55, align: "right" }
-        );
-        doc.moveDown(0.5);
-      });
-
-      doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
-      doc.moveDown(0.5);
-
-      // --- PRICING SUMMARY ---
-      const summaryX = 380;
-      const summaryValX = 490;
-      const summaryWidth = 55;
-
-      doc.font("Helvetica").fontSize(9);
-      doc.text("Subtotal:", summaryX, doc.y, { width: 100 });
-      doc.text(
-        `${Number(quote.subtotal).toFixed(2)}`,
-        summaryValX,
-        doc.y - doc.currentLineHeight(),
-        { width: summaryWidth, align: "right" }
-      );
-      doc.moveDown(0.3);
-
-      if (Number(quote.discount) > 0) {
-        doc.text(
-          `Discount (${Number(quote.discountPercent).toFixed(2)}%):`,
-          summaryX,
-          doc.y,
-          { width: 100 }
-        );
-        doc.text(
-          `-${Number(quote.discount).toFixed(2)}`,
-          summaryValX,
-          doc.y - doc.currentLineHeight(),
-          { width: summaryWidth, align: "right" }
-        );
-        doc.moveDown(0.3);
-      }
-
-      if (Number(quote.taxAmount) > 0) {
-        doc.text(
-          `Tax (${Number(quote.taxPercent).toFixed(2)}%):`,
-          summaryX,
-          doc.y,
-          { width: 100 }
-        );
-        doc.text(
-          `${Number(quote.taxAmount).toFixed(2)}`,
-          summaryValX,
-          doc.y - doc.currentLineHeight(),
-          { width: summaryWidth, align: "right" }
-        );
-        doc.moveDown(0.3);
-      }
-
-      if (Number(quote.shippingAmount) > 0) {
-        doc.text("Shipping:", summaryX, doc.y, { width: 100 });
-        doc.text(
-          `${Number(quote.shippingAmount).toFixed(2)}`,
-          summaryValX,
-          doc.y - doc.currentLineHeight(),
-          { width: summaryWidth, align: "right" }
-        );
-        doc.moveDown(0.3);
-      }
-
-      doc.moveTo(summaryX, doc.y).lineTo(545, doc.y).stroke();
-      doc.moveDown(0.3);
-      doc.font("Helvetica-Bold").fontSize(10);
-      doc.text("Grand Total:", summaryX, doc.y, { width: 100 });
-      doc.text(
-        `${Number(quote.grandTotal).toFixed(2)}`,
-        summaryValX,
-        doc.y - doc.currentLineHeight(),
-        { width: summaryWidth, align: "right" }
-      );
-      doc.moveDown(1.5);
-
-      // --- TERMS & NOTES ---
-      doc.font("Helvetica").fontSize(9);
-      if (quote.paymentTerms) {
-        doc.font("Helvetica-Bold").text("Payment Terms:", 50);
-        doc.font("Helvetica").text(quote.paymentTerms, 50);
-        doc.moveDown(0.5);
-      }
-      if (quote.deliveryTerms) {
-        doc.font("Helvetica-Bold").text("Delivery Terms:", 50);
-        doc.font("Helvetica").text(quote.deliveryTerms, 50);
-        doc.moveDown(0.5);
-      }
-      if (quote.notes) {
-        doc.font("Helvetica-Bold").text("Notes:", 50);
-        doc.font("Helvetica").text(quote.notes, 50);
-        doc.moveDown(0.5);
-      }
-
-      // --- FOOTER ---
-      doc.fontSize(8).font("Helvetica").fillColor("gray");
-      doc.text(
-        `Generated on ${new Date().toLocaleString()}`,
-        50,
-        doc.page.height - 50,
-        { align: "center", width: 495 }
-      );
-
-      doc.end();
+      res
+        .status(200)
+        .set({
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${safeQuoteNumber}.pdf"`,
+          "Content-Length": pdfBuffer.length.toString(),
+          "Cache-Control": "private, no-store",
+        })
+        .send(pdfBuffer);
     } catch (error) {
       handleError(error, res, operation);
     }
   }
 
-  /**
-   * POST /api/quotes/:id/submit-for-approval
-   * Submit a DRAFT quote for internal approval (ADMIN only)
-   * Body: { requestedToId: number, comment?: string }
-   * Sets quote status to IN_REVIEW and creates an ApprovalProcess record
-   */
   async submitForApproval(req: Request, res: Response) {
     const operation = "Submit quote for approval";
     try {
@@ -1046,7 +721,7 @@ export class QuoteController {
       const userId = req.user!.id;
       const { requestedToId, comment } = req.body;
 
-      if (!requestedToId) {
+      if (requestedToId === undefined || requestedToId === null) {
         return handleValidationError(
           res,
           "requestedToId is required",
@@ -1055,12 +730,32 @@ export class QuoteController {
         );
       }
 
-      const parsedRequestedToId = parseInt(requestedToId, 10);
-      if (isNaN(parsedRequestedToId)) {
+      const parsedRequestedToId = parsePositiveInteger(requestedToId);
+      if (parsedRequestedToId === null) {
         return handleValidationError(
           res,
           "Invalid requestedToId",
           "requestedToId",
+          operation
+        );
+      }
+      if (parsedRequestedToId === userId) {
+        return handleValidationError(
+          res,
+          "A quote cannot be submitted to its requester for approval",
+          "requestedToId",
+          operation
+        );
+      }
+      if (
+        comment !== undefined &&
+        comment !== null &&
+        (typeof comment !== "string" || comment.trim().length > 5_000)
+      ) {
+        return handleValidationError(
+          res,
+          "comment must be text of at most 5000 characters",
+          "comment",
           operation
         );
       }
@@ -1085,20 +780,31 @@ export class QuoteController {
 
       const approver = await prisma.user.findUnique({
         where: { id: parsedRequestedToId },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          role: true,
+          permissions: true,
+          deletedAt: true,
+        },
       });
       if (!approver) {
         return handleNotFoundError(res, "Approver user", operation);
       }
-      if (approver.role === UserRole.SALES) {
+      if (
+        approver.deletedAt !== null ||
+        !roleHasPermission(approver.role, approver.permissions, "approvals.act")
+      ) {
         return handleValidationError(
           res,
-          "Approver must have the ADMIN role",
+          "Approver must be active and have approval permission",
           "requestedToId",
           operation
         );
       }
 
-      // Check for existing pending approval
       const existing = await prisma.approvalProcess.findFirst({
         where: {
           targetObjectName: "QUOTE",
@@ -1114,15 +820,23 @@ export class QuoteController {
         });
       }
 
-      // Transactionally: set quote to IN_REVIEW + create ApprovalProcess
       const approval = await prisma.$transaction(async tx => {
+        const claimed = await tx.quote.updateMany({
+          where: { id: quoteId, status: "DRAFT" },
+          data: { status: "IN_REVIEW" },
+        });
+        if (claimed.count !== 1) {
+          throw new QuoteSubmissionStateError();
+        }
+
         const newApproval = await tx.approvalProcess.create({
           data: {
             targetObjectName: "QUOTE",
             targetRecordId: quoteId,
             requestedToId: parsedRequestedToId,
             createdById: userId,
-            comment: comment || null,
+            comment:
+              typeof comment === "string" ? comment.trim() || null : null,
           },
           include: {
             requestedTo: {
@@ -1144,16 +858,13 @@ export class QuoteController {
           },
         });
 
-        await tx.quote.update({
-          where: { id: quoteId },
-          data: { status: "IN_REVIEW" },
-        });
-
         return newApproval;
       });
 
-      // Notify approver (fire-and-forget)
-      const requester = await prisma.user.findUnique({ where: { id: userId } });
+      const requester = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { firstName: true, lastName: true },
+      });
       emailService
         .sendApprovalRequestEmail({
           approverName: buildFullName(approver.firstName, approver.lastName),
@@ -1167,9 +878,7 @@ export class QuoteController {
           objectNumber: quote.quoteNumber,
           approvalId: approval.id,
         })
-        .catch(err =>
-          console.error("[Quote] Failed to send approval request email:", err)
-        );
+        .catch(err => logError("quote_approval_email_failed", err));
 
       const updatedQuote = await prisma.quote.findUnique({
         where: { id: quoteId },
@@ -1184,17 +893,17 @@ export class QuoteController {
 
       return res.json({ data: updatedQuote, approval });
     } catch (error) {
+      if (error instanceof QuoteSubmissionStateError) {
+        return handleConflictError(
+          res,
+          "Quote status changed while it was being submitted",
+          operation
+        );
+      }
       handleError(error, res, operation);
     }
   }
 
-  /**
-   * POST /api/quotes/:id/send
-   * Send an APPROVED quote to the client via email (ADMIN only)
-   * Generates PDF, uploads to S3, sends email with inline summary + download link
-   * Body: { to: string, subject?: string, message?: string, cc?: string[], bcc?: string[] }
-   * Sets quote status to PRESENTED on success
-   */
   async sendToClient(req: Request, res: Response) {
     const operation = "Send quote to client";
     try {
@@ -1203,7 +912,8 @@ export class QuoteController {
 
       const { to, subject, message, cc, bcc } = req.body;
 
-      if (!to || typeof to !== "string" || !to.includes("@")) {
+      const recipient = normalizeEmail(typeof to === "string" ? to : null);
+      if (!recipient || !isValidEmail(recipient)) {
         return handleValidationError(
           res,
           "A valid recipient email (to) is required",
@@ -1211,27 +921,88 @@ export class QuoteController {
           operation
         );
       }
+      if (
+        subject !== undefined &&
+        (typeof subject !== "string" ||
+          subject.trim().length === 0 ||
+          subject.trim().length > 200)
+      ) {
+        return handleValidationError(
+          res,
+          "subject must be non-empty text of at most 200 characters",
+          "subject",
+          operation
+        );
+      }
+      if (
+        message !== undefined &&
+        (typeof message !== "string" || message.trim().length > 5_000)
+      ) {
+        return handleValidationError(
+          res,
+          "message must be text of at most 5000 characters",
+          "message",
+          operation
+        );
+      }
+
+      const parseRecipients = (value: unknown): string[] | null => {
+        if (value === undefined || value === null) return [];
+        if (!Array.isArray(value) || value.length > 20) return null;
+        const normalized = value.map(item =>
+          normalizeEmail(typeof item === "string" ? item : null)
+        );
+        if (normalized.some(item => !item || !isValidEmail(item))) return null;
+        return [...new Set(normalized as string[])];
+      };
+      const normalizedCc = parseRecipients(cc);
+      const normalizedBcc = parseRecipients(bcc);
+      if (normalizedCc === null || normalizedBcc === null) {
+        const field = normalizedCc === null ? "cc" : "bcc";
+        return handleValidationError(
+          res,
+          `${field} must contain at most 20 valid email addresses`,
+          field,
+          operation
+        );
+      }
+
+      const deliveryState = await prisma.quote.findUnique({
+        where: { id: quoteId },
+        select: { status: true, updatedAt: true },
+      });
+      if (!deliveryState) {
+        return handleNotFoundError(res, "Quote", operation);
+      }
+      if (deliveryState.status === QuoteStatus.PRESENTING) {
+        const staleBefore = new Date(Date.now() - DELIVERY_CLAIM_TIMEOUT_MS);
+        if (deliveryState.updatedAt > staleBefore) {
+          return handleConflictError(
+            res,
+            "Quote delivery is already in progress",
+            operation
+          );
+        }
+        const recovered = await prisma.quote.updateMany({
+          where: {
+            id: quoteId,
+            status: QuoteStatus.PRESENTING,
+            updatedAt: { lte: staleBefore },
+          },
+          data: { status: QuoteStatus.APPROVED },
+        });
+        if (recovered.count !== 1) {
+          return handleConflictError(
+            res,
+            "Quote delivery state changed while it was being recovered",
+            operation
+          );
+        }
+      }
 
       const quote = await prisma.quote.findUnique({
         where: { id: quoteId },
-        include: {
-          account: { select: { id: true, name: true } },
-          contact: {
-            select: { id: true, name: true, email: true, phone: true },
-          },
-          preparedBy: {
-            select: { id: true, firstName: true, lastName: true, email: true },
-          },
-          opportunity: {
-            select: { id: true, name: true, opportunityNumber: true },
-          },
-          lineItems: {
-            orderBy: { sortOrder: "asc" },
-            include: {
-              product: { select: { id: true, name: true, code: true } },
-            },
-          },
-        },
+        include: quotePdfInclude,
       });
 
       if (!quote) {
@@ -1247,245 +1018,72 @@ export class QuoteController {
         );
       }
 
-      // --- Generate PDF buffer ---
-      const pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
-        const doc = new PDFDocument({ margin: 50, size: "A4" });
-        const chunks: Buffer[] = [];
+      const pdfBuffer = await renderQuotePdf(quote);
 
-        doc.on("data", (chunk: Buffer) => chunks.push(chunk));
-        doc.on("end", () => resolve(Buffer.concat(chunks)));
-        doc.on("error", reject);
-
-        // Header
-        doc
-          .fontSize(20)
-          .font("Helvetica-Bold")
-          .text("QUOTE", { align: "center" });
-        doc.moveDown(0.5);
-        doc
-          .fontSize(12)
-          .font("Helvetica")
-          .text(quote.quoteNumber, { align: "center" });
-        doc.moveDown(1);
-
-        // Quote info
-        doc.fontSize(10).font("Helvetica-Bold").text("Quote Details");
-        doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
-        doc.moveDown(0.3);
-        doc.font("Helvetica").fontSize(9);
-        const infoY = doc.y;
-        doc.text(`Name: ${quote.name}`, 50, infoY);
-        doc.text(`Status: ${quote.status}`, 50);
-        doc.text(`Version: ${quote.version}`, 50);
-        doc.text(
-          `Valid Until: ${quote.validUntil ? new Date(quote.validUntil).toLocaleDateString() : "N/A"}`,
-          50
-        );
-        doc.text(
-          `Date: ${new Date(quote.createdAt).toLocaleDateString()}`,
-          300,
-          infoY
-        );
-        doc.text(`Opportunity: ${quote.opportunity.name}`, 300);
-        doc.text(`Account: ${quote.account.name}`, 300);
-        doc.moveDown(1);
-
-        // Customer info
-        if (quote.contact) {
-          doc.fontSize(10).font("Helvetica-Bold").text("Customer");
-          doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
-          doc.moveDown(0.3);
-          doc.font("Helvetica").fontSize(9);
-          doc.text(`Contact: ${quote.contact.name}`, 50);
-          if (quote.contact.email)
-            doc.text(`Email: ${quote.contact.email}`, 50);
-          if (quote.contact.phone)
-            doc.text(`Phone: ${quote.contact.phone}`, 50);
-          doc.moveDown(1);
-        }
-
-        // Line items
-        doc.fontSize(10).font("Helvetica-Bold").text("Line Items");
-        doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
-        doc.moveDown(0.3);
-        const tableTop = doc.y;
-        const colX = {
-          num: 50,
-          product: 70,
-          qty: 280,
-          unitPrice: 330,
-          discount: 410,
-          total: 470,
-        };
-        doc.fontSize(8).font("Helvetica-Bold");
-        doc.text("#", colX.num, tableTop, { width: 20 });
-        doc.text("Product", colX.product, tableTop, { width: 200 });
-        doc.text("Qty", colX.qty, tableTop, { width: 45, align: "right" });
-        doc.text("Unit Price", colX.unitPrice, tableTop, {
-          width: 70,
-          align: "right",
-        });
-        doc.text("Disc %", colX.discount, tableTop, {
-          width: 50,
-          align: "right",
-        });
-        doc.text("Total", colX.total, tableTop, { width: 75, align: "right" });
-        doc.moveDown(0.3);
-        doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
-        doc.moveDown(0.3);
-        doc.font("Helvetica").fontSize(8);
-        quote.lineItems.forEach((item, index) => {
-          if (doc.y > 700) doc.addPage();
-          const rowY = doc.y;
-          doc.text(`${index + 1}`, colX.num, rowY, { width: 20 });
-          doc.text(
-            item.product?.name || `Product #${item.productId}`,
-            colX.product,
-            rowY,
-            { width: 200 }
-          );
-          doc.text(`${item.quantity}`, colX.qty, rowY, {
-            width: 45,
-            align: "right",
-          });
-          doc.text(
-            `${Number(item.unitPrice).toFixed(2)}`,
-            colX.unitPrice,
-            rowY,
-            { width: 70, align: "right" }
-          );
-          doc.text(`${Number(item.discount).toFixed(2)}`, colX.discount, rowY, {
-            width: 50,
-            align: "right",
-          });
-          doc.text(`${Number(item.totalPrice).toFixed(2)}`, colX.total, rowY, {
-            width: 75,
-            align: "right",
-          });
-          doc.moveDown(0.5);
-        });
-        doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
-        doc.moveDown(0.5);
-
-        // Totals
-        const sumX = 380;
-        const sumValX = 470;
-        doc.font("Helvetica").fontSize(9);
-        doc.text("Subtotal:", sumX, doc.y, { width: 85 });
-        doc.text(
-          `${Number(quote.subtotal).toFixed(2)}`,
-          sumValX,
-          doc.y - doc.currentLineHeight(),
-          { width: 75, align: "right" }
-        );
-        doc.moveDown(0.3);
-        if (Number(quote.discount) > 0) {
-          doc.text(
-            `Discount (${Number(quote.discountPercent).toFixed(2)}%):`,
-            sumX,
-            doc.y,
-            { width: 85 }
-          );
-          doc.text(
-            `-${Number(quote.discount).toFixed(2)}`,
-            sumValX,
-            doc.y - doc.currentLineHeight(),
-            { width: 75, align: "right" }
-          );
-          doc.moveDown(0.3);
-        }
-        if (Number(quote.taxAmount) > 0) {
-          doc.text(
-            `Tax (${Number(quote.taxPercent).toFixed(2)}%):`,
-            sumX,
-            doc.y,
-            { width: 85 }
-          );
-          doc.text(
-            `${Number(quote.taxAmount).toFixed(2)}`,
-            sumValX,
-            doc.y - doc.currentLineHeight(),
-            { width: 75, align: "right" }
-          );
-          doc.moveDown(0.3);
-        }
-        if (Number(quote.shippingAmount) > 0) {
-          doc.text("Shipping:", sumX, doc.y, { width: 85 });
-          doc.text(
-            `${Number(quote.shippingAmount).toFixed(2)}`,
-            sumValX,
-            doc.y - doc.currentLineHeight(),
-            { width: 75, align: "right" }
-          );
-          doc.moveDown(0.3);
-        }
-        doc.moveTo(sumX, doc.y).lineTo(545, doc.y).stroke();
-        doc.moveDown(0.3);
-        doc.font("Helvetica-Bold").fontSize(10);
-        doc.text("Grand Total:", sumX, doc.y, { width: 85 });
-        doc.text(
-          `${Number(quote.grandTotal).toFixed(2)}`,
-          sumValX,
-          doc.y - doc.currentLineHeight(),
-          { width: 75, align: "right" }
-        );
-        doc.moveDown(1.5);
-
-        // Terms
-        doc.font("Helvetica").fontSize(9);
-        if (quote.paymentTerms) {
-          doc.font("Helvetica-Bold").text("Payment Terms:", 50);
-          doc.font("Helvetica").text(quote.paymentTerms, 50);
-          doc.moveDown(0.5);
-        }
-        if (quote.deliveryTerms) {
-          doc.font("Helvetica-Bold").text("Delivery Terms:", 50);
-          doc.font("Helvetica").text(quote.deliveryTerms, 50);
-          doc.moveDown(0.5);
-        }
-        if (quote.notes) {
-          doc.font("Helvetica-Bold").text("Notes:", 50);
-          doc.font("Helvetica").text(quote.notes, 50);
-          doc.moveDown(0.5);
-        }
-
-        doc.fontSize(8).font("Helvetica").fillColor("gray");
-        doc.text(
-          `Generated on ${new Date().toLocaleString()}`,
-          50,
-          doc.page.height - 50,
-          { align: "center", width: 495 }
-        );
-        doc.end();
+      const claimed = await prisma.quote.updateMany({
+        where: { id: quoteId, status: "APPROVED" },
+        data: { status: "PRESENTING" },
       });
+      if (claimed.count !== 1) {
+        return handleConflictError(
+          res,
+          "Quote delivery is already in progress or the quote status changed",
+          operation
+        );
+      }
 
-      // --- Upload PDF to S3 ---
-      const s3Result = await uploadToS3(pdfBuffer, {
-        folder: "quotes",
-        filename: `${quote.quoteNumber}.pdf`,
-        contentType: "application/pdf",
-        publicRead: true,
-      });
+      const deliveryDigest = createHash("sha256")
+        .update(
+          JSON.stringify({
+            deliveryFormatVersion: 1,
+            quoteId,
+            recipient,
+            cc: normalizedCc,
+            bcc: normalizedBcc,
+            subject: typeof subject === "string" ? subject.trim() : null,
+            message: typeof message === "string" ? message.trim() : null,
+            pdfSha256: createHash("sha256").update(pdfBuffer).digest("hex"),
+            quote: {
+              quoteNumber: quote.quoteNumber,
+              name: quote.name,
+              validUntil: quote.validUntil?.toISOString() ?? null,
+              subtotal: quote.subtotal.toString(),
+              discount: quote.discount.toString(),
+              discountPercent: quote.discountPercent.toString(),
+              taxAmount: quote.taxAmount.toString(),
+              taxPercent: quote.taxPercent.toString(),
+              shippingAmount: quote.shippingAmount.toString(),
+              grandTotal: quote.grandTotal.toString(),
+              paymentTerms: quote.paymentTerms,
+              deliveryTerms: quote.deliveryTerms,
+              notes: quote.notes,
+              lineItems: quote.lineItems.map(item => ({
+                productId: item.productId,
+                productName: item.product?.name ?? null,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice.toString(),
+                discount: item.discount.toString(),
+                totalPrice: item.totalPrice.toString(),
+              })),
+            },
+          })
+        )
+        .digest("hex")
+        .slice(0, 40);
 
-      // --- Update quote: save pdfUrl + set PRESENTED status ---
       const contactName = quote.contact?.name ?? quote.account.name;
-      await prisma.quote.update({
-        where: { id: quoteId },
-        data: {
-          pdfUrl: s3Result.publicUrl,
-          status: "PRESENTED",
-          presentedAt: new Date(),
-        },
-      });
-
-      // --- Send email to client ---
       const sent = await emailService.sendQuoteEmail({
-        to,
+        to: recipient,
         contactName,
-        subject: subject || undefined,
-        message: message || undefined,
-        cc: Array.isArray(cc) ? cc : undefined,
-        bcc: Array.isArray(bcc) ? bcc : undefined,
+        subject: typeof subject === "string" ? subject.trim() : undefined,
+        message: typeof message === "string" ? message.trim() : undefined,
+        cc: normalizedCc.length > 0 ? normalizedCc : undefined,
+        bcc: normalizedBcc.length > 0 ? normalizedBcc : undefined,
+        idempotencyKey: `quote-${quoteId}-${deliveryDigest}`,
+        pdfAttachment: {
+          filename: `${quote.quoteNumber}.pdf`,
+          content: pdfBuffer.toString("base64"),
+        },
         quote: {
           quoteNumber: quote.quoteNumber,
           name: quote.name,
@@ -1500,7 +1098,6 @@ export class QuoteController {
           paymentTerms: quote.paymentTerms,
           deliveryTerms: quote.deliveryTerms,
           notes: quote.notes,
-          pdfUrl: s3Result.publicUrl,
           lineItems: quote.lineItems.map(item => ({
             productName: item.product?.name ?? `Product #${item.productId}`,
             quantity: item.quantity,
@@ -1510,6 +1107,28 @@ export class QuoteController {
           })),
         },
       });
+      if (!sent) {
+        await prisma.quote.updateMany({
+          where: { id: quoteId, status: "PRESENTING" },
+          data: { status: "APPROVED" },
+        });
+        return res.status(502).json({
+          error: "Quote email could not be delivered",
+          code: "EMAIL_DELIVERY_FAILED",
+        });
+      }
+
+      const finalized = await prisma.quote.updateMany({
+        where: { id: quoteId, status: QuoteStatus.PRESENTING },
+        data: { status: "PRESENTED", presentedAt: new Date() },
+      });
+      if (finalized.count !== 1) {
+        return handleConflictError(
+          res,
+          "Quote was delivered, but its status changed before finalization",
+          operation
+        );
+      }
 
       const updatedQuote = await prisma.quote.findUnique({
         where: { id: quoteId },
@@ -1525,7 +1144,6 @@ export class QuoteController {
 
       return res.json({
         data: updatedQuote,
-        pdfUrl: s3Result.publicUrl,
         emailSent: sent,
       });
     } catch (error) {
@@ -1533,11 +1151,6 @@ export class QuoteController {
     }
   }
 
-  /**
-   * GET /api/quotes/:id
-   * Get all quotes for a specific opportunity (paginated)
-   * :id here is the opportunity ID
-   */
   async getQuotesByOpportunityId(req: Request, res: Response) {
     const operation = "Get quotes by opportunity";
     try {
@@ -1549,7 +1162,6 @@ export class QuoteController {
       );
       if (opportunityId === null) return;
 
-      // Verify the opportunity exists
       const opportunity = await prisma.opportunity.findUnique({
         where: { id: opportunityId },
         select: { id: true, deletedAt: true },
@@ -1559,39 +1171,38 @@ export class QuoteController {
         return handleNotFoundError(res, "Opportunity", operation);
       }
 
-      // Extract and validate pagination parameters
-      const pageParam = req.query.page as string;
-      const limitParam = req.query.limit as string;
+      const pagination = this.pagination(req, res, operation);
+      if (!pagination) return;
+      const { page, limit, skip } = pagination;
 
-      // Validate page parameter
-      const page = Math.max(1, parseInt(pageParam) || 1);
-
-      // Validate limit parameter with custom support
-      const requestedLimit = parseInt(limitParam);
-      const limit =
-        requestedLimit >= 1 && requestedLimit <= 100 ? requestedLimit : 10;
-
-      // Calculate pagination offset
-      const skip = (page - 1) * limit;
-
-      // Extract optional filters
       const { status } = req.query;
 
-      // Build where clause
-      const whereClause: any = {
+      const whereClause: Prisma.QuoteWhereInput = {
         opportunityId,
       };
 
       if (status) {
         const statusArray = status.toString().split(",");
+        if (
+          statusArray.some(
+            value => !Object.values(QuoteStatus).includes(value as QuoteStatus)
+          )
+        ) {
+          return handleValidationError(
+            res,
+            "Invalid quote status",
+            "status",
+            operation
+          );
+        }
         whereClause.status =
-          statusArray.length === 1 ? statusArray[0] : { in: statusArray };
+          statusArray.length === 1
+            ? (statusArray[0] as QuoteStatus)
+            : { in: statusArray as QuoteStatus[] };
       }
 
-      // Execute count query
       const totalItems = await prisma.quote.count({ where: whereClause });
 
-      // Execute paginated query
       const quotes = await prisma.quote.findMany({
         where: whereClause,
         skip,
@@ -1618,12 +1229,10 @@ export class QuoteController {
         },
       });
 
-      // Calculate pagination metadata
       const totalPages = Math.ceil(totalItems / limit);
       const hasNextPage = page < totalPages;
       const hasPreviousPage = page > 1;
 
-      // Return standardized pagination response
       return res.json({
         data: quotes,
         pagination: {

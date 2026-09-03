@@ -1,6 +1,6 @@
 "use client";
 
-import logov3 from "@/app/assets/images/logos/logo_v1.png";
+import logov3 from "@/app/assets/images/logos/logo-v1.png";
 import { aakramanService } from "@/lib/api/services";
 import { Button } from "@repo/ui/components/ui/button";
 import {
@@ -24,7 +24,6 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 
-// Zod schema for customer details validation
 const customerDetailsSchema = z.object({
   firmName: z.string().min(1, "Firm name is required"),
   ownerFirstName: z.string().min(1, "First name is required"),
@@ -56,7 +55,6 @@ const customerDetailsSchema = z.object({
 
 type CustomerDetailsFormData = z.infer<typeof customerDetailsSchema>;
 
-// Indian states list
 const INDIAN_STATES = [
   "Andhra Pradesh",
   "Arunachal Pradesh",
@@ -118,20 +116,18 @@ export default function CustomerDetailsPage() {
     Partial<Record<keyof CustomerDetailsFormData, boolean>>
   >({});
 
-  // Check authentication
   useEffect(() => {
     if (!aakramanService.isAuthenticated()) {
       router.push("/aakraman");
       return;
     }
 
-    // Load existing customer details if any
     const savedDetails = localStorage.getItem(CUSTOMER_DETAILS_KEY);
     if (savedDetails) {
       try {
-        setFormData(JSON.parse(savedDetails));
-      } catch (e) {
-        console.error("Failed to parse saved customer details:", e);
+        setFormData(customerDetailsSchema.parse(JSON.parse(savedDetails)));
+      } catch {
+        localStorage.removeItem(CUSTOMER_DETAILS_KEY);
       }
     }
   }, [router]);
@@ -178,7 +174,6 @@ export default function CustomerDetailsPage() {
     setError("");
     setIsLoading(true);
 
-    // Mark all fields as touched
     const allFields = Object.keys(
       formData
     ) as (keyof CustomerDetailsFormData)[];
@@ -192,14 +187,11 @@ export default function CustomerDetailsPage() {
       )
     );
 
-    // Validate all fields
     try {
       customerDetailsSchema.parse(formData);
 
-      // Save customer details to localStorage
       localStorage.setItem(CUSTOMER_DETAILS_KEY, JSON.stringify(formData));
 
-      // Redirect to order booking page
       router.push("/aakraman/book-a-order");
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -221,7 +213,6 @@ export default function CustomerDetailsPage() {
 
   return (
     <div className="min-h-screen bg-surface-elevated">
-      {/* Header */}
       <header className="sticky top-0 z-40 bg-primary shadow-md">
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
@@ -240,7 +231,6 @@ export default function CustomerDetailsPage() {
         </div>
       </header>
 
-      {/* Form */}
       <main className="max-w-3xl mx-auto px-4 py-8">
         <Card>
           <CardHeader>

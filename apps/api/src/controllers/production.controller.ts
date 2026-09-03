@@ -26,9 +26,10 @@ import {
 import { DomainError, NotFoundError } from "../services/supplyChain/errors.js";
 import {
   ZERO,
+  requireNonNegative,
+  requirePositive,
   roundCost,
   roundQuantity,
-  toDecimal,
 } from "../services/supplyChain/decimal.js";
 import {
   handleSupplyChainError,
@@ -41,7 +42,7 @@ import {
   parseOptionalId,
   parsePagination,
   requireUserId,
-} from "../utils/supplyChainHttp.js";
+} from "../utils/supply-chain-http.js";
 
 const ORDER_INCLUDE = {
   product: {
@@ -66,7 +67,6 @@ const ORDER_INCLUDE = {
 } as const;
 
 export class ProductionController {
-  /** GET /api/production-orders */
   async list(req: Request, res: Response) {
     const operation = "List production orders";
     try {
@@ -108,7 +108,6 @@ export class ProductionController {
     }
   }
 
-  /** GET /api/production-orders/:id */
   async getById(req: Request, res: Response) {
     const operation = "Get production order";
     try {
@@ -152,27 +151,33 @@ export class ProductionController {
     }
   }
 
-  /**
-   * POST /api/production-orders
-   * Plan a build. The BOM is exploded at creation time and the component
-   * demand is frozen onto the order, so a later BOM revision cannot silently
-   * rewrite what this run was supposed to consume.
-   */
   async create(req: Request, res: Response) {
     const operation = "Create production order";
     try {
       const userId = requireUserId(req);
       const productId = parseId(String(req.body.productId), "productId");
       const warehouseId = parseId(String(req.body.warehouseId), "warehouseId");
-      const plannedQuantity = toDecimal(
+      const plannedQuantity = requirePositive(
         req.body.plannedQuantity,
         "plannedQuantity"
       );
-
-      if (plannedQuantity.lessThanOrEqualTo(0)) {
-        throw new DomainError("plannedQuantity must be greater than zero", {
-          code: "VALIDATION_ERROR",
-        });
+      const plannedStartDate = parseDate(
+        req.body.plannedStartDate,
+        "plannedStartDate"
+      );
+      const plannedEndDate = parseDate(
+        req.body.plannedEndDate,
+        "plannedEndDate"
+      );
+      if (
+        plannedStartDate &&
+        plannedEndDate &&
+        plannedEndDate < plannedStartDate
+      ) {
+        throw new DomainError(
+          "plannedEndDate cannot be earlier than plannedStartDate",
+          { code: "VALIDATION_ERROR" }
+        );
       }
 
       const bom = await resolveBomForProduct(
@@ -212,14 +217,8 @@ export class ProductionController {
             warehouseId,
             status: ProductionOrderStatus.DRAFT,
             plannedQuantity: roundQuantity(plannedQuantity),
-            plannedStartDate: parseDate(
-              req.body.plannedStartDate,
-              "plannedStartDate"
-            ),
-            plannedEndDate: parseDate(
-              req.body.plannedEndDate,
-              "plannedEndDate"
-            ),
+            plannedStartDate,
+            plannedEndDate,
             plannedMaterialCost: roundCost(plannedMaterialCost),
             notes: optionalString(req.body.notes),
             createdById: userId,
@@ -242,7 +241,6 @@ export class ProductionController {
     }
   }
 
-  /** GET /api/production-orders/:id/availability */
   async availability(req: Request, res: Response) {
     const operation = "Check production material availability";
     try {
@@ -264,11 +262,6 @@ export class ProductionController {
     }
   }
 
-  /**
-   * POST /api/production-orders/:id/release
-   * Release the order to the floor and reserve its components, so the build
-   * cannot have its materials picked away by another order.
-   */
   async release(req: Request, res: Response) {
     const operation = "Release production order";
     try {
@@ -296,7 +289,6 @@ export class ProductionController {
           }
 
           if (reserveMaterials) {
-            // Ascending product order keeps the stock locks deterministic.
             const ordered = [...existing.components].sort(
               (a, b) => a.productId - b.productId
             );
@@ -335,33 +327,32 @@ export class ProductionController {
     }
   }
 
-  /**
-   * POST /api/production-orders/:id/complete
-   * Book finished goods in. The unit cost is the material actually consumed
-   * plus the BOM's labour and overhead, spread over the good units produced —
-   * so what lands in stock is what the run really cost.
-   */
   async complete(req: Request, res: Response) {
     const operation = "Complete production order";
     try {
       const userId = requireUserId(req);
       const id = parseId(req.params.id, "Production order id");
-      const producedQuantity = toDecimal(
+      const producedQuantity = requirePositive(
         req.body.producedQuantity,
         "producedQuantity"
       );
-      const scrappedQuantity = req.body.scrappedQuantity
-        ? toDecimal(req.body.scrappedQuantity, "scrappedQuantity")
-        : ZERO;
-
-      if (producedQuantity.lessThanOrEqualTo(0)) {
-        throw new DomainError("producedQuantity must be greater than zero", {
+      const scrappedQuantity = requireNonNegative(
+        req.body.scrappedQuantity ?? ZERO,
+        "scrappedQuantity"
+      );
+      const manufacturedDate = new Date();
+      const expiryDate = parseDate(req.body.expiryDate, "expiryDate");
+      const currentDay = new Date(manufacturedDate);
+      currentDay.setUTCHours(0, 0, 0, 0);
+      if (expiryDate && expiryDate < currentDay) {
+        throw new DomainError("expiryDate cannot be in the past", {
           code: "VALIDATION_ERROR",
         });
       }
 
       const result = await prisma.$transaction(
         async tx => {
+          await tx.$queryRaw`SELECT "id" FROM "production_orders" WHERE "id" = ${id} FOR UPDATE`;
           const order = await tx.productionOrder.findUnique({
             where: { id },
             include: {
@@ -391,7 +382,6 @@ export class ProductionController {
             );
           }
 
-          // Cost the output from what the run actually consumed.
           const unitCost = producedQuantity.isZero()
             ? ZERO
             : roundCost(
@@ -412,8 +402,8 @@ export class ProductionController {
               batchNumber:
                 optionalString(req.body.batchNumber) ?? order.orderNumber,
               serialNumber: optionalString(req.body.serialNumber),
-              manufacturedDate: new Date(),
-              expiryDate: parseDate(req.body.expiryDate, "expiryDate"),
+              manufacturedDate,
+              expiryDate,
             },
             reference: {
               type: "PRODUCTION_ORDER",
@@ -464,7 +454,6 @@ export class ProductionController {
     }
   }
 
-  /** PATCH /api/production-orders/:id/cancel */
   async cancel(req: Request, res: Response) {
     const operation = "Cancel production order";
     try {
@@ -501,7 +490,6 @@ export class ProductionController {
     }
   }
 
-  /** GET /api/production-orders/:id/variance */
   async variance(req: Request, res: Response) {
     const operation = "Production variance";
     try {

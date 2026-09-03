@@ -2,9 +2,9 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { RoleGuard } from "@/components/guards/RoleGuard";
+import { RoleGuard } from "@/components/guards/role-guard";
 import { DataTable, type TableColumn } from "@/components/data-table";
-import { useQuotesWithPagination } from "@/hooks/useQuotes";
+import { useQuotesWithPagination } from "@/hooks/use-quotes";
 import type { QuoteListItem } from "@/lib/api/types";
 import { Alert } from "@repo/ui/components/ui/alert";
 import { TablePageSkeleton } from "@/components/skeletons";
@@ -12,7 +12,7 @@ import { PageHeader } from "@repo/ui/components/ui/page-header";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { DEFAULT_PAGE_SIZE } from "@/components/data-table";
 import { formatMoney } from "@/lib/utils/decimal";
-import { DataTransfer } from "@/components/data-transfer/DataTransfer";
+import { DataTransfer } from "@/components/data-transfer/data-transfer";
 
 export type QuoteTableRow = {
   id: string;
@@ -136,7 +136,7 @@ export default function QuotesPage() {
 
   if (isLoading) {
     return (
-      <RoleGuard allowedRoles={["ADMIN", "ADMIN", "SALES"]}>
+      <RoleGuard allowedRoles={["ADMIN", "SALES"]}>
         <TablePageSkeleton filters={0} />
       </RoleGuard>
     );
@@ -144,7 +144,7 @@ export default function QuotesPage() {
 
   if (isError) {
     return (
-      <RoleGuard allowedRoles={["ADMIN", "ADMIN", "SALES"]}>
+      <RoleGuard allowedRoles={["ADMIN", "SALES"]}>
         <PageShell>
           <Alert tone="error" title="Quotes could not be loaded">
             {error && typeof error === "object" && "message" in error
@@ -160,7 +160,7 @@ export default function QuotesPage() {
   const totalPages = pagination?.totalPages ?? 1;
 
   return (
-    <RoleGuard allowedRoles={["ADMIN", "ADMIN", "SALES"]}>
+    <RoleGuard allowedRoles={["ADMIN", "SALES"]}>
       <PageShell>
         <PageHeader
           title="Quotes"

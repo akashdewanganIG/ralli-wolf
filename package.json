@@ -2,6 +2,7 @@
   "name": "custom-marketing-crm-suite",
   "private": true,
   "scripts": {
+    "clean": "node scripts/clean-build-artifacts.mjs",
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
@@ -10,6 +11,7 @@
     "check-types": "turbo run check-types",
     "env:switch:local": "node scripts/switch-env.mjs local",
     "env:switch:production": "node scripts/switch-env.mjs production",
+    "env:check": "node scripts/check-environment-keys.mjs",
     "db:generate": "turbo run prisma:generate",
     "db:migrate": "turbo run prisma:migrate",
     "db:deploy": "turbo run prisma:deploy",
@@ -20,8 +22,7 @@
     "db:verify:all-demo": "npm run prisma:verify:all-demo -w @repo/db",
     "db:seed:supply-chain": "turbo run prisma:seed:supply-chain",
     "db:reset": "turbo run prisma:reset",
-    "db:switch:local": "cd packages/db && powershell -ExecutionPolicy Bypass -File switch-db.ps1 local",
-    "db:switch:production": "cd packages/db && powershell -ExecutionPolicy Bypass -File switch-db.ps1 production"
+    "postinstall": "node scripts/patch-exceljs-uuid.mjs"
   },
   "devDependencies": {
     "dotenv-cli": "^7.4.2",
@@ -38,6 +39,7 @@
     "packages/*"
   ],
   "overrides": {
-    "lightningcss": "1.27.0"
+    "lightningcss": "1.27.0",
+    "uuid": "11.1.1"
   }
 }

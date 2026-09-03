@@ -8,30 +8,30 @@ import {
   Campaign,
   AnalyticsEvent,
   FormSubmission,
-  UserPermissions,
   LoginRequest,
   LoginOtpVerifyRequest,
-  LoginMfaChallenge,
   LoginResult,
   AuthMethodsSummary,
   TotpEnrolment,
   LoginOtpResendResponse,
   LoginResponse,
-  SignupRequest,
-  SignupResponse,
   LeadFilters,
   ContactFilters,
   CampaignFilters,
   UserFilters,
-  WebhookPayload,
-  WebhookResponse,
   ApiResponse,
   PaginatedApiResponse,
   SyncLeadsResponse,
   BrevoCampaign,
-  BrevoAnalyticsResponse,
   UpdateCampaignRequest,
   MessagingAccount,
+  WhatsAppCampaignSummary,
+  WhatsAppCampaignDetail,
+  WhatsAppCampaignConfig,
+  WhatsAppCreateCampaignPayload,
+  WhatsAppCreateTemplatePayload,
+  WhatsAppUpdateCampaignPayload,
+  WhatsAppOptOut,
   DashboardChartData,
   DashboardMetric,
   MessageTemplate,
@@ -42,7 +42,6 @@ import {
   GenerateOtpResponse,
   VerifyOtpRequest,
   VerifyOtpResponse,
-  CheckPhoneResponse,
   SubdealerLoginRequest,
   SubdealerAuthResponse,
   Product,
@@ -55,6 +54,15 @@ import {
   PriceBookEntry,
   Keyword,
   LeadAssignmentStats,
+  LeadMutationResponse,
+  LeadConversionResult,
+  BulkLeadConversionResult,
+  LeadRemark,
+  Enquiry,
+  Order,
+  Invoice,
+  GlobalSetting,
+  Currency,
   LandingPageCampaignStats,
   Segment,
   SegmentPayload,
@@ -70,15 +78,12 @@ import {
   QuoteOrderItem,
   SalesOrderListItem,
   SalesOrderDetail,
+  SalesOrderLineItem,
+  PaginationMeta,
   ApprovalProcessApi,
 } from "./types";
 
-// Auth Services
 export const authService = {
-  /**
-   * Step one of sign-in. A correct password does not return a session — it
-   * returns a challenge, and the emailed code must be verified next.
-   */
   login: async (credentials: LoginRequest): Promise<LoginResult> => {
     const response = await apiClient.post("/api/auth/login", credentials);
     return response.data;
@@ -91,7 +96,6 @@ export const authService = {
     return response.data;
   },
 
-  /** Step two of sign-in: trades a valid code for a session token. */
   verifyLoginOtp: async (
     credentials: LoginOtpVerifyRequest
   ): Promise<LoginResponse> => {
@@ -102,15 +106,11 @@ export const authService = {
     return response.data;
   },
 
-  // ---- Authentication method management ----------------------------------
-  // All act on the signed-in account; the server never takes a user id here.
-
   getAuthMethods: async (): Promise<AuthMethodsSummary> => {
     const response = await apiClient.get("/api/auth/methods");
     return response.data;
   },
 
-  /** Mints a secret and returns the QR + manual key. Does not enable it. */
   startTotpSetup: async (): Promise<TotpEnrolment> => {
     const response = await apiClient.post("/api/auth/methods/totp/setup");
     return response.data;
@@ -135,7 +135,6 @@ export const authService = {
     return response.data;
   },
 
-  /** Sets a password and turns password sign-in back on. */
   setAuthPassword: async (newPassword: string): Promise<AuthMethodsSummary> => {
     const response = await apiClient.post("/api/auth/methods/password", {
       newPassword,
@@ -150,19 +149,6 @@ export const authService = {
     return response.data;
   },
 
-  developerLogin: async (credentials: LoginRequest): Promise<LoginResponse> => {
-    const response = await apiClient.post(
-      "/api/auth/developer-login",
-      credentials
-    );
-    return response.data;
-  },
-
-  signup: async (userData: SignupRequest): Promise<SignupResponse> => {
-    const response = await apiClient.post("/api/auth/signup", userData);
-    return response.data;
-  },
-
   logout: async (): Promise<void> => {
     await apiClient.post("/api/auth/logout");
   },
@@ -172,7 +158,6 @@ export const authService = {
     return response.data;
   },
 
-  // Forgot password (OTP)
   requestPasswordResetOtp: async (
     email: string
   ): Promise<{ success: boolean }> => {
@@ -207,7 +192,7 @@ export const authService = {
   changePassword: async (
     currentPassword: string,
     newPassword: string
-  ): Promise<{ success: boolean }> => {
+  ): Promise<{ success: boolean; token?: string }> => {
     const response = await apiClient.post("/api/auth/change-password", {
       currentPassword,
       newPassword,
@@ -216,34 +201,22 @@ export const authService = {
   },
 };
 
-// Lead Services
 export const leadService = {
   getAllLeads: async (
     filters?: LeadFilters & { page?: number; limit?: number }
   ): Promise<PaginatedApiResponse<Lead>> => {
-    const params: any = { ...filters };
-    // Convert keywordIds array to comma-separated string for API
-    if (
-      params.keywordIds &&
-      Array.isArray(params.keywordIds) &&
-      params.keywordIds.length > 0
-    ) {
-      params.keywordIds = params.keywordIds.join(",");
-    } else if (params.keywordIds) {
-      delete params.keywordIds;
-    }
-    if (typeof params.assigned === "boolean") {
-      params.assigned = params.assigned ? "true" : "false";
-    }
-    if (typeof params.unassigned === "boolean") {
-      params.unassigned = params.unassigned ? "true" : "false";
-    }
+    const { keywordIds, assigned, unassigned, ...rest } = filters ?? {};
+    const params = {
+      ...rest,
+      ...(keywordIds?.length ? { keywordIds: keywordIds.join(",") } : {}),
+      ...(typeof assigned === "boolean"
+        ? { assigned: assigned ? "true" : "false" }
+        : {}),
+      ...(typeof unassigned === "boolean"
+        ? { unassigned: unassigned ? "true" : "false" }
+        : {}),
+    };
     const response = await apiClient.get("/api/leads", { params });
-    return response.data;
-  },
-
-  getAllLeadsComplete: async (): Promise<Lead[]> => {
-    const response = await apiClient.get("/api/leads/all");
     return response.data;
   },
 
@@ -254,7 +227,7 @@ export const leadService = {
 
   createLead: async (
     leadData: Partial<Lead>
-  ): Promise<{ lead: Lead; scoreBreakdown: any }> => {
+  ): Promise<LeadMutationResponse> => {
     const response = await apiClient.post("/api/leads", leadData);
     return response.data;
   },
@@ -262,21 +235,13 @@ export const leadService = {
   updateLead: async (
     id: number,
     leadData: Partial<Lead>
-  ): Promise<{ lead: Lead; scoreBreakdown: any }> => {
+  ): Promise<LeadMutationResponse> => {
     const response = await apiClient.put(`/api/leads/${id}`, leadData);
     return response.data;
   },
 
   deleteLead: async (id: number): Promise<void> => {
     await apiClient.delete(`/api/leads/${id}`);
-  },
-
-  // Filter and search methods
-  filterLeads: async (filters: LeadFilters): Promise<Lead[]> => {
-    const response = await apiClient.get("/api/leads/filter", {
-      params: filters,
-    });
-    return response.data;
   },
 
   searchLeads: async (query: string): Promise<Lead[]> => {
@@ -286,39 +251,11 @@ export const leadService = {
     return response.data;
   },
 
-  getLeadsByStatus: async (status: string): Promise<Lead[]> => {
-    const response = await apiClient.get(`/api/leads/by-status/${status}`);
-    return response.data;
-  },
-
-  getLeadsBySource: async (source: string): Promise<Lead[]> => {
-    const response = await apiClient.get(`/api/leads/by-source/${source}`);
-    return response.data;
-  },
-
-  getLeadsByOwner: async (ownerId: number): Promise<Lead[]> => {
-    const response = await apiClient.get(`/api/leads/by-owner/${ownerId}`);
-    // The API returns a paginated response with data and pagination properties
-    // Extract the data array from the response
-    return response.data?.data || response.data || [];
-  },
-
   getAssignmentStats: async (): Promise<LeadAssignmentStats[]> => {
     const response = await apiClient.get("/api/leads/assignment/stats");
     return response.data;
   },
 
-  getLeadsByScore: async (
-    minScore?: number,
-    maxScore?: number
-  ): Promise<Lead[]> => {
-    const response = await apiClient.get("/api/leads/by-score", {
-      params: { minScore, maxScore },
-    });
-    return response.data;
-  },
-
-  // Assignment methods
   assignLead: async (id: number, userId: number): Promise<Lead> => {
     const response = await apiClient.put(`/api/leads/${id}/assign`, { userId });
     return response.data;
@@ -335,38 +272,18 @@ export const leadService = {
     return response.data;
   },
 
-  // Claim methods
-  claimLead: async (id: number): Promise<Lead> => {
-    const response = await apiClient.put(`/api/leads/${id}/claim`);
-    return response.data;
-  },
-
-  claimLeadsBulk: async (payload: {
-    leadIds: number[];
-    userId: number;
-  }): Promise<Lead[]> => {
-    const response = await apiClient.post("/api/leads/claim-bulk", payload);
-    return response.data;
-  },
-
-  // Conversion methods
   convertLead: async (
     id: number,
     data: { keywordIds?: number[] }
-  ): Promise<any> => {
+  ): Promise<LeadConversionResult> => {
     const response = await apiClient.post(`/api/leads/${id}/convert`, data);
     return response.data;
   },
 
   convertLeadsBulk: async (
     leads: Array<{ leadId: number; keywordIds?: number[] }>
-  ): Promise<any> => {
+  ): Promise<BulkLeadConversionResult> => {
     const response = await apiClient.post("/api/leads/convert-bulk", { leads });
-    return response.data;
-  },
-
-  getConversionHistory: async (id: number): Promise<any[]> => {
-    const response = await apiClient.get(`/api/leads/${id}/conversion-history`);
     return response.data;
   },
 
@@ -375,13 +292,6 @@ export const leadService = {
     return response.data;
   },
 
-  // Scoring methods
-  updateLeadScore: async (id: number, score: number): Promise<Lead> => {
-    const response = await apiClient.put(`/api/leads/${id}/score`, { score });
-    return response.data;
-  },
-
-  // Import/Export helpers
   downloadExport: async (
     entity: "leads" | "contacts" | "accounts",
     params: {
@@ -444,13 +354,11 @@ export const leadService = {
   },
 };
 
-// User Services
 export const userService = {
   getAllUsers: async (
     filters?: UserFilters & { page?: number; limit?: number }
   ): Promise<PaginatedApiResponse<User>> => {
-    const params: any = { ...filters };
-    const response = await apiClient.get("/api/users", { params });
+    const response = await apiClient.get("/api/users", { params: filters });
     return response.data;
   },
 
@@ -475,27 +383,11 @@ export const userService = {
     await apiClient.delete(`/api/users/${id}`);
   },
 
-  /**
-   * Issue a fresh password for the account and email it. The previous password
-   * stops working, so this doubles as a recovery path when the first email went
-   * astray.
-   */
   resendCredentials: async (
     id: number
   ): Promise<{ success: boolean; email: string; message: string }> => {
     const response = await apiClient.post(
       `/api/users/${id}/resend-credentials`
-    );
-    return response.data;
-  },
-
-  updateUserPermissions: async (
-    id: number,
-    permissions: Partial<UserPermissions>
-  ): Promise<UserPermissions> => {
-    const response = await apiClient.put(
-      `/api/users/${id}/permissions`,
-      permissions
     );
     return response.data;
   },
@@ -571,12 +463,10 @@ export const userService = {
   },
 
   downloadTemplate: (): string => {
-    // Returns the URL for downloading the template
     return `${apiClient.defaults.baseURL}/api/users/import/template/download`;
   },
 };
 
-// Account Services
 export const accountService = {
   getAllAccounts: async (filters?: {
     page?: number;
@@ -625,7 +515,6 @@ export const accountService = {
   },
 };
 
-// Contact Services
 export const contactService = {
   getAllContacts: async (
     filters?: ContactFilters & { page?: number; limit?: number }
@@ -666,7 +555,6 @@ export const contactService = {
   },
 };
 
-// Campaign Services
 export const campaignService = {
   getAllCampaigns: async (filters?: CampaignFilters): Promise<Campaign[]> => {
     const response = await apiClient.get("/api/campaigns", { params: filters });
@@ -698,7 +586,6 @@ export const campaignService = {
   },
 };
 
-// Analytics Services
 export const analyticsService = {
   getAllEvents: async (params?: {
     campaignId?: number;
@@ -707,13 +594,6 @@ export const analyticsService = {
     eventType?: string;
   }): Promise<AnalyticsEvent[]> => {
     const response = await apiClient.get("/api/analytics/events", { params });
-    return response.data;
-  },
-
-  createEvent: async (
-    eventData: Omit<AnalyticsEvent, "id" | "occurredAt">
-  ): Promise<AnalyticsEvent> => {
-    const response = await apiClient.post("/api/analytics/events", eventData);
     return response.data;
   },
 
@@ -746,20 +626,23 @@ export const analyticsService = {
   },
 };
 
-// WhatsApp / Messaging Services
 export const whatsappService = {
-  // Accounts
   listAccounts: async (): Promise<MessagingAccount[]> => {
     const response = await apiClient.get("/api/whatsapp/accounts");
     return response.data;
   },
-  createAccount: async (
-    data: Partial<MessagingAccount>
-  ): Promise<MessagingAccount> => {
+  createAccount: async (data: {
+    displayName: string;
+    sourceHandle: string;
+    apiKey: string;
+    appName?: string;
+    senderId?: string;
+    businessId?: string;
+  }): Promise<MessagingAccount> => {
     const response = await apiClient.post("/api/whatsapp/accounts", data);
     return response.data;
   },
-  // Templates
+
   listTemplates: async (accountId: number): Promise<MessageTemplate[]> => {
     const response = await apiClient.get("/api/whatsapp/templates", {
       params: { accountId },
@@ -772,15 +655,9 @@ export const whatsappService = {
     });
     return response.data;
   },
-  createTemplate: async (data: {
-    accountId: number;
-    template_name: string;
-    language: string;
-    category: string;
-    button_url?: boolean;
-    message_ttl?: number;
-    components: any[];
-  }): Promise<MessageTemplate> => {
+  createTemplate: async (
+    data: WhatsAppCreateTemplatePayload
+  ): Promise<unknown> => {
     const response = await apiClient.post("/api/whatsapp/templates", data);
     return response.data;
   },
@@ -810,9 +687,9 @@ export const whatsappService = {
     templateName: string,
     data: {
       accountId: number;
-      components: any[];
+      components: Array<Record<string, unknown>>;
     }
-  ): Promise<any> => {
+  ): Promise<unknown> => {
     const response = await apiClient.put(
       `/api/whatsapp/templates/${encodeURIComponent(templateName)}`,
       data
@@ -822,7 +699,7 @@ export const whatsappService = {
   deleteTemplate: async (
     templateName: string,
     accountId: number
-  ): Promise<any> => {
+  ): Promise<unknown> => {
     const response = await apiClient.delete(
       `/api/whatsapp/templates/${encodeURIComponent(templateName)}`,
       {
@@ -831,18 +708,25 @@ export const whatsappService = {
     );
     return response.data;
   },
-  // Numbers
+
   syncNumbers: async (): Promise<{
     synced: number;
     errors: number;
-    details: any;
+    details: {
+      synced: Array<
+        MessagingAccount & {
+          action: "created" | "updated" | "existing";
+        }
+      >;
+      errors: Array<{ phoneNumber?: string; error: string }>;
+    };
   }> => {
     const response = await apiClient.post("/api/whatsapp/numbers/sync");
     return response.data;
   },
   updateNumber: async (
     numberId: number,
-    data: { displayName: string; status: string }
+    data: { displayName: string; status: string; apiKey?: string }
   ): Promise<MessagingAccount> => {
     const response = await apiClient.patch(
       `/api/whatsapp/accounts/${numberId}`,
@@ -850,39 +734,45 @@ export const whatsappService = {
     );
     return response.data;
   },
-  // Campaigns
-  listCampaigns: async (): Promise<any[]> => {
-    const response = await apiClient.get("/api/whatsapp/campaigns");
+
+  listCampaigns: async (params?: {
+    skip?: number;
+    take?: number;
+    search?: string;
+    status?: string;
+    startDate?: string;
+    createdFrom?: string;
+    createdTo?: string;
+  }): Promise<{
+    data: WhatsAppCampaignSummary[];
+    pagination: { total: number; skip: number; take: number; pages: number };
+  }> => {
+    const response = await apiClient.get("/api/whatsapp/campaigns", { params });
     return response.data;
   },
-  getCampaignById: async (id: number): Promise<any> => {
+  getCampaignById: async (id: number): Promise<WhatsAppCampaignDetail> => {
     const response = await apiClient.get(`/api/whatsapp/campaigns/${id}`);
     return response.data;
   },
-  getCampaignConfig: async (
-    id: number
-  ): Promise<{
-    id: number;
-    name: string;
-    description?: string;
-    accountId: number;
-    templateName: string;
-    language?: string;
-    messageParams?: Record<string, unknown>;
-    audience: string;
-    segmentId?: number;
-    scheduledAt?: string;
-  }> => {
+  getCampaignConfig: async (id: number): Promise<WhatsAppCampaignConfig> => {
     const response = await apiClient.get(
       `/api/whatsapp/campaigns/${id}/config`
     );
     return response.data;
   },
-  createCampaign: async (payload: any): Promise<Campaign> => {
+  createCampaign: async (
+    payload: WhatsAppCreateCampaignPayload
+  ): Promise<{
+    campaign: WhatsAppCampaignSummary;
+    totalRecipients: number;
+  }> => {
     const response = await apiClient.post("/api/whatsapp/campaigns", payload);
     return response.data;
   },
-  updateCampaign: async (id: number, payload: any): Promise<any> => {
+  updateCampaign: async (
+    id: number,
+    payload: WhatsAppUpdateCampaignPayload
+  ): Promise<WhatsAppCampaignDetail> => {
     const response = await apiClient.put(
       `/api/whatsapp/campaigns/${id}`,
       payload
@@ -903,57 +793,56 @@ export const whatsappService = {
     );
     return response.data;
   },
-  // Data
-  listDeliveries: async (campaignId: number): Promise<CampaignDelivery[]> => {
+
+  listDeliveries: async (
+    campaignId: number,
+    params?: { skip?: number; take?: number }
+  ): Promise<{
+    data: CampaignDelivery[];
+    pagination: { total: number; skip: number; take: number; pages: number };
+  }> => {
     const response = await apiClient.get("/api/whatsapp/deliveries", {
-      params: { campaignId },
+      params: { campaignId, ...params },
     });
     return response.data;
   },
-  listEvents: async (campaignId: number): Promise<AnalyticsEvent[]> => {
+  listEvents: async (
+    campaignId: number,
+    params?: { skip?: number; take?: number }
+  ): Promise<{
+    data: AnalyticsEvent[];
+    pagination: { total: number; skip: number; take: number; pages: number };
+  }> => {
     const response = await apiClient.get("/api/whatsapp/events", {
-      params: { campaignId },
+      params: { campaignId, ...params },
     });
     return response.data;
   },
-  // Opt-out
+
   optOut: async (
-    address: string,
+    phone: string,
     reason?: string,
     source?: string
-  ): Promise<any> => {
+  ): Promise<{
+    success: true;
+    message: string;
+    data: WhatsAppOptOut;
+  }> => {
     const response = await apiClient.post("/api/whatsapp/optout", {
-      channel: "whatsapp",
-      address,
+      phone,
       reason,
       source,
     });
     return response.data;
   },
-  removeOptOut: async (address: string): Promise<{ removed: boolean }> => {
+  removeOptOut: async (phone: string): Promise<{ success: boolean }> => {
     const response = await apiClient.delete("/api/whatsapp/optout", {
-      params: { channel: "whatsapp", address },
+      data: { phone },
     });
     return response.data;
   },
 };
 
-// Webhook Services
-export const webhookService = {
-  handleLandingiWebhook: async (
-    payload: WebhookPayload
-  ): Promise<WebhookResponse> => {
-    const response = await apiClient.post("/api/webhook/landingi", payload);
-    return response.data;
-  },
-
-  testLandingiWebhook: async (): Promise<WebhookResponse> => {
-    const response = await apiClient.get("/api/webhook/landingi/test");
-    return response.data;
-  },
-};
-
-// Dashboard Services
 export const dashboardService = {
   getLeadsGeneratedOverTime: async (params?: {
     period?: "week" | "month";
@@ -982,7 +871,6 @@ export const dashboardService = {
   },
 };
 
-// Brevo Services
 export const brevoService = {
   syncLeads: async (leadIds: number[]): Promise<SyncLeadsResponse> => {
     const response = await apiClient.post("/api/brevo/sync-leads", { leadIds });
@@ -995,14 +883,6 @@ export const brevoService = {
     status?: string;
   }): Promise<{ campaigns: BrevoCampaign[]; count: number; total: number }> => {
     const response = await apiClient.get("/api/brevo/campaigns", { params });
-    return response.data;
-  },
-
-  getActiveCampaigns: async (): Promise<{
-    campaigns: BrevoCampaign[];
-    count: number;
-  }> => {
-    const response = await apiClient.get("/api/brevo/campaigns/active");
     return response.data;
   },
 
@@ -1029,24 +909,13 @@ export const brevoService = {
     return response.data;
   },
 
-  updateCampaignStatus: async (id: number, status: string): Promise<void> => {
-    await apiClient.put(`/api/brevo/campaigns/${id}/status`, { status });
-  },
-
-  getAnalytics: async (): Promise<BrevoAnalyticsResponse> => {
-    const response = await apiClient.get("/api/brevo/analytics");
-    return response.data;
-  },
-
   testConnection: async (): Promise<{ status: string; message: string }> => {
     const response = await apiClient.get("/api/brevo/test-connection");
     return response.data;
   },
 };
 
-// Sales Services
 export const salesService = {
-  // Get all leads assigned to the current sales user
   getMyLeads: async (params?: {
     page?: number;
     limit?: number;
@@ -1057,19 +926,16 @@ export const salesService = {
     return response.data;
   },
 
-  // Get a specific lead by ID (only if assigned to this sales user)
   getLeadById: async (id: number): Promise<Lead> => {
     const response = await apiClient.get(`/api/sales/leads/${id}`);
     return response.data;
   },
 
-  // Qualify a lead
   qualifyLead: async (id: number): Promise<{ message: string; lead: Lead }> => {
     const response = await apiClient.put(`/api/sales/leads/${id}/qualify`);
     return response.data;
   },
 
-  // Disqualify a lead
   disqualifyLead: async (
     id: number
   ): Promise<{ message: string; lead: Lead }> => {
@@ -1077,41 +943,30 @@ export const salesService = {
     return response.data;
   },
 
-  // Add a remark to a lead
   addRemark: async (
     id: number,
     remark: string
-  ): Promise<{ message: string; remark: any }> => {
+  ): Promise<{ message: string; remark: LeadRemark }> => {
     const response = await apiClient.post(`/api/sales/leads/${id}/remarks`, {
       remark,
     });
     return response.data;
   },
 
-  // Get all remarks for a specific lead
-  getLeadRemarks: async (id: number): Promise<{ remarks: any[] }> => {
-    const response = await apiClient.get(`/api/sales/leads/${id}/remarks`);
-    return response.data;
-  },
-
-  // Get statistics for the sales user's leads
   getMyStats: async (): Promise<SalesMyStatsResponse> => {
     const response = await apiClient.get("/api/sales/stats");
     return response.data;
   },
 
-  // Resolve an enquiry
   resolveEnquiry: async (
     id: number
-  ): Promise<{ message: string; enquiry: any }> => {
+  ): Promise<{ message: string; enquiry: Enquiry }> => {
     const response = await apiClient.put(`/api/sales/enquiries/${id}/resolve`);
     return response.data;
   },
 };
 
-// Landing Page Campaign Services
 export const landingPageCampaignService = {
-  // Get all campaigns with pagination and filters
   getAllCampaigns: async (params?: {
     page?: number;
     limit?: number;
@@ -1126,7 +981,6 @@ export const landingPageCampaignService = {
     return response.data;
   },
 
-  // Get campaign statistics
   getStats: async () => {
     const response = await apiClient.get<LandingPageCampaignStats>(
       "/api/landing-page-campaigns/stats"
@@ -1134,13 +988,11 @@ export const landingPageCampaignService = {
     return response.data;
   },
 
-  // Get campaign by ID
   getCampaignById: async (id: number) => {
     const response = await apiClient.get(`/api/landing-page-campaigns/${id}`);
     return response.data;
   },
 
-  // Get campaign by unique ID (public endpoint)
   getCampaignByUniqueId: async (uniqueId: string) => {
     const response = await apiClient.get(
       `/api/landing-page-campaigns/unique/${uniqueId}`
@@ -1148,18 +1000,15 @@ export const landingPageCampaignService = {
     return response.data;
   },
 
-  // Create campaign
   createCampaign: async (data: {
     name: string;
     description?: string;
     status?: string;
-    createdBy?: number;
   }) => {
     const response = await apiClient.post("/api/landing-page-campaigns", data);
     return response.data;
   },
 
-  // Update campaign
   updateCampaign: async (
     id: number,
     data: {
@@ -1175,21 +1024,24 @@ export const landingPageCampaignService = {
     return response.data;
   },
 
-  // Delete campaign
   deleteCampaign: async (id: number) => {
     await apiClient.delete(`/api/landing-page-campaigns/${id}`);
   },
 };
 
-// Subdealer Services
-export const subdealerService = {
-  checkPhone: async (phone: string): Promise<CheckPhoneResponse> => {
-    const response = await apiClient.post("/api/subdealer/check-phone", {
-      phone,
-    });
-    return response.data;
-  },
+const SUBDEALER_SESSION_KEY = "subdealer_token";
 
+function getSubdealerToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return sessionStorage.getItem(SUBDEALER_SESSION_KEY);
+}
+
+function subdealerAuthConfig() {
+  const token = getSubdealerToken();
+  return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+}
+
+export const subdealerService = {
   fetchGstDetails: async (gstNumber: string): Promise<FetchGstResponse> => {
     const response = await apiClient.post("/api/subdealer/fetch-gst", {
       gstNumber,
@@ -1217,9 +1069,30 @@ export const subdealerService = {
     const response = await apiClient.post("/api/subdealer/login", data);
     return response.data;
   },
+
+  setSession: (token: string): void => {
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(SUBDEALER_SESSION_KEY, token);
+      localStorage.removeItem(SUBDEALER_SESSION_KEY);
+    }
+  },
+
+  logout: async (): Promise<void> => {
+    try {
+      await apiClient.post(
+        "/api/subdealer/logout",
+        undefined,
+        subdealerAuthConfig()
+      );
+    } finally {
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem(SUBDEALER_SESSION_KEY);
+        localStorage.removeItem(SUBDEALER_SESSION_KEY);
+      }
+    }
+  },
 };
 
-// Product Services
 export const productService = {
   getAllProducts: async (filters?: {
     categoryId?: number;
@@ -1305,7 +1178,20 @@ export const productService = {
   },
 };
 
-// PriceBook Services
+type PriceBookApiRecord = Omit<PriceBook, "currencyISOCode">;
+
+const normalizePriceBook = (record: PriceBookApiRecord): PriceBook => ({
+  ...record,
+  currencyISOCode: record.currencyCode,
+});
+
+const normalizePriceBookEntry = (record: PriceBookEntry): PriceBookEntry => ({
+  ...record,
+  priceBook: record.priceBook
+    ? normalizePriceBook(record.priceBook as PriceBookApiRecord)
+    : undefined,
+});
+
 export const pricebookService = {
   getAllPriceBooks: async (filters?: {
     page?: number;
@@ -1314,25 +1200,42 @@ export const pricebookService = {
     const response = await apiClient.get("/api/pricebooks", {
       params: filters,
     });
-    return response.data;
+    const payload = response.data as {
+      data: PriceBookApiRecord[];
+      pagination: PaginatedApiResponse<PriceBook>["pagination"];
+    };
+    return {
+      ...payload,
+      data: payload.data.map(normalizePriceBook),
+    };
   },
 
   getPriceBookById: async (id: number): Promise<PriceBook> => {
     const response = await apiClient.get(`/api/pricebooks/${id}`);
-    return response.data;
+    return normalizePriceBook(response.data.data as PriceBookApiRecord);
   },
 
   createPriceBook: async (data: Partial<PriceBook>): Promise<PriceBook> => {
-    const response = await apiClient.post("/api/pricebooks", data);
-    return response.data;
+    const { currencyISOCode, ...canonical } = data;
+    const response = await apiClient.post("/api/pricebooks", {
+      ...canonical,
+      currencyCode: data.currencyCode || currencyISOCode,
+    });
+    return normalizePriceBook(response.data.data as PriceBookApiRecord);
   },
 
   updatePriceBook: async (
     id: number,
     data: Partial<PriceBook>
   ): Promise<PriceBook> => {
-    const response = await apiClient.put(`/api/pricebooks/${id}`, data);
-    return response.data;
+    const { currencyISOCode, ...canonical } = data;
+    const response = await apiClient.put(`/api/pricebooks/${id}`, {
+      ...canonical,
+      ...(data.currencyCode || currencyISOCode
+        ? { currencyCode: data.currencyCode || currencyISOCode }
+        : {}),
+    });
+    return normalizePriceBook(response.data.data as PriceBookApiRecord);
   },
 
   deletePriceBook: async (id: number): Promise<void> => {
@@ -1340,18 +1243,20 @@ export const pricebookService = {
   },
 };
 
-// PriceBookEntry Services
 export const pricebookEntryService = {
   getAllPriceBookEntries: async (filters: {
     productId: number;
-  }): Promise<PaginatedApiResponse<PriceBookEntry>> => {
+  }): Promise<{ data: PriceBookEntry[] }> => {
     const response = await apiClient.get("/api/pricebook-entries", {
       params: filters,
     });
-    return response.data;
+    return {
+      data: (response.data.data as PriceBookEntry[]).map(
+        normalizePriceBookEntry
+      ),
+    };
   },
 
-  // Backend returns { data: PriceBookEntry[] } (not paginated) for this endpoint.
   getPriceBookEntriesByPriceBookId: async (filters: {
     priceBookId: number;
   }): Promise<{ data: PriceBookEntry[] }> => {
@@ -1361,19 +1266,23 @@ export const pricebookEntryService = {
         params: filters,
       }
     );
-    return response.data;
+    return {
+      data: (response.data.data as PriceBookEntry[]).map(
+        normalizePriceBookEntry
+      ),
+    };
   },
 
   getPriceBookEntryById: async (id: number): Promise<PriceBookEntry> => {
     const response = await apiClient.get(`/api/pricebook-entries/${id}`);
-    return response.data;
+    return normalizePriceBookEntry(response.data.data as PriceBookEntry);
   },
 
   createPriceBookEntry: async (
     data: Partial<PriceBookEntry>
   ): Promise<PriceBookEntry> => {
     const response = await apiClient.post("/api/pricebook-entries", data);
-    return response.data;
+    return normalizePriceBookEntry(response.data.data as PriceBookEntry);
   },
 
   updatePriceBookEntry: async (
@@ -1381,7 +1290,7 @@ export const pricebookEntryService = {
     data: Partial<PriceBookEntry>
   ): Promise<PriceBookEntry> => {
     const response = await apiClient.put(`/api/pricebook-entries/${id}`, data);
-    return response.data;
+    return normalizePriceBookEntry(response.data.data as PriceBookEntry);
   },
 
   deletePriceBookEntry: async (id: number): Promise<void> => {
@@ -1389,7 +1298,6 @@ export const pricebookEntryService = {
   },
 };
 
-// Product Category Services
 export const productCategoryService = {
   getAllCategories: async (): Promise<ApiResponse<ProductCategory[]>> => {
     const response = await apiClient.get("/api/product-categories");
@@ -1424,7 +1332,6 @@ export const productCategoryService = {
   },
 };
 
-// Segment Services
 export const segmentService = {
   list: async (): Promise<Segment[]> => {
     const response = await apiClient.get("/api/segments");
@@ -1462,7 +1369,6 @@ export const segmentService = {
   },
 };
 
-// Keyword Services
 export const keywordService = {
   getAllKeywords: async (search?: string): Promise<ApiResponse<Keyword[]>> => {
     const params = search ? { search } : {};
@@ -1493,7 +1399,6 @@ export const keywordService = {
   },
 };
 
-// Quote Services
 export type GetQuotesParams = {
   page?: number;
   limit?: number;
@@ -1575,44 +1480,42 @@ export const quoteService = {
     );
     return response.data;
   },
-};
-
-// Order Services
-export const orderService = {
-  createOrder: async (data: {
-    subdealerId: number;
-    lineItems: { productId: number; quantity: number }[];
-  }): Promise<ApiResponse<any>> => {
-    const token =
-      typeof window !== "undefined"
-        ? localStorage.getItem("subdealer_token")
-        : null;
-    const config = token
-      ? { headers: { Authorization: `Bearer ${token}` } }
-      : {};
-    const response = await apiClient.post("/api/orders", data, config);
+  sendToClient: async (
+    quoteId: number,
+    body: {
+      to: string;
+      subject?: string;
+      message?: string;
+      cc?: string[];
+      bcc?: string[];
+    }
+  ): Promise<{ data: QuoteDetail; emailSent: boolean }> => {
+    const response = await apiClient.post(`/api/quotes/${quoteId}/send`, body);
     return response.data;
   },
 };
 
-// Invoice Services
+export const orderService = {
+  createOrder: async (data: {
+    lineItems: { productId: number; quantity: number }[];
+  }): Promise<ApiResponse<Order & { totalAmount: string | number }>> => {
+    const response = await apiClient.post(
+      "/api/orders",
+      data,
+      subdealerAuthConfig()
+    );
+    return response.data;
+  },
+};
+
 export const invoiceService = {
-  uploadInvoice: async (
-    file: File,
-    phone: string
-  ): Promise<ApiResponse<any>> => {
+  uploadInvoice: async (file: File): Promise<ApiResponse<Invoice>> => {
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("phone", phone);
-
-    const token =
-      typeof window !== "undefined"
-        ? localStorage.getItem("subdealer_token")
-        : null;
     const config = {
       headers: {
         "Content-Type": "multipart/form-data",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(subdealerAuthConfig().headers || {}),
       },
     };
     const response = await apiClient.post("/api/invoices", formData, config);
@@ -1620,14 +1523,16 @@ export const invoiceService = {
   },
 };
 
-// Settings Service
 export const settingsService = {
   getGlobalSettings: async (): Promise<Record<string, string>> => {
     const response = await apiClient.get("/api/settings/global-settings");
     return response.data;
   },
 
-  updateGlobalSetting: async (key: string, value: string): Promise<any> => {
+  updateGlobalSetting: async (
+    key: string,
+    value: string
+  ): Promise<GlobalSetting> => {
     const response = await apiClient.put("/api/settings/global-settings", {
       key,
       value,
@@ -1635,13 +1540,12 @@ export const settingsService = {
     return response.data;
   },
 
-  getCurrencies: async (): Promise<any[]> => {
+  getCurrencies: async (): Promise<Currency[]> => {
     const response = await apiClient.get("/api/settings/currencies");
     return response.data;
   },
 };
 
-// Health Check
 export const healthService = {
   checkHealth: async (): Promise<{ status: string; database: string }> => {
     const response = await apiClient.get("/health");
@@ -1649,7 +1553,6 @@ export const healthService = {
   },
 };
 
-// Aakraman Service - Sales User OTP Login & Order Booking
 export interface AakramanUser {
   id: number;
   firstName: string | null;
@@ -1666,7 +1569,7 @@ export interface AakramanProduct {
   name: string;
   code: string;
   imageUrl: string | null;
-  price: number | null;
+  price: number | string | null;
   description: string | null;
   categoryId: number;
   active: boolean;
@@ -1702,7 +1605,6 @@ export interface AakramanLineItem {
 export interface AakramanOrder {
   id: number;
   orderNumber: string;
-  status: string;
   totalAmount: number | null;
   firmName: string | null;
   ownerFirstName: string | null;
@@ -1727,7 +1629,6 @@ export interface AakramanOrder {
   salesUser?: AakramanUser;
 }
 
-// Create a separate axios instance for aakraman that uses the aakraman token
 const getAakramanConfig = () => {
   const token =
     typeof window !== "undefined"
@@ -1737,7 +1638,6 @@ const getAakramanConfig = () => {
 };
 
 export const aakramanService = {
-  // OTP Methods
   sendSmsOtp: async (
     phone: string
   ): Promise<{ success: boolean; message: string; expiresIn: number }> => {
@@ -1770,7 +1670,6 @@ export const aakramanService = {
     return response.data;
   },
 
-  // User Methods
   getCurrentUser: async (): Promise<{ user: AakramanUser }> => {
     const response = await apiClient.get(
       "/api/aakraman/me",
@@ -1779,7 +1678,6 @@ export const aakramanService = {
     return response.data;
   },
 
-  // Product Methods
   getProducts: async (params?: {
     search?: string;
     categoryId?: number;
@@ -1794,7 +1692,6 @@ export const aakramanService = {
     return response.data;
   },
 
-  // Order Methods
   createOrder: async (data: {
     firmDetails: AakramanOrderFirmDetails;
     lineItems: AakramanLineItem[];
@@ -1815,7 +1712,6 @@ export const aakramanService = {
     return response.data;
   },
 
-  // Auth helpers
   setToken: (token: string) => {
     if (typeof window !== "undefined") {
       localStorage.setItem("aakraman_token", token);
@@ -1839,7 +1735,6 @@ export const aakramanService = {
     return !!aakramanService.getToken();
   },
 
-  // Admin methods (uses regular auth token, not aakraman token)
   admin: {
     getAllOrders: async (params?: {
       region?: string;
@@ -1865,7 +1760,6 @@ export const aakramanService = {
     updateOrder: async (
       id: number,
       data: Partial<{
-        status: string;
         firmName: string | null;
         ownerFirstName: string | null;
         ownerLastName: string | null;
@@ -1917,7 +1811,6 @@ export const aakramanService = {
   },
 };
 
-// Opportunity Services
 export const opportunityService = {
   getAllOpportunities: async (params?: {
     page?: number;
@@ -2034,7 +1927,7 @@ export const opportunityService = {
       description?: string | null;
       sortOrder?: number;
     }
-  ): Promise<{ data: any }> => {
+  ): Promise<{ data: OpportunityLineItem }> => {
     const response = await apiClient.patch(
       `/api/opportunities/${opportunityId}/line-items/${lineItemId}`,
       data
@@ -2043,7 +1936,6 @@ export const opportunityService = {
   },
 };
 
-// Notification Services
 export const notificationService = {
   getAll: async (
     page = 1
@@ -2092,7 +1984,6 @@ export const notificationService = {
   },
 };
 
-/** One configurable notification, as the API describes it. */
 export type NotificationPreference = {
   type: string;
   label: string;
@@ -2103,12 +1994,11 @@ export type NotificationPreference = {
   email: boolean;
 };
 
-// Sales Order Services
 export const salesOrderService = {
   getAllOrders: async (params?: {
     page?: number;
     limit?: number;
-  }): Promise<{ data: SalesOrderListItem[]; pagination: any }> =>
+  }): Promise<{ data: SalesOrderListItem[]; pagination: PaginationMeta }> =>
     apiClient.get("/api/sales-orders", { params }).then(r => r.data),
 
   getOrderById: async (id: number): Promise<{ data: SalesOrderDetail }> =>
@@ -2116,7 +2006,7 @@ export const salesOrderService = {
       .get(`/api/sales-orders/${id}/get-order-details`)
       .then(r => r.data),
 
-  getLineItems: async (id: number): Promise<{ data: any[] }> =>
+  getLineItems: async (id: number): Promise<{ data: SalesOrderLineItem[] }> =>
     apiClient.get(`/api/sales-orders/${id}/line-items`).then(r => r.data),
 
   downloadPdf: async (id: number, orderNumber: string): Promise<void> => {
@@ -2126,13 +2016,13 @@ export const salesOrderService = {
     const url = URL.createObjectURL(response.data);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${orderNumber}.pdf`;
+    const safeOrderNumber = orderNumber.replace(/[^a-zA-Z0-9._-]+/g, "_");
+    a.download = `${safeOrderNumber || "sales-order"}.pdf`;
     a.click();
     URL.revokeObjectURL(url);
   },
 };
 
-// Approval Services
 export const approvalService = {
   getAllApprovals: async (params?: {
     status?: string;

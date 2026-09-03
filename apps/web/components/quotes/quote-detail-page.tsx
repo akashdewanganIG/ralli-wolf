@@ -9,11 +9,14 @@ import {
   DetailCard,
   DetailPageHeader,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Input,
+  Label,
   Select,
   SelectContent,
   SelectItem,
@@ -25,6 +28,7 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  Textarea,
 } from "@repo/ui";
 import {
   Hash,
@@ -48,8 +52,9 @@ import {
   useGenerateOrder,
   useSetPrimaryQuote,
   useUpdateQuoteStatus,
+  useSendQuoteToClient,
   QUOTE_STATUS_API_VALUES,
-} from "@/hooks/useQuotes";
+} from "@/hooks/use-quotes";
 import { quoteService } from "@/lib/api/services";
 import { toast } from "@/lib/toast";
 import {
@@ -157,8 +162,19 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
   const updateStatusMutation = useUpdateQuoteStatus(quoteId);
   const { data: linkedOrder } = useQuoteOrder(quoteId);
   const generateOrderMutation = useGenerateOrder(quoteId);
+  const sendQuoteMutation = useSendQuoteToClient(quoteId);
 
   const [isDownloading, setIsDownloading] = React.useState(false);
+  const [sendOpen, setSendOpen] = React.useState(false);
+  const [recipient, setRecipient] = React.useState("");
+  const [sendSubject, setSendSubject] = React.useState("");
+  const [sendMessage, setSendMessage] = React.useState("");
+
+  React.useEffect(() => {
+    if (sendOpen && !recipient && quote?.contact?.email) {
+      setRecipient(quote.contact.email);
+    }
+  }, [quote?.contact?.email, recipient, sendOpen]);
 
   const handleDownloadPdf = React.useCallback(async () => {
     setIsDownloading(true);
@@ -187,6 +203,27 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
       },
     });
   }, [generateOrderMutation]);
+
+  const handleSendQuote = React.useCallback(
+    (event: React.FormEvent) => {
+      event.preventDefault();
+      sendQuoteMutation.mutate(
+        {
+          to: recipient.trim(),
+          subject: sendSubject.trim() || undefined,
+          message: sendMessage.trim() || undefined,
+        },
+        {
+          onSuccess: () => {
+            toast.success("Quote sent to the client");
+            setSendOpen(false);
+          },
+          onError: error => toast.error(error, "Quote delivery failed"),
+        }
+      );
+    },
+    [recipient, sendMessage, sendQuoteMutation, sendSubject]
+  );
 
   const lineItemRows = React.useMemo(
     () => lineItemsData.map(mapApiLineItemToRow),
@@ -228,6 +265,12 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
         .filter(Boolean)
         .join(" ") || "—"
     : "—";
+  const manualStatusOptions =
+    quote.status === "PRESENTED"
+      ? ["PRESENTED", "ACCEPTED", "REJECTED"]
+      : quote.status === "REJECTED"
+        ? ["REJECTED", "DRAFT"]
+        : [quote.status];
   const approvedByName = quote.approvedBy
     ? [quote.approvedBy.firstName, quote.approvedBy.lastName]
         .filter(Boolean)
@@ -266,6 +309,18 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
               </Button>
             )}
 
+            {(quote.status === "APPROVED" || quote.status === "PRESENTING") && (
+              <Button
+                variant="default"
+                onClick={() => setSendOpen(true)}
+                disabled={sendQuoteMutation.isPending}
+              >
+                {quote.status === "PRESENTING"
+                  ? "Retry delivery"
+                  : "Send to client"}
+              </Button>
+            )}
+
             {linkedOrder ? (
               <Button
                 variant="outline"
@@ -301,7 +356,8 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                       </TooltipTrigger>
                       {isDisabled && !generateOrderMutation.isPending && (
                         <TooltipContent>
-                          You can turn this quote into an order once the customer has accepted it.
+                          You can turn this quote into an order once the
+                          customer has accepted it.
                         </TooltipContent>
                       )}
                     </Tooltip>
@@ -313,7 +369,10 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
             <Select
               value={quote.status}
               onValueChange={value => updateStatusMutation.mutate(value)}
-              disabled={updateStatusMutation.isPending}
+              disabled={
+                updateStatusMutation.isPending ||
+                manualStatusOptions.length === 1
+              }
             >
               <SelectTrigger className="w-full sm:w-[12.5rem]">
                 <span className="flex-1 text-left">
@@ -321,22 +380,13 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                 </span>
               </SelectTrigger>
               <SelectContent>
-                {/* ACCEPTED and APPROVED are set exclusively via the approval workflow,
-                    not via manual override, to prevent bypassing the approval flow.
-                    The current value is always shown regardless. */}
-                {QUOTE_STATUS_API_VALUES.filter(
-                  s => s !== "ACCEPTED" && s !== "APPROVED"
+                {QUOTE_STATUS_API_VALUES.filter(s =>
+                  manualStatusOptions.includes(s)
                 ).map(s => (
                   <SelectItem key={s} value={s}>
                     {s}
                   </SelectItem>
                 ))}
-                {(quote.status === "ACCEPTED" ||
-                  quote.status === "APPROVED") && (
-                  <SelectItem key={quote.status} value={quote.status} disabled>
-                    {quote.status} (set via approval)
-                  </SelectItem>
-                )}
               </SelectContent>
             </Select>
           </div>
@@ -350,6 +400,80 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
         quoteNumber={quote.quoteNumber}
         createdBy={preparedByName}
       />
+
+      <Dialog
+        open={sendOpen}
+        onOpenChange={open => {
+          setSendOpen(open);
+          if (!open) sendQuoteMutation.reset();
+        }}
+      >
+        <DialogContent className="max-w-lg gap-0 overflow-hidden">
+          <form
+            className="flex min-h-0 flex-1 flex-col overflow-hidden"
+            onSubmit={handleSendQuote}
+          >
+            <DialogHeader>
+              <DialogTitle>Send quote to client</DialogTitle>
+              <DialogDescription>
+                The approved quote PDF will be attached to this email. Delivery
+                is retry-safe if the mail provider times out.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogBody className="space-y-3">
+              <div className="space-y-2">
+                <Label htmlFor="quote-recipient">Recipient</Label>
+                <Input
+                  id="quote-recipient"
+                  type="email"
+                  required
+                  maxLength={254}
+                  value={recipient}
+                  onChange={event => setRecipient(event.target.value)}
+                  placeholder="client@example.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="quote-subject">Subject (optional)</Label>
+                <Input
+                  id="quote-subject"
+                  maxLength={200}
+                  value={sendSubject}
+                  onChange={event => setSendSubject(event.target.value)}
+                  placeholder={`Quote ${quote.quoteNumber} from Ralli Wolf Operations`}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="quote-message">Message (optional)</Label>
+                <Textarea
+                  id="quote-message"
+                  maxLength={5000}
+                  rows={5}
+                  value={sendMessage}
+                  onChange={event => setSendMessage(event.target.value)}
+                  placeholder="Add a short note for the client"
+                />
+              </div>
+            </DialogBody>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setSendOpen(false)}
+                disabled={sendQuoteMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={!recipient.trim() || sendQuoteMutation.isPending}
+              >
+                {sendQuoteMutation.isPending ? "Sending…" : "Send quote"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={setPrimaryOpen} onOpenChange={setSetPrimaryOpen}>
         <DialogContent className="max-w-sm">
@@ -372,7 +496,6 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
               onClick={() => {
                 setPrimaryMutation.mutate(undefined, {
                   onSuccess: () => setSetPrimaryOpen(false),
-                  onError: () => {},
                 });
               }}
               disabled={setPrimaryMutation.isPending}
@@ -383,7 +506,6 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Financial banner */}
       <div className="rounded-xl bg-info-surface border border-info-border p-4 text-info-foreground">
         <p className="text-xs font-semibold uppercase tracking-wider opacity-75">
           Grand Total
@@ -606,7 +728,6 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                     </div>
                   </div>
 
-                  {/* Financial breakdown */}
                   <div className="mt-4 pt-4 border-t border-subtle grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {[
                       {
@@ -645,7 +766,6 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                     ))}
                   </div>
 
-                  {/* Notes / Internal Notes / Description */}
                   {(quote.notes ||
                     quote.internalNotes ||
                     quote.description) && (
@@ -990,26 +1110,6 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                         </p>
                       </div>
                     </div>
-                    {quote.pdfUrl && (
-                      <div className="flex items-start gap-3">
-                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
-                          <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
-                            PDF
-                          </p>
-                          <a
-                            href={quote.pdfUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm font-medium text-info-foreground hover:text-info"
-                          >
-                            View PDF
-                          </a>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </DetailCard>
               </div>
@@ -1033,9 +1133,6 @@ export function QuoteDetailPage({ quoteId }: QuoteDetailPageProps) {
                   setLineItemsPerPage(n);
                   setLineItemsPage(1);
                 }}
-                onRowClick={item =>
-                  router.push(`/sales/quotes/${quoteId}/line-items/${item.id}`)
-                }
               />
             )}
           </TabsContent>

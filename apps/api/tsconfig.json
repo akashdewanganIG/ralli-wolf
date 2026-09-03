@@ -4,9 +4,9 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "baseUrl": ".",
-    "outDir": "dist", // compiled JS output
-    "rootDir": "src", // keep src/ as the entry
-    "noEmitOnError": true, // don't emit JS if there are type errors
+    "outDir": "dist",
+    "rootDir": "src",
+    "noEmitOnError": true,
     "target": "ES2022",
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true

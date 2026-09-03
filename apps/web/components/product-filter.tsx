@@ -4,6 +4,7 @@ import { ProductCategory } from "@/lib/api/types";
 import { Button } from "@repo/ui/components/ui/button";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -33,7 +34,6 @@ interface ProductFilterProps {
   onActiveChange: (active: boolean | undefined) => void;
 }
 
-// Helper function to check if filters are active
 export const hasActiveProductFilters = (
   filters: ProductFilterValues
 ): boolean => {
@@ -51,7 +51,6 @@ export const ProductFilter: React.FC<ProductFilterProps> = ({
     useState<ProductFilterValues>(filters);
   const hasActive = hasActiveProductFilters(filters);
 
-  // Sync local filters with props when dialog opens or filters change
   useEffect(() => {
     if (open) {
       setLocalFilters(filters);
@@ -77,13 +76,11 @@ export const ProductFilter: React.FC<ProductFilterProps> = ({
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-[31.25rem]">
+        <DialogContent className="gap-0 overflow-hidden sm:max-w-[31.25rem]">
           <DialogHeader>
             <DialogTitle>Filter Products</DialogTitle>
           </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            {/* Category Filter */}
+          <DialogBody className="space-y-3">
             <div className="space-y-2">
               <Label htmlFor="category">Category</Label>
               <Select
@@ -112,7 +109,6 @@ export const ProductFilter: React.FC<ProductFilterProps> = ({
               </Select>
             </div>
 
-            {/* Active Status Filter */}
             <div className="space-y-2">
               <Label htmlFor="active">Status</Label>
               <Select
@@ -143,9 +139,8 @@ export const ProductFilter: React.FC<ProductFilterProps> = ({
                 </SelectContent>
               </Select>
             </div>
-          </div>
+          </DialogBody>
 
-          {/* Action Buttons */}
           <DialogFooter>
             <Button onClick={handleApplyFilters}>Apply Filter</Button>
           </DialogFooter>

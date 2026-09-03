@@ -1,18 +1,31 @@
 import { Request, Response } from "express";
 import { prisma } from "@repo/db";
-import { ApprovalTargetObject, ApprovalStatus, UserRole } from "@prisma/client";
+import { roleHasPermission } from "@repo/db/permissions";
+import {
+  ApprovalTargetObject,
+  ApprovalStatus,
+  Prisma,
+  UserRole,
+} from "@prisma/client";
 import {
   handleError,
   handleValidationError,
   handleNotFoundError,
-} from "../utils/errorHandler.js";
-import { buildFullName } from "../utils/nameHelpers.js";
+} from "../utils/error-handler.js";
+import { buildFullName } from "../utils/name-helpers.js";
 import { emailService } from "../services/email.service.js";
 import { NotificationType } from "@prisma/client";
 import {
   createNotification,
   shouldSendEmail,
 } from "./notification.controller.js";
+import { logError } from "../utils/logger.js";
+import {
+  parseBoundedInteger,
+  parsePositiveInteger,
+} from "../utils/validators.js";
+
+class ApprovalAlreadyActionedError extends Error {}
 
 export class ApprovalController {
   private parseId(
@@ -21,35 +34,49 @@ export class ApprovalController {
     label: string,
     operation: string
   ): number | null {
-    if (!id) {
-      handleValidationError(res, `${label} is required`, "id", operation);
-      return null;
-    }
-    const parsed = parseInt(id, 10);
-    if (isNaN(parsed)) {
+    const parsed = parsePositiveInteger(id);
+    if (parsed === null) {
       handleValidationError(res, `Invalid ${label}`, "id", operation);
       return null;
     }
     return parsed;
   }
 
-  /**
-   * GET /api/approvals
-   * Get all approvals in the system (ADMIN only)
-   * Query params: status, targetObjectName, page, limit
-   */
+  private pagination(
+    req: Request,
+    res: Response,
+    operation: string
+  ): { page: number; limit: number; skip: number } | null {
+    const page =
+      req.query.page === undefined
+        ? 1
+        : parseBoundedInteger(req.query.page, 1, 1_000_000);
+    const limit =
+      req.query.limit === undefined
+        ? 10
+        : parseBoundedInteger(req.query.limit, 1, 100);
+    if (page === null || limit === null) {
+      handleValidationError(
+        res,
+        "page must be positive and limit must be between 1 and 100",
+        undefined,
+        operation
+      );
+      return null;
+    }
+    return { page, limit, skip: (page - 1) * limit };
+  }
+
   async getAllApprovals(req: Request, res: Response) {
     const operation = "Get all approvals";
     try {
-      const page = Math.max(1, parseInt(req.query.page as string) || 1);
-      const requestedLimit = parseInt(req.query.limit as string);
-      const limit =
-        requestedLimit >= 1 && requestedLimit <= 100 ? requestedLimit : 10;
-      const skip = (page - 1) * limit;
+      const pagination = this.pagination(req, res, operation);
+      if (!pagination) return;
+      const { page, limit, skip } = pagination;
 
       const { status, targetObjectName } = req.query;
 
-      const where: any = {};
+      const where: Prisma.ApprovalProcessWhereInput = {};
 
       if (status) {
         const valid: ApprovalStatus[] = ["PENDING", "APPROVED", "REJECTED"];
@@ -61,7 +88,7 @@ export class ApprovalController {
             operation
           );
         }
-        where.status = status;
+        where.status = status as ApprovalStatus;
       }
 
       if (targetObjectName) {
@@ -78,7 +105,7 @@ export class ApprovalController {
             operation
           );
         }
-        where.targetObjectName = targetObjectName;
+        where.targetObjectName = targetObjectName as ApprovalTargetObject;
       }
 
       const [totalItems, approvals] = await Promise.all([
@@ -129,21 +156,11 @@ export class ApprovalController {
     }
   }
 
-  /**
-   * GET /api/approvals/:id
-   * Get a single approval by ID
-   */
   async getApprovalById(req: Request, res: Response) {
     const operation = "Get approval by ID";
     try {
-      const id = parseInt(req.params.id ?? "", 10);
-      if (isNaN(id))
-        return handleValidationError(
-          res,
-          "Invalid approval ID",
-          "id",
-          operation
-        );
+      const id = this.parseId(req.params.id, res, "approval ID", operation);
+      if (id === null) return;
 
       const approval = await prisma.approvalProcess.findUnique({
         where: { id },
@@ -166,20 +183,13 @@ export class ApprovalController {
     }
   }
 
-  /**
-   * GET /api/approvals/my
-   * Get approvals for the current user
-   * Query params: type (pending_for_me | raised_by_me | all), status, page, limit
-   */
   async getMyApprovals(req: Request, res: Response) {
     const operation = "Get my approvals";
     try {
       const userId = req.user!.id;
-      const page = Math.max(1, parseInt(req.query.page as string) || 1);
-      const requestedLimit = parseInt(req.query.limit as string);
-      const limit =
-        requestedLimit >= 1 && requestedLimit <= 100 ? requestedLimit : 10;
-      const skip = (page - 1) * limit;
+      const pagination = this.pagination(req, res, operation);
+      if (!pagination) return;
+      const { page, limit, skip } = pagination;
 
       const type = (req.query.type as string) || "all";
       const { status, targetObjectName } = req.query;
@@ -194,14 +204,13 @@ export class ApprovalController {
         );
       }
 
-      const where: any = {};
+      const where: Prisma.ApprovalProcessWhereInput = {};
 
       if (type === "pending_for_me") {
         where.requestedToId = userId;
       } else if (type === "raised_by_me") {
         where.createdById = userId;
       } else {
-        // all: either assigned to me or raised by me
         where.OR = [{ requestedToId: userId }, { createdById: userId }];
       }
 
@@ -215,7 +224,7 @@ export class ApprovalController {
             operation
           );
         }
-        where.status = status;
+        where.status = status as ApprovalStatus;
       }
 
       if (targetObjectName) {
@@ -232,7 +241,7 @@ export class ApprovalController {
             operation
           );
         }
-        where.targetObjectName = targetObjectName;
+        where.targetObjectName = targetObjectName as ApprovalTargetObject;
       }
 
       const [totalItems, approvals] = await Promise.all([
@@ -283,11 +292,6 @@ export class ApprovalController {
     }
   }
 
-  /**
-   * POST /api/approvals
-   * Manually raise an approval request (ADMIN only)
-   * Body: { targetObjectName, targetRecordId, requestedToId, comment? }
-   */
   async createApproval(req: Request, res: Response) {
     const operation = "Create approval request";
     try {
@@ -295,7 +299,6 @@ export class ApprovalController {
       const { targetObjectName, targetRecordId, requestedToId, comment } =
         req.body;
 
-      // Validate required fields
       if (!targetObjectName || !targetRecordId || !requestedToId) {
         return handleValidationError(
           res,
@@ -319,8 +322,21 @@ export class ApprovalController {
         );
       }
 
-      const parsedRecordId = parseInt(targetRecordId, 10);
-      if (isNaN(parsedRecordId)) {
+      if (
+        comment !== undefined &&
+        comment !== null &&
+        (typeof comment !== "string" || comment.trim().length > 5_000)
+      ) {
+        return handleValidationError(
+          res,
+          "comment must be text of at most 5000 characters",
+          "comment",
+          operation
+        );
+      }
+
+      const parsedRecordId = parsePositiveInteger(targetRecordId);
+      if (parsedRecordId === null) {
         return handleValidationError(
           res,
           "Invalid targetRecordId",
@@ -329,8 +345,8 @@ export class ApprovalController {
         );
       }
 
-      const parsedRequestedToId = parseInt(requestedToId, 10);
-      if (isNaN(parsedRequestedToId)) {
+      const parsedRequestedToId = parsePositiveInteger(requestedToId);
+      if (parsedRequestedToId === null) {
         return handleValidationError(
           res,
           "Invalid requestedToId",
@@ -338,24 +354,42 @@ export class ApprovalController {
           operation
         );
       }
-
-      // Validate the approver exists and has admin role
-      const approver = await prisma.user.findUnique({
-        where: { id: parsedRequestedToId },
-      });
-      if (!approver) {
-        return handleNotFoundError(res, "Approver user", operation);
-      }
-      if (approver.role === UserRole.SALES) {
+      if (parsedRequestedToId === userId) {
         return handleValidationError(
           res,
-          "Approver must have the ADMIN role",
+          "An approval request must be assigned to a different user",
           "requestedToId",
           operation
         );
       }
 
-      // Validate the target record exists and is in an approvable state
+      const approver = await prisma.user.findUnique({
+        where: { id: parsedRequestedToId },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          role: true,
+          permissions: true,
+          deletedAt: true,
+        },
+      });
+      if (!approver) {
+        return handleNotFoundError(res, "Approver user", operation);
+      }
+      if (
+        approver.deletedAt !== null ||
+        !roleHasPermission(approver.role, approver.permissions, "approvals.act")
+      ) {
+        return handleValidationError(
+          res,
+          "Approver must be active and have approval permission",
+          "requestedToId",
+          operation
+        );
+      }
+
       let objectName = "";
       let objectNumber = "";
 
@@ -367,10 +401,19 @@ export class ApprovalController {
             name: true,
             opportunityNumber: true,
             deletedAt: true,
+            status: true,
           },
         });
         if (!opportunity || opportunity.deletedAt) {
           return handleNotFoundError(res, "Opportunity", operation);
+        }
+        if (!["DRAFT", "REJECTED"].includes(opportunity.status)) {
+          return handleValidationError(
+            res,
+            `Opportunity is not in an approvable state. Current status: ${opportunity.status}`,
+            "targetRecordId",
+            operation
+          );
         }
         objectName = opportunity.name;
         objectNumber = opportunity.opportunityNumber;
@@ -420,7 +463,6 @@ export class ApprovalController {
         objectNumber = quote.quoteNumber;
       }
 
-      // Check for existing PENDING approval for this record
       const existingApproval = await prisma.approvalProcess.findFirst({
         where: {
           targetObjectName,
@@ -436,7 +478,6 @@ export class ApprovalController {
         });
       }
 
-      // Create approval and update record status in a transaction
       const approval = await prisma.$transaction(async tx => {
         const newApproval = await tx.approvalProcess.create({
           data: {
@@ -444,7 +485,8 @@ export class ApprovalController {
             targetRecordId: parsedRecordId,
             requestedToId: parsedRequestedToId,
             createdById: userId,
-            comment: comment || null,
+            comment:
+              typeof comment === "string" ? comment.trim() || null : null,
           },
           include: {
             requestedTo: {
@@ -466,8 +508,11 @@ export class ApprovalController {
           },
         });
 
-        // Update record status to reflect pending approval
         if (targetObjectName === "OPP") {
+          await tx.opportunity.update({
+            where: { id: parsedRecordId },
+            data: { status: "SUBMITTED" },
+          });
           await tx.opportunityActivity.create({
             data: {
               opportunityId: parsedRecordId,
@@ -491,8 +536,10 @@ export class ApprovalController {
         return newApproval;
       });
 
-      // Send in-app notification to the assigned approver (fire-and-forget)
-      const requester = await prisma.user.findUnique({ where: { id: userId } });
+      const requester = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { firstName: true, lastName: true },
+      });
       const requesterName = buildFullName(
         requester?.firstName ?? null,
         requester?.lastName ?? null
@@ -515,18 +562,12 @@ export class ApprovalController {
         title: `Approval Requested — ${objectLabel} ${objectNumber}`,
         message: `${requesterName} has submitted ${objectName} for your approval.`,
         link: objectLink,
-        // The dedicated email below carries the reference numbers and requester
-        // that a generic notification body cannot, so it is used instead of the
-        // one createNotification would send.
-        emailHandledByCaller: true,
-      }).catch(err =>
-        console.error("[Approval] Failed to create notification:", err)
-      );
 
-      // Send notification email to approver (fire-and-forget), unless they have
-      // switched approval email off.
-      void shouldSendEmail(parsedRequestedToId, "APPROVAL_REQUESTED").then(
-        allowed => {
+        emailHandledByCaller: true,
+      }).catch(err => logError("approval_notification_create_failed", err));
+
+      void shouldSendEmail(parsedRequestedToId, "APPROVAL_REQUESTED")
+        .then(allowed => {
           if (!allowed) return;
           return emailService
             .sendApprovalRequestEmail({
@@ -544,18 +585,9 @@ export class ApprovalController {
               objectNumber,
               approvalId: approval.id,
             })
-            .catch(err =>
-              console.error(
-                "[Approval] Failed to send approval request email:",
-                err
-              )
-            );
-        }
-      ).catch(err =>
-        // A preference lookup that fails must not become an unhandled
-        // rejection; the approval itself has already been recorded.
-        console.error("[Approval] Could not resolve email preference:", err)
-      );
+            .catch(err => logError("approval_request_email_failed", err));
+        })
+        .catch(err => logError("approval_email_preference_lookup_failed", err));
 
       return res.status(201).json({ data: approval });
     } catch (error) {
@@ -563,12 +595,6 @@ export class ApprovalController {
     }
   }
 
-  /**
-   * PATCH /api/approvals/:id/action
-   * Approve or reject an approval request (ADMIN only)
-   * Body: { action: 'APPROVE' | 'REJECT', comment? }
-   * Only the assigned approver (requestedTo) or an admin can act
-   */
   async actionApproval(req: Request, res: Response) {
     const operation = "Action on approval";
     try {
@@ -592,6 +618,20 @@ export class ApprovalController {
           operation
         );
       }
+      if (
+        comment !== undefined &&
+        comment !== null &&
+        (typeof comment !== "string" || comment.trim().length > 5_000)
+      ) {
+        return handleValidationError(
+          res,
+          "comment must be text of at most 5000 characters",
+          "comment",
+          operation
+        );
+      }
+      const normalizedComment =
+        typeof comment === "string" ? comment.trim() || null : null;
 
       const approval = await prisma.approvalProcess.findUnique({
         where: { id: approvalId },
@@ -618,7 +658,24 @@ export class ApprovalController {
         );
       }
 
-      // Only the assigned approver or an admin can act
+      if (
+        !(
+          ["OPP", "QUOTE", "PURCHASE_ORDER"] as ApprovalTargetObject[]
+        ).includes(approval.targetObjectName)
+      ) {
+        return res.status(422).json({
+          error: `Approval target ${approval.targetObjectName} is not supported by this workflow`,
+          code: "UNSUPPORTED_APPROVAL_TARGET",
+        });
+      }
+
+      if (approval.createdById === userId) {
+        return res.status(403).json({
+          error: "Requesters cannot approve or reject their own requests",
+          code: "SELF_APPROVAL_FORBIDDEN",
+        });
+      }
+
       if (approval.requestedToId !== userId && userRole !== UserRole.ADMIN) {
         return res.status(403).json({
           error:
@@ -639,18 +696,19 @@ export class ApprovalController {
         "Opportunity";
 
       await prisma.$transaction(async tx => {
-        // Update approval record
-        await tx.approvalProcess.update({
-          where: { id: approvalId },
+        const decision = await tx.approvalProcess.updateMany({
+          where: { id: approvalId, status: "PENDING" },
           data: {
             status: newStatus,
             lastActorId: userId,
-            comment: comment || approval.comment,
+            comment: normalizedComment ?? approval.comment,
             completedDate: new Date(),
           },
         });
+        if (decision.count !== 1) {
+          throw new ApprovalAlreadyActionedError();
+        }
 
-        // Sync status on the target record
         if (approval.targetObjectName === "OPP") {
           objectType = "Opportunity";
           const opp = await tx.opportunity.findUnique({
@@ -660,6 +718,13 @@ export class ApprovalController {
           objectName = opp?.name ?? "";
           objectNumber = opp?.opportunityNumber ?? "";
 
+          await tx.opportunity.update({
+            where: { id: approval.targetRecordId },
+            data: {
+              status: newStatus === "APPROVED" ? "APPROVED" : "REJECTED",
+            },
+          });
+
           await tx.opportunityActivity.create({
             data: {
               opportunityId: approval.targetRecordId,
@@ -668,14 +733,13 @@ export class ApprovalController {
               description:
                 newStatus === "APPROVED"
                   ? `Approved by ${buildFullName(actor?.firstName ?? null, actor?.lastName ?? null)}`
-                  : `Rejected by ${buildFullName(actor?.firstName ?? null, actor?.lastName ?? null)}${comment ? `: ${comment}` : ""}`,
+                  : `Rejected by ${buildFullName(actor?.firstName ?? null, actor?.lastName ?? null)}${normalizedComment ? `: ${normalizedComment}` : ""}`,
               newValue: newStatus,
             },
           });
         } else if (approval.targetObjectName === "PURCHASE_ORDER") {
           objectType = "Purchase Order";
-          // An approved order becomes committable spend; a rejected one goes
-          // back to the buyer so it can be corrected and resubmitted.
+
           const purchaseOrder = await tx.purchaseOrder.update({
             where: { id: approval.targetRecordId },
             data:
@@ -704,31 +768,30 @@ export class ApprovalController {
               },
             },
           });
-        } else {
+        } else if (approval.targetObjectName === "QUOTE") {
           objectType = "Quote";
           const quote = await tx.quote.update({
             where: { id: approval.targetRecordId },
             data: {
-              // When an approval is APPROVED, quote moves to ACCEPTED (ready for order generation).
-              // When REJECTED, quote moves to REJECTED.
-              status: newStatus === "APPROVED" ? "ACCEPTED" : "REJECTED",
+              status: newStatus === "APPROVED" ? "APPROVED" : "REJECTED",
               ...(newStatus === "APPROVED"
                 ? {
                     approvedAt: new Date(),
                     approvedById: userId,
-                    approvalComment: comment || null,
-                    acceptedAt: new Date(),
+                    approvalComment: normalizedComment,
                   }
                 : {
                     rejectedAt: new Date(),
                     rejectedById: userId,
-                    rejectionComment: comment || null,
+                    rejectionComment: normalizedComment,
                   }),
             },
             select: { name: true, quoteNumber: true },
           });
           objectName = quote.name;
           objectNumber = quote.quoteNumber;
+        } else {
+          throw new Error("Unsupported approval target");
         }
       });
 
@@ -738,8 +801,6 @@ export class ApprovalController {
           ? "PURCHASE_ORDER_APPROVED"
           : "PURCHASE_ORDER_REJECTED";
 
-      // Purchase approvals gate real spend, so the buyer is told in-app as
-      // well as by email — waiting on an inbox delays the order going out.
       if (isPurchaseOrder) {
         createNotification({
           userId: approval.createdById,
@@ -748,21 +809,13 @@ export class ApprovalController {
           message:
             newStatus === "APPROVED"
               ? `${buildFullName(actor?.firstName ?? null, actor?.lastName ?? null)} approved ${objectNumber}. It can now be sent to the supplier.`
-              : `${buildFullName(actor?.firstName ?? null, actor?.lastName ?? null)} rejected ${objectNumber}${comment ? `: ${comment}` : ""}.`,
+              : `${buildFullName(actor?.firstName ?? null, actor?.lastName ?? null)} rejected ${objectNumber}${normalizedComment ? `: ${normalizedComment}` : ""}.`,
           link: `/purchasing/orders/${approval.targetRecordId}`,
-          // The decision email below is the richer one, so the generic
-          // notification email is suppressed to avoid sending two.
+
           emailHandledByCaller: true,
-        }).catch(err =>
-          console.error("[Approval] Failed to create notification:", err)
-        );
+        }).catch(err => logError("approval_notification_create_failed", err));
       }
 
-      // Send the decision email to the requester (fire-and-forget).
-      //
-      // Only purchase-order decisions are configurable — quotes and
-      // opportunities have no notification type in the catalogue, so their
-      // email is not something a user can switch off and always sends.
       const decisionEmailAllowed = isPurchaseOrder
         ? await shouldSendEmail(approval.createdById, decisionType)
         : true;
@@ -785,12 +838,7 @@ export class ApprovalController {
             objectNumber,
             comment: comment || undefined,
           })
-          .catch(err =>
-            console.error(
-              "[Approval] Failed to send approval action email:",
-              err
-            )
-          );
+          .catch(err => logError("approval_action_email_failed", err));
       }
 
       const updated = await prisma.approvalProcess.findUnique({
@@ -808,6 +856,12 @@ export class ApprovalController {
 
       return res.json({ data: updated });
     } catch (error) {
+      if (error instanceof ApprovalAlreadyActionedError) {
+        return res.status(409).json({
+          error: "Approval has already been actioned",
+          code: "APPROVAL_ALREADY_ACTIONED",
+        });
+      }
       handleError(error, res, operation);
     }
   }

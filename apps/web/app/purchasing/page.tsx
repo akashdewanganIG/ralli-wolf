@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button } from "@repo/ui/components/ui/button";
 import Link from "next/link";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   ErrorBanner,
   PageHeader,
@@ -12,12 +12,12 @@ import {
   StatCard,
   StatusBadge,
 } from "@/components/supply-chain/shared";
-import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
+import { WarehouseFilter } from "@/components/supply-chain/warehouse-filter";
 import {
   useDeliveryWatchlist,
   usePurchasingDashboard,
   useSupplierScorecards,
-} from "@/hooks/useSupplyChain";
+} from "@/hooks/use-supply-chain";
 import {
   formatDate,
   formatMoney,
@@ -27,6 +27,14 @@ import {
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { CardActionButton } from "@repo/ui/components/ui/card-action-button";
 import { Tag } from "@repo/ui/components/ui/tag";
+import { NavCard } from "@repo/ui/components/ui/nav-card";
+import {
+  BadgeCheck,
+  Building2,
+  ClipboardList,
+  FileCheck2,
+  ShoppingCart,
+} from "@repo/ui/icons";
 
 export default function PurchasingDashboardPage() {
   const [warehouseId, setWarehouseId] = useState<number | undefined>(undefined);
@@ -96,44 +104,37 @@ export default function PurchasingDashboardPage() {
               href: "/purchasing/suppliers",
               label: "Suppliers",
               hint: `${dashboard?.activeSuppliers ?? 0} active`,
+              icon: Building2,
             },
             {
               href: "/purchasing/requisitions",
               label: "Requisitions",
               hint: `${dashboard?.openRequisitions ?? 0} open`,
+              icon: ClipboardList,
             },
             {
               href: "/purchasing/orders",
               label: "Purchase orders",
               hint: "Raise, approve and track",
+              icon: ShoppingCart,
             },
             {
               href: "/purchasing/goods-receipts",
               label: "Goods receipts",
               hint: "GRN and putaway",
+              icon: FileCheck2,
             },
             {
               href: "/purchasing/quality",
               label: "Quality checks",
               hint: "Inspection results",
+              icon: BadgeCheck,
             },
           ].map(link => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="rounded-lg border p-4 shadow-sm transition-shadow hover:shadow-md"
-            >
-              <p className="text-sm font-medium">{link.label}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{link.hint}</p>
-            </Link>
+            <NavCard key={link.href} {...link} />
           ))}
         </div>
 
-        {/* Stacked, not side by side. The watchlist carries six columns
-            including a supplier name and two dates; at half the page it lost
-            its right-hand columns off the edge, so the reader could not see
-            what was outstanding — the very thing the panel is for. Full width
-            each, one above the other, and every column fits. */}
         <div className="grid gap-4">
           <Panel flush title="Orders by status">
             <SimpleTable

@@ -1,15 +1,5 @@
 import { PrismaClient, UomCategory } from "@prisma/client";
-
-/**
- * Reference data for the supply-chain modules.
- *
- * Everything in here is idempotent and non-destructive: it may be run against
- * a production database to bring a new environment up to the baseline, and
- * re-run safely afterwards. It seeds *reference* data only — units, document
- * numbering and tunable settings. It never invents warehouses, suppliers,
- * stock or prices, because those are business records that must come from the
- * customer, not from a seed script.
- */
+import { assertDestructiveDatabaseAllowed } from "./seed-safety.js";
 
 interface UnitSeed {
   code: string;
@@ -20,10 +10,6 @@ interface UnitSeed {
   decimals: number;
 }
 
-/**
- * `baseFactor` converts one of this unit into the category's base unit
- * (EA, KG, M, L, M2, HR), which is what makes cross-unit arithmetic exact.
- */
 const UNITS: UnitSeed[] = [
   {
     code: "EA",
@@ -238,11 +224,6 @@ interface SequenceSeed {
   resetPeriod: "NONE" | "YEARLY" | "MONTHLY";
 }
 
-/**
- * Document numbering. Seeding the rows up front means the first document of
- * each kind does not pay the cost of creating its sequence, and an
- * administrator can change a prefix before go-live without touching code.
- */
 const SEQUENCES: SequenceSeed[] = [
   { key: "STOCK_MOVEMENT", prefix: "MOV", padding: 7, resetPeriod: "YEARLY" },
   { key: "STOCK_LOT", prefix: "LOT", padding: 7, resetPeriod: "YEARLY" },
@@ -271,11 +252,6 @@ const SEQUENCES: SequenceSeed[] = [
   { key: "PRODUCTION_ORDER", prefix: "PRO", padding: 5, resetPeriod: "YEARLY" },
 ];
 
-/**
- * Tunables the alert engine reads at run time. They are stored as global
- * settings so an administrator can change them from the Settings screen
- * rather than needing a deployment.
- */
 const SETTINGS: Array<{ key: string; value: string; description: string }> = [
   {
     key: "inventory.expiry_warning_days",
@@ -303,9 +279,7 @@ export async function seedSupplyChainReference(
   for (const unit of UNITS) {
     await prisma.unitOfMeasure.upsert({
       where: { code: unit.code },
-      // Only the descriptive fields are refreshed. `baseFactor` is left alone
-      // on an existing row, because changing a conversion factor under live
-      // stock would silently restate quantities already recorded.
+
       update: {
         name: unit.name,
         category: unit.category,
@@ -326,7 +300,7 @@ export async function seedSupplyChainReference(
   for (const sequence of SEQUENCES) {
     await prisma.numberSequence.upsert({
       where: { key: sequence.key },
-      // A live counter is never reset by re-seeding.
+
       update: {},
       create: {
         key: sequence.key,
@@ -341,7 +315,7 @@ export async function seedSupplyChainReference(
   for (const setting of SETTINGS) {
     await prisma.globalSetting.upsert({
       where: { key: setting.key },
-      // An administrator's chosen value wins over the seed default.
+
       update: { description: setting.description },
       create: setting,
     });
@@ -352,14 +326,10 @@ export async function seedSupplyChainReference(
   );
 }
 
-/**
- * Delete supply-chain transactional data in foreign-key-safe order.
- * Used by the destructive development seed before it clears users and
- * products, which those tables reference.
- */
 export async function resetSupplyChainData(
   prisma: PrismaClient
 ): Promise<void> {
+  assertDestructiveDatabaseAllowed("Supply-chain data reset");
   await prisma.productionOrderConsumption.deleteMany({});
   await prisma.materialRequisitionLine.deleteMany({});
   await prisma.materialRequisition.deleteMany({});
@@ -409,7 +379,6 @@ export async function resetSupplyChainData(
   await prisma.billOfMaterials.deleteMany({});
 }
 
-// Allow running this file directly: `npm run prisma:seed:supply-chain`
 const isDirectRun = process.argv[1]
   ?.replace(/\\/g, "/")
   .endsWith("seed-supply-chain.ts");

@@ -2,7 +2,7 @@
 
 import React from "react";
 import { MainLayout } from "@/components/main-layout";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import { useRouter } from "next/navigation";
 import { ProductDetailPage } from "@/components/product-detail-page";
 
@@ -12,7 +12,7 @@ interface ProductDetailPageProps {
   }>;
 }
 
-export default function LeadDetailRoute({ params }: ProductDetailPageProps) {
+export default function ProductDetailRoute({ params }: ProductDetailPageProps) {
   const router = useRouter();
   const resolvedParams = React.use(params);
   const productId = parseInt(resolvedParams.productId);
@@ -24,17 +24,7 @@ export default function LeadDetailRoute({ params }: ProductDetailPageProps) {
   return (
     <ProtectedRoute>
       <MainLayout>
-        <ProductDetailPage
-          productId={productId}
-          onBack={handleBack}
-          onEdit={() => {
-            console.log("Lead edit initiated");
-          }}
-          onDelete={() => {
-            console.log("Lead delete initiated");
-            handleBack();
-          }}
-        />
+        <ProductDetailPage productId={productId} onBack={handleBack} />
       </MainLayout>
     </ProtectedRoute>
   );

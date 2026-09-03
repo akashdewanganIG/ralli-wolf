@@ -1,7 +1,7 @@
 "use client";
 
 import { toast as sonner } from "sonner";
-import { parseApiError } from "./api/errorHandler";
+import { parseApiError } from "./api/error-handler";
 
 type ToastOptions = {
   description?: string;
@@ -50,14 +50,7 @@ export const toast = {
   dismiss(id?: string | number) {
     return sonner.dismiss(id);
   },
-  /**
-   * Wrap a promise with loading/success/error toasts.
-   * Backward compatible with previous signature.
-   *
-   * Examples:
-   *  - toast.promise(apiCall(), { loading: 'Loading', success: 'Done', error: 'Failed' }, { duration: 5000 })
-   *  - toast.promise(apiCall(), { loading: 'Loading', success: (res) => `Done: ${res.count}`, error: 'Failed' }, { duration: 5000 })
-   */
+
   promise<T>(
     promise: Promise<T>,
     messages:
@@ -69,7 +62,6 @@ export const toast = {
       | ((value: T) => { success?: string } | string),
     options: ToastOptions = {}
   ) {
-    // If messages is a function, we assume success text will be resolved dynamically
     if (typeof messages === "function") {
       return sonner.promise(promise, {
         loading: "Loading...",

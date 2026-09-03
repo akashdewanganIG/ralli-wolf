@@ -11,46 +11,40 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@repo/ui/components/ui/select";
-import { Download, Plus } from "@repo/ui/icons";
+import { Plus, Upload } from "@repo/ui/icons";
 import { usePathname, useRouter } from "next/navigation";
 import React, { useEffect, useMemo, useState } from "react";
-import { useAuth } from "../contexts/AuthContext";
-import { useLeadManagementContext } from "../contexts/LeadManagementContext";
-import {
-  useAccountsWithPagination,
-  useDeleteAccount,
-} from "../hooks/useAccounts";
-import { useSyncLeadsToBrevo } from "../hooks/useBrevo";
-import {
-  useContactsWithPagination,
-  useDeleteContact,
-} from "../hooks/useContacts";
+import { useAuth } from "../contexts/auth-context";
+import { useLeadManagementContext } from "../contexts/lead-management-context";
+import { useAccountsWithPagination } from "../hooks/use-accounts";
+import { useSyncLeadsToBrevo } from "../hooks/use-brevo";
+import { useContactsWithPagination } from "../hooks/use-contacts";
 import {
   useAssignLeadsBulk,
   useAssignmentStats,
   useConvertLeadsBulk,
-  useDeleteLead,
   useLeadsWithPagination,
-} from "../hooks/useLeads";
-import { useSearchAccounts } from "../hooks/useSearchAccounts";
-import { useSearchAllContacts } from "../hooks/useSearchAllContacts";
-import { useSearchLeads } from "../hooks/useSearchLeads";
-import { useUsers } from "../hooks/useUsers";
+} from "../hooks/use-leads";
+import { useSearchAccounts } from "../hooks/use-search-accounts";
+import { useSearchAllContacts } from "../hooks/use-search-all-contacts";
+import { useSearchLeads } from "../hooks/use-search-leads";
+import { useUsers } from "../hooks/use-users";
 import type {
   Account,
+  Contact,
   LeadAssignmentStats,
   LeadFilters,
 } from "../lib/api/types";
 import { getLeadFullName } from "../lib/name";
 import { AccountTable } from "./account-table";
-import AddLeadModal from "./AddLeadModal";
+import AddLeadModal from "./add-lead-modal";
 import { AssignLeadsModal } from "./assign-leads-modal";
 import { ContactTable } from "./contact-table";
-import { ImportLeadsModal } from "./ImportLeadsModal";
+import { ImportLeadsModal } from "./import-leads-modal";
 import { LeadSearchInput } from "./lead-search-input";
 import { LeadTable } from "./lead-table";
 import { SelectedLeadsActions } from "./selected-leads-actions";
-import { SendLeadsEmailModal } from "./SendLeadsEmailModal";
+import { SendLeadsEmailModal } from "./send-leads-email-modal";
 import {
   StatGridSkeleton,
   SummaryCardSkeleton,
@@ -61,8 +55,13 @@ import { cn } from "@repo/ui/lib/utils";
 import { DashboardToolbar } from "@repo/ui/components/ui/dashboard-toolbar";
 import { Tag } from "@repo/ui/components/ui/tag";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
-import { DataTransfer } from "@/components/data-transfer/DataTransfer";
+import { DataTransfer } from "@/components/data-transfer/data-transfer";
 import { useQueryClient } from "@tanstack/react-query";
+import {
+  accountService,
+  contactService,
+  leadService,
+} from "@/lib/api/services";
 
 const REGION_LABELS: Record<string, string> = {
   SOUTH: "South",
@@ -172,7 +171,6 @@ export const LeadManagementDashboard: React.FC = () => {
     []
   );
 
-  // Use context for state management
   const {
     activeTab,
     leadSearchQuery,
@@ -205,7 +203,6 @@ export const LeadManagementDashboard: React.FC = () => {
     setSelectedSalesRegion,
   } = useLeadManagementContext();
 
-  /** Which dataset the visible tab is showing, for import and export. */
   const transferEntity =
     activeTab === "accounts"
       ? "accounts"
@@ -213,17 +210,10 @@ export const LeadManagementDashboard: React.FC = () => {
         ? "contacts"
         : "leads";
 
-  /**
-   * Pull the visible list again after an import.
-   *
-   * The queries here are keyed per tab, so invalidating the whole lead
-   * namespace is both correct and simpler than naming the one in view.
-   */
   const queryClient = useQueryClient();
   const refetchCurrent = () =>
-    queryClient.invalidateQueries({ queryKey: ["leads"] });
+    queryClient.invalidateQueries({ queryKey: [transferEntity] });
 
-  // Selection state (not in URL)
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
@@ -233,6 +223,9 @@ export const LeadManagementDashboard: React.FC = () => {
     useState(false);
   const [showBulkContactsDeleteDialog, setShowBulkContactsDeleteDialog] =
     useState(false);
+  const [bulkDeletePending, setBulkDeletePending] = useState<
+    "leads" | "accounts" | "contacts" | null
+  >(null);
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showAddLeadModal, setShowAddLeadModal] = useState(false);
@@ -271,7 +264,6 @@ export const LeadManagementDashboard: React.FC = () => {
     setSelectedSalesUserId,
   ]);
 
-  // Search functionality - only call the relevant search hook based on active tab
   const { data: leadSearchResults = [], isLoading: isSearchingLeads } =
     useSearchLeads(leadSearchQuery, {
       debounceMs: 500,
@@ -294,7 +286,6 @@ export const LeadManagementDashboard: React.FC = () => {
     enabled: activeTab === "unassigned-leads",
   });
 
-  // Account search functionality - only when on accounts tab
   const {
     data: accountSearchResults = [],
     isLoading: isSearchingAccounts,
@@ -304,7 +295,6 @@ export const LeadManagementDashboard: React.FC = () => {
     enabled: activeTab === "accounts",
   });
 
-  // Contact search functionality - only when on contacts tab
   const {
     data: contactSearchResults = [],
     isLoading: isSearchingContacts,
@@ -314,8 +304,6 @@ export const LeadManagementDashboard: React.FC = () => {
     enabled: activeTab === "contacts",
   });
 
-  // Lazy load data based on active tab
-  // Lead Master tab - paginated leads
   const tableFilters = React.useMemo(
     () => ({
       status: statusFilter,
@@ -353,7 +341,6 @@ export const LeadManagementDashboard: React.FC = () => {
     enabled: activeTab === "lead-master" && !leadSearchQuery,
   });
 
-  // Assigned tab - all assigned leads with optional filters
   const ownerId = typeof user?.id === "number" ? user.id : undefined;
   const parsedSelectedSalesUserId =
     selectedSalesUserId !== "all" ? Number(selectedSalesUserId) : undefined;
@@ -529,7 +516,6 @@ export const LeadManagementDashboard: React.FC = () => {
     user,
   ]);
 
-  // Unassigned Leads tab - filtered leads (new leads)
   const unassignedLeadFilters = useMemo(
     () => ({
       page: currentPage,
@@ -549,7 +535,6 @@ export const LeadManagementDashboard: React.FC = () => {
     enabled: activeTab === "unassigned-leads",
   });
 
-  // Contacts tab
   const {
     data: contacts = [],
     pagination: contactsPagination,
@@ -563,7 +548,6 @@ export const LeadManagementDashboard: React.FC = () => {
     { enabled: activeTab === "contacts" }
   );
 
-  // API hooks for accounts
   const {
     data: accounts = [],
     pagination: accountsPagination,
@@ -576,18 +560,11 @@ export const LeadManagementDashboard: React.FC = () => {
     },
     { enabled: activeTab === "accounts" }
   );
-  // Mutation hooks
-  const deleteLeadMutation = useDeleteLead();
+
   const assignLeadsBulkMutation = useAssignLeadsBulk();
   const convertLeadsBulkMutation = useConvertLeadsBulk();
   const syncLeadsToBrevoMutation = useSyncLeadsToBrevo();
-  const deleteAccountMutation = useDeleteAccount();
-  const deleteContactMutation = useDeleteContact();
 
-  // Note: Client-side filtering removed to support pagination
-  // Filtering can be added back as server-side filtering if needed
-
-  // Bulk action handlers
   const handleBulkConvert = async () => {
     if (selectedLeads.length === 0) return;
     setShowBulkConvertDialog(true);
@@ -598,8 +575,8 @@ export const LeadManagementDashboard: React.FC = () => {
       const leads = selectedLeads.map(id => ({ leadId: parseInt(id) }));
       await convertLeadsBulkMutation.mutateAsync(leads);
       setSelectedLeads([]);
-    } catch (error) {
-      console.error("Failed to convert leads:", error);
+    } catch {
+      return;
     }
   };
 
@@ -608,80 +585,99 @@ export const LeadManagementDashboard: React.FC = () => {
     setShowBulkDeleteDialog(true);
   };
 
-  const handleBulkDeleteConfirm = async () => {
+  const runBulkDelete = async ({
+    kind,
+    ids,
+    remove,
+    setSelected,
+    closeDialog,
+    queryKey,
+    label,
+  }: {
+    kind: "leads" | "accounts" | "contacts";
+    ids: string[];
+    remove: (id: number) => Promise<void>;
+    setSelected: (ids: string[]) => void;
+    closeDialog: (open: boolean) => void;
+    queryKey: readonly string[];
+    label: string;
+  }) => {
+    setBulkDeletePending(kind);
+    const failed: string[] = [];
+    let deleted = 0;
     try {
-      // Delete leads one by one since there's no bulk delete API
-      for (const leadId of selectedLeads) {
-        await deleteLeadMutation.mutateAsync(parseInt(leadId));
+      for (const rawId of ids) {
+        const id = Number(rawId);
+        if (!Number.isSafeInteger(id) || id <= 0) {
+          failed.push(rawId);
+          continue;
+        }
+        try {
+          await remove(id);
+          deleted += 1;
+        } catch {
+          failed.push(rawId);
+        }
       }
-      setSelectedLeads([]);
-      setShowBulkDeleteDialog(false);
-      toast.success(`${selectedLeads.length} leads deleted successfully!`);
-    } catch (error) {
-      console.error("Failed to delete leads:", error);
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
-      toast.error(`Failed to delete leads: ${errorMessage}`);
+      setSelected(failed);
+      await queryClient.invalidateQueries({ queryKey });
+      if (deleted > 0) {
+        toast.success(`${deleted} ${label}${deleted === 1 ? "" : "s"} deleted`);
+      }
+      if (failed.length > 0) {
+        toast.error(
+          `${failed.length} ${label}${failed.length === 1 ? "" : "s"} could not be deleted`
+        );
+      } else {
+        closeDialog(false);
+      }
+    } finally {
+      setBulkDeletePending(null);
     }
   };
 
-  // Bulk action handlers for Accounts
+  const handleBulkDeleteConfirm = () =>
+    runBulkDelete({
+      kind: "leads",
+      ids: selectedLeads,
+      remove: leadService.deleteLead,
+      setSelected: setSelectedLeads,
+      closeDialog: setShowBulkDeleteDialog,
+      queryKey: ["leads"],
+      label: "lead",
+    });
+
   const handleBulkAccountsDelete = async () => {
     if (selectedAccounts.length === 0) return;
     setShowBulkAccountsDeleteDialog(true);
   };
 
-  const handleBulkAccountsDeleteConfirm = async () => {
-    try {
-      // Delete accounts one by one since there's no bulk delete API
-      for (const accountId of selectedAccounts) {
-        await deleteAccountMutation.mutateAsync(parseInt(accountId));
-      }
-      setSelectedAccounts([]);
-      setShowBulkAccountsDeleteDialog(false);
-      toast.success(
-        `${selectedAccounts.length} accounts deleted successfully!`
-      );
-    } catch (error) {
-      console.error("Failed to delete accounts:", error);
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
-      toast.error(`Failed to delete accounts: ${errorMessage}`);
-    }
-  };
+  const handleBulkAccountsDeleteConfirm = () =>
+    runBulkDelete({
+      kind: "accounts",
+      ids: selectedAccounts,
+      remove: accountService.deleteAccount,
+      setSelected: setSelectedAccounts,
+      closeDialog: setShowBulkAccountsDeleteDialog,
+      queryKey: ["accounts"],
+      label: "account",
+    });
 
-  const handleBulkAccountsExport = () => {
-    console.log("Export selected accounts:", selectedAccounts);
-  };
-
-  // Bulk action handlers for Contacts
   const handleBulkContactsDelete = async () => {
     if (selectedContacts.length === 0) return;
     setShowBulkContactsDeleteDialog(true);
   };
 
-  const handleBulkContactsDeleteConfirm = async () => {
-    try {
-      // Delete contacts one by one since there's no bulk delete API
-      for (const contactId of selectedContacts) {
-        await deleteContactMutation.mutateAsync(parseInt(contactId));
-      }
-      setSelectedContacts([]);
-      setShowBulkContactsDeleteDialog(false);
-      toast.success(
-        `${selectedContacts.length} contacts deleted successfully!`
-      );
-    } catch (error) {
-      console.error("Failed to delete contacts:", error);
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
-      toast.error(`Failed to delete contacts: ${errorMessage}`);
-    }
-  };
-
-  const handleBulkContactsExport = () => {
-    console.log("Export selected contacts:", selectedContacts);
-  };
+  const handleBulkContactsDeleteConfirm = () =>
+    runBulkDelete({
+      kind: "contacts",
+      ids: selectedContacts,
+      remove: contactService.deleteContact,
+      setSelected: setSelectedContacts,
+      closeDialog: setShowBulkContactsDeleteDialog,
+      queryKey: ["contacts"],
+      label: "contact",
+    });
 
   const handleBulkEmail = async () => {
     if (selectedLeads.length === 0) {
@@ -699,12 +695,10 @@ export const LeadManagementDashboard: React.FC = () => {
         selectedLeads.map(id => parseInt(id))
       );
 
-      // Dismiss loading toast before showing result
       if (loadingToastId) {
         toast.dismiss(loadingToastId);
       }
 
-      // Show success message with summary
       if (response.summary.failed === 0) {
         toast.success(
           `Successfully synced all ${response.summary.successful} leads to email!`
@@ -721,14 +715,11 @@ export const LeadManagementDashboard: React.FC = () => {
         );
       }
 
-      // Clear selection after successful sync
       setSelectedLeads([]);
     } catch (error) {
-      // Dismiss loading toast before showing error
       if (loadingToastId) {
         toast.dismiss(loadingToastId);
       }
-      console.error("Failed to sync leads to email:", error);
       toast.error(
         `Failed to sync leads to email: ${error instanceof Error ? error.message : "Unknown error"}`
       );
@@ -754,8 +745,7 @@ export const LeadManagementDashboard: React.FC = () => {
       );
       setSelectedLeads([]);
       setShowAssignDialog(false);
-    } catch (error) {
-      console.error("Failed to assign leads:", error);
+    } catch {
       toast.error("Failed to assign leads. Please try again.");
     }
   };
@@ -819,7 +809,6 @@ export const LeadManagementDashboard: React.FC = () => {
     [statusFilter, sourceFilter, createdFrom, createdTo, keywordIds]
   );
 
-  // Determine which data to display based on search state
   const getDisplayData = () => {
     if (leadSearchQuery && activeTab === "lead-master") {
       return {
@@ -865,7 +854,6 @@ export const LeadManagementDashboard: React.FC = () => {
     }
 
     if (unassignedLeadsSearchQuery && activeTab === "unassigned-leads") {
-      // Filter for unassigned leads (ownerId is null)
       const filteredResults = unassignedLeadsSearchResults
         .filter(lead => lead.ownerId == null)
         .filter(leadMatchesActiveFilters);
@@ -954,46 +942,26 @@ export const LeadManagementDashboard: React.FC = () => {
   const currentData = getDisplayData();
   const totalPages = currentData.pagination?.totalPages || 1;
 
-  console.log(
-    "🎯 Dashboard state - Tab:",
-    activeTab,
-    "Page:",
-    currentPage,
-    "Total pages:",
-    totalPages
-  );
-
   const handlePageChange = (page: number) => {
-    console.log(
-      "📄 Page change requested:",
-      page,
-      "(current:",
-      currentPage,
-      ")"
-    );
     setCurrentPage(page);
   };
 
   const handleItemsPerPageChange = (newItemsPerPage: number) => {
-    setItemsPerPage(newItemsPerPage); // nuqs handles page reset automatically
+    setItemsPerPage(newItemsPerPage);
   };
 
   const handleLeadClick = (lead: any) => {
-    // Navigate to lead detail page
     router.push(`/leads/${lead.id}`);
   };
 
-  const handleAccountClick = (account: any) => {
-    // Navigate to account detail page
-    router.push(`/accounts/${account.id}`);
+  const handleAccountClick = (account: Account) => {
+    router.push(`/leads/accounts/${account.id}`);
   };
 
-  const handleContactClick = (contact: any) => {
-    // Navigate to contact detail page
-    router.push(`/contacts/${contact.id}`);
+  const handleContactClick = (contact: Contact) => {
+    router.push(`/leads/contacts/${contact.id}`);
   };
 
-  // Determine error state based on active tab
   const getError = () => {
     switch (activeTab) {
       case "lead-master":
@@ -1013,7 +981,6 @@ export const LeadManagementDashboard: React.FC = () => {
 
   const currentError = getError();
 
-  // Error state
   if (currentError) {
     return (
       <div className="bg-background pb-4">
@@ -1031,12 +998,10 @@ export const LeadManagementDashboard: React.FC = () => {
     );
   }
 
-  // Render content based on pathname
   const renderContent = () => {
     if (pathname.endsWith("/lead-master")) {
       return (
         <div className="space-y-4">
-          {/* Lead Master Content */}
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-end gap-2">
               <DataTransfer
@@ -1049,7 +1014,7 @@ export const LeadManagementDashboard: React.FC = () => {
                 variant="outline"
                 onClick={() => setShowImportModal(true)}
               >
-                <Download className="size-4" />
+                <Upload className="size-4" />
                 Import
               </Button>
               <Button type="button" onClick={() => setShowAddLeadModal(true)}>
@@ -1063,7 +1028,7 @@ export const LeadManagementDashboard: React.FC = () => {
                 onSendToEmail={handleBulkEmail}
                 onEmailExcel={() => setShowSendLeadsEmailModal(true)}
                 onAssign={handleBulkAssignModal}
-                onConvert={() => {}}
+                onConvert={handleBulkConvert}
                 onDelete={handleBulkDelete}
               />
             )}
@@ -1131,10 +1096,6 @@ export const LeadManagementDashboard: React.FC = () => {
                 setCreatedTo(null);
                 setKeywordIds([]);
               }}
-              // onStatusFilterRemove={handleStatusFilterRemove}
-              // onSourceFilterRemove={handleSourceFilterRemove}
-              // onCreatedFromFilterRemove={handleCreatedFromFilterRemove}
-              // onCreatedToFilterRemove={handleCreatedToFilterRemove}
               onKeywordIdsFilterRemove={handleKeywordIdsFilterRemove}
               searchQuery={leadSearchQuery}
               isSearchMode={currentData.isSearchMode}
@@ -1148,7 +1109,6 @@ export const LeadManagementDashboard: React.FC = () => {
     if (pathname.endsWith("/assigned")) {
       return (
         <div className="space-y-4">
-          {/* Assigned Leads Content */}
           <div className="space-y-3">
             <DashboardToolbar
               search={
@@ -1177,9 +1137,6 @@ export const LeadManagementDashboard: React.FC = () => {
                         onValueChange={handleSalesUserFilterChange}
                         disabled={salesUsersLoading}
                       >
-                        {/* Sized to its content rather than a fixed 16rem —
-                            the old w-64 pair left a gap beside the search on
-                            wide screens and forced a wrap on narrow ones. */}
                         <SelectTrigger className="w-full sm:w-44">
                           <SelectValue placeholder="Sales user" />
                         </SelectTrigger>
@@ -1392,7 +1349,6 @@ export const LeadManagementDashboard: React.FC = () => {
     if (pathname.endsWith("/unassigned-leads")) {
       return (
         <div className="space-y-4">
-          {/* Unassigned Leads Content */}
           <div className="space-y-3">
             <DashboardToolbar
               search={
@@ -1429,7 +1385,7 @@ export const LeadManagementDashboard: React.FC = () => {
                 onSendToEmail={handleBulkEmail}
                 onEmailExcel={() => setShowSendLeadsEmailModal(true)}
                 onAssign={handleBulkAssignModal}
-                onConvert={() => {}}
+                onConvert={handleBulkConvert}
                 onDelete={handleBulkDelete}
               />
             )}
@@ -1498,11 +1454,9 @@ export const LeadManagementDashboard: React.FC = () => {
     if (pathname.endsWith("/accounts")) {
       return (
         <div className="space-y-4">
-          {/* Accounts Content */}
           <div className="space-y-3">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <div className="min-w-0 flex-1">
-                {/* Search Bar */}
                 <LeadSearchInput
                   value={accountsSearchQuery}
                   onChange={setAccountsSearchQuery}
@@ -1533,10 +1487,6 @@ export const LeadManagementDashboard: React.FC = () => {
                 <span className="text-sm text-muted-foreground">
                   {selectedAccounts.length} selected
                 </span>
-                <Button variant="outline" onClick={handleBulkAccountsExport}>
-                  <Download className="h-4 w-4" />
-                  Export Selected
-                </Button>
                 <Button
                   variant="destructive"
                   onClick={handleBulkAccountsDelete}
@@ -1565,16 +1515,6 @@ export const LeadManagementDashboard: React.FC = () => {
               <AccountTable
                 accounts={(currentData.data ?? []) as Account[]}
                 onAccountClick={handleAccountClick}
-                onDeleteAccount={async account => {
-                  try {
-                    await deleteAccountMutation.mutateAsync(account.id);
-                    toast.success("Account deleted successfully!");
-                  } catch (error) {
-                    const errorMessage =
-                      error instanceof Error ? error.message : "Unknown error";
-                    toast.error(`Failed to delete account: ${errorMessage}`);
-                  }
-                }}
                 showCheckboxes={true}
                 selectedItems={selectedAccounts}
                 onSelectionChange={setSelectedAccounts}
@@ -1598,11 +1538,9 @@ export const LeadManagementDashboard: React.FC = () => {
     if (pathname.endsWith("/contacts")) {
       return (
         <div className="space-y-4">
-          {/* Contacts Content */}
           <div className="space-y-3">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <div className="min-w-0 flex-1">
-                {/* Search Bar */}
                 <LeadSearchInput
                   value={contactsSearchQuery}
                   onChange={setContactsSearchQuery}
@@ -1633,10 +1571,6 @@ export const LeadManagementDashboard: React.FC = () => {
                 <span className="text-sm text-muted-foreground">
                   {selectedContacts.length} selected
                 </span>
-                <Button variant="outline" onClick={handleBulkContactsExport}>
-                  <Download className="h-4 w-4" />
-                  Export Selected
-                </Button>
                 <Button
                   variant="destructive"
                   onClick={handleBulkContactsDelete}
@@ -1652,31 +1586,8 @@ export const LeadManagementDashboard: React.FC = () => {
               </div>
             ) : (
               <ContactTable
-                contacts={currentData.data.map((item: any) => ({
-                  id: item.id.toString(),
-                  name: item.name,
-                  email: item.email,
-                  phone: item.phone || "",
-                  countryCode: item.countryCode,
-                  position: item.position || "",
-                  accountName: item.account?.name || "No Account",
-                  createdAt: item.createdAt,
-                  isConvertedLead:
-                    item.convertedLeads && item.convertedLeads.length > 0,
-                }))}
+                contacts={(currentData.data ?? []) as Contact[]}
                 onContactClick={handleContactClick}
-                onDeleteContact={async contact => {
-                  try {
-                    await deleteContactMutation.mutateAsync(
-                      parseInt(contact.id)
-                    );
-                    toast.success("Contact deleted successfully!");
-                  } catch (error) {
-                    const errorMessage =
-                      error instanceof Error ? error.message : "Unknown error";
-                    toast.error(`Failed to delete contact: ${errorMessage}`);
-                  }
-                }}
                 showCheckboxes={true}
                 selectedItems={selectedContacts}
                 onSelectionChange={setSelectedContacts}
@@ -1697,7 +1608,6 @@ export const LeadManagementDashboard: React.FC = () => {
       );
     }
 
-    // Default fallback
     return (
       <div className="space-y-4">
         <div className="text-center py-8">
@@ -1714,10 +1624,8 @@ export const LeadManagementDashboard: React.FC = () => {
 
   return (
     <div className="bg-background">
-      {/* Content */}
       <PageShell>{renderContent()}</PageShell>
 
-      {/* Bulk Confirmation Dialogs */}
       <ConvertConfirmationDialog
         open={showBulkConvertDialog}
         onOpenChange={setShowBulkConvertDialog}
@@ -1732,6 +1640,8 @@ export const LeadManagementDashboard: React.FC = () => {
         onConfirm={handleBulkDeleteConfirm}
         itemName={`${selectedLeads.length} selected leads`}
         itemType="lead"
+        isLoading={bulkDeletePending === "leads"}
+        disabled={bulkDeletePending !== null}
       />
 
       <DeleteConfirmationDialog
@@ -1740,6 +1650,8 @@ export const LeadManagementDashboard: React.FC = () => {
         onConfirm={handleBulkAccountsDeleteConfirm}
         itemName={`${selectedAccounts.length} selected accounts`}
         itemType="account"
+        isLoading={bulkDeletePending === "accounts"}
+        disabled={bulkDeletePending !== null}
       />
 
       <DeleteConfirmationDialog
@@ -1748,6 +1660,8 @@ export const LeadManagementDashboard: React.FC = () => {
         onConfirm={handleBulkContactsDeleteConfirm}
         itemName={`${selectedContacts.length} selected contacts`}
         itemType="contact"
+        isLoading={bulkDeletePending === "contacts"}
+        disabled={bulkDeletePending !== null}
       />
 
       <AssignLeadsModal

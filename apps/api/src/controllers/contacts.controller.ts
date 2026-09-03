@@ -5,27 +5,40 @@ import {
   handleValidationError,
   handleNotFoundError,
   validateRequiredFields,
-} from "../utils/errorHandler.js";
+} from "../utils/error-handler.js";
 import {
   isValidEmail,
   isValidPhone,
   isValidName,
   normalizeEmail,
+  isValidPincode,
   validateFieldLength,
+  parseBoundedInteger,
+  parsePositiveInteger,
 } from "../utils/validators.js";
-import { buildFullName } from "../utils/nameHelpers.js";
-import { parsePhoneNumber } from "../utils/phoneHelper.js";
+import { buildFullName } from "../utils/name-helpers.js";
+import { parsePhoneNumber } from "../utils/phone-helper.js";
+import { Prisma } from "@prisma/client";
 
 export class ContactController {
   async getAllContacts(req: Request, res: Response) {
     try {
-      console.log("=== GET ALL CONTACTS ===");
-      const pageParam = req.query.page as string;
-      const limitParam = req.query.limit as string;
-      const page = Math.max(1, parseInt(pageParam) || 1);
-      const requestedLimit = parseInt(limitParam);
+      const page =
+        req.query.page === undefined
+          ? 1
+          : parseBoundedInteger(req.query.page, 1, 1_000_000);
       const limit =
-        requestedLimit >= 1 && requestedLimit <= 100 ? requestedLimit : 10;
+        req.query.limit === undefined
+          ? 10
+          : parseBoundedInteger(req.query.limit, 1, 100);
+      if (page === null || limit === null) {
+        return handleValidationError(
+          res,
+          "page must be positive and limit must be between 1 and 100",
+          undefined,
+          "Get all contacts"
+        );
+      }
       const skip = (page - 1) * limit;
 
       const totalItems = await prisma.contact.count();
@@ -46,10 +59,6 @@ export class ContactController {
       const hasNextPage = page < totalPages;
       const hasPreviousPage = page > 1;
 
-      console.log(
-        `Found ${contacts.length} contacts (page ${page}/${totalPages})`
-      );
-
       res.json({
         data: contacts,
         pagination: {
@@ -62,21 +71,26 @@ export class ContactController {
         },
       });
     } catch (error) {
-      console.error("Get all contacts error:", error);
       handleError(error, res, "Get all contacts");
     }
   }
 
   async createContact(req: Request, res: Response) {
     try {
-      const { name, email, phone, position, accountId } = req.body;
+      const { name, email, phone, position, accountId, city, state, pincode } =
+        req.body || {};
 
-      // Validate required fields
-      if (!validateRequiredFields(req.body, ["name"], res, "Create contact")) {
+      if (
+        !validateRequiredFields(
+          req.body,
+          ["name", "email"],
+          res,
+          "Create contact"
+        )
+      ) {
         return;
       }
 
-      // Validate field formats and lengths
       if (!isValidName(name)) {
         return handleValidationError(
           res,
@@ -89,7 +103,7 @@ export class ContactController {
       if (email && !isValidEmail(email)) {
         return handleValidationError(
           res,
-          "Invalid email format. Email must be a valid address ending with .com, .co, .in, .org, .net, .edu, .gov, .io, or .info",
+          "Invalid email address",
           "email",
           "Create contact"
         );
@@ -112,39 +126,98 @@ export class ContactController {
           "Create contact"
         );
       }
+      if (city && !validateFieldLength(city, 100)) {
+        return handleValidationError(
+          res,
+          "City must be 100 characters or less",
+          "city",
+          "Create contact"
+        );
+      }
+      if (state && !validateFieldLength(state, 100)) {
+        return handleValidationError(
+          res,
+          "State must be 100 characters or less",
+          "state",
+          "Create contact"
+        );
+      }
+      if (pincode && !isValidPincode(pincode)) {
+        return handleValidationError(
+          res,
+          "Pincode must contain 6 digits",
+          "pincode",
+          "Create contact"
+        );
+      }
+      const normalizedAccountId =
+        accountId === undefined || accountId === null || accountId === ""
+          ? null
+          : Number(accountId);
+      if (
+        normalizedAccountId !== null &&
+        (!Number.isSafeInteger(normalizedAccountId) || normalizedAccountId <= 0)
+      ) {
+        return handleValidationError(
+          res,
+          "Account ID is invalid",
+          "accountId",
+          "Create contact"
+        );
+      }
+      if (
+        normalizedAccountId !== null &&
+        !(await prisma.account.findUnique({
+          where: { id: normalizedAccountId },
+          select: { id: true },
+        }))
+      ) {
+        return handleValidationError(
+          res,
+          "Account does not exist",
+          "accountId",
+          "Create contact"
+        );
+      }
 
-      // Parse phone number to extract country code
       const parsedPhone = phone ? parsePhoneNumber(phone) : null;
       const countryCode = parsedPhone?.countryCode || "91";
       const localPhone = parsedPhone?.localNumber || phone;
 
       const contact = await prisma.contact.create({
         data: {
-          name,
-          // `email` is unique and non-null on this table, so the stored form
-          // has to be the canonical one or the same person can be inserted
-          // twice. Falls through unchanged when absent, leaving the missing
-          // required field to fail where it did before.
-          email: normalizeEmail(email) ?? email,
-          phone: localPhone,
+          name: name.trim(),
+          email: normalizeEmail(email)!,
+          phone: localPhone || null,
           countryCode,
-          position,
-          accountId,
+          position: position?.trim() || null,
+          city: city?.trim() || null,
+          state: state?.trim() || null,
+          pincode: pincode?.trim() || null,
+          accountId: normalizedAccountId,
         },
         include: {
           account: true,
         },
       });
       res.status(201).json(contact);
-    } catch (error) {
+    } catch (error: unknown) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        return res
+          .status(409)
+          .json({ error: "A contact with this email already exists" });
+      }
       handleError(error, res, "Create contact");
     }
   }
 
   async getContactById(req: Request, res: Response) {
     try {
-      const { id } = req.params;
-      if (!id) {
+      const id = parsePositiveInteger(req.params.id);
+      if (id === null) {
         return handleValidationError(
           res,
           "Contact ID is required",
@@ -153,7 +226,7 @@ export class ContactController {
         );
       }
       const contact = await prisma.contact.findUnique({
-        where: { id: parseInt(id) },
+        where: { id },
         include: {
           account: true,
           convertedLeads: true,
@@ -177,8 +250,8 @@ export class ContactController {
 
   async updateContact(req: Request, res: Response) {
     try {
-      const { id } = req.params;
-      if (!id) {
+      const id = parsePositiveInteger(req.params.id);
+      if (id === null) {
         return handleValidationError(
           res,
           "Contact ID is required",
@@ -186,10 +259,22 @@ export class ContactController {
           "Update contact"
         );
       }
-      const updateData = req.body;
+      const { name, email, phone, position, accountId, city, state, pincode } =
+        req.body || {};
+      if (
+        [name, email, phone, position, accountId, city, state, pincode].every(
+          value => value === undefined
+        )
+      ) {
+        return handleValidationError(
+          res,
+          "At least one contact field is required",
+          undefined,
+          "Update contact"
+        );
+      }
 
-      // Validate fields that are being updated
-      if (updateData.name !== undefined && !isValidName(updateData.name)) {
+      if (name !== undefined && !isValidName(name)) {
         return handleValidationError(
           res,
           "Name must be non-empty (max 255 characters)",
@@ -198,24 +283,16 @@ export class ContactController {
         );
       }
 
-      if (
-        updateData.email !== undefined &&
-        updateData.email &&
-        !isValidEmail(updateData.email)
-      ) {
+      if (email !== undefined && !isValidEmail(email)) {
         return handleValidationError(
           res,
-          "Invalid email format. Email must be a valid address ending with .com, .co, .in, .org, .net, .edu, .gov, .io, or .info",
+          "Invalid email address",
           "email",
           "Update contact"
         );
       }
 
-      if (
-        updateData.phone !== undefined &&
-        updateData.phone &&
-        !isValidPhone(updateData.phone)
-      ) {
+      if (phone !== undefined && phone && !isValidPhone(phone)) {
         return handleValidationError(
           res,
           "Invalid phone number. Phone must be 10 digits",
@@ -225,9 +302,9 @@ export class ContactController {
       }
 
       if (
-        updateData.position !== undefined &&
-        updateData.position &&
-        !validateFieldLength(updateData.position, 255)
+        position !== undefined &&
+        position &&
+        !validateFieldLength(position, 255)
       ) {
         return handleValidationError(
           res,
@@ -237,23 +314,86 @@ export class ContactController {
         );
       }
 
-      // Parse phone number to extract country code if phone is being updated
-      if (updateData.phone) {
-        const parsedPhone = parsePhoneNumber(updateData.phone);
-        if (parsedPhone) {
-          updateData.phone = parsedPhone.localNumber;
-          updateData.countryCode = parsedPhone.countryCode;
-        }
+      if (city && !validateFieldLength(city, 100)) {
+        return handleValidationError(
+          res,
+          "City must be 100 characters or less",
+          "city",
+          "Update contact"
+        );
+      }
+      if (state && !validateFieldLength(state, 100)) {
+        return handleValidationError(
+          res,
+          "State must be 100 characters or less",
+          "state",
+          "Update contact"
+        );
+      }
+      if (pincode && !isValidPincode(pincode)) {
+        return handleValidationError(
+          res,
+          "Pincode must contain 6 digits",
+          "pincode",
+          "Update contact"
+        );
+      }
+      const normalizedAccountId =
+        accountId === undefined
+          ? undefined
+          : accountId === null || accountId === ""
+            ? null
+            : Number(accountId);
+      if (
+        normalizedAccountId !== undefined &&
+        normalizedAccountId !== null &&
+        (!Number.isSafeInteger(normalizedAccountId) || normalizedAccountId <= 0)
+      ) {
+        return handleValidationError(
+          res,
+          "Account ID is invalid",
+          "accountId",
+          "Update contact"
+        );
+      }
+      if (
+        typeof normalizedAccountId === "number" &&
+        !(await prisma.account.findUnique({
+          where: { id: normalizedAccountId },
+          select: { id: true },
+        }))
+      ) {
+        return handleValidationError(
+          res,
+          "Account does not exist",
+          "accountId",
+          "Update contact"
+        );
       }
 
-      // Only when the caller actually sent an email: assigning here on an
-      // absent field would null out a stored address.
-      if (updateData.email !== undefined) {
-        updateData.email = normalizeEmail(updateData.email);
-      }
+      const parsedPhone = phone ? parsePhoneNumber(phone) : null;
+      const updateData = {
+        ...(name !== undefined ? { name: name.trim() } : {}),
+        ...(email !== undefined ? { email: normalizeEmail(email)! } : {}),
+        ...(phone !== undefined
+          ? {
+              phone: parsedPhone?.localNumber || null,
+              countryCode: parsedPhone?.countryCode || "91",
+            }
+          : {}),
+        ...(position !== undefined
+          ? { position: position.trim() || null }
+          : {}),
+        ...(city !== undefined ? { city: city.trim() || null } : {}),
+        ...(state !== undefined ? { state: state.trim() || null } : {}),
+        ...(pincode !== undefined ? { pincode: pincode.trim() || null } : {}),
+        ...(normalizedAccountId !== undefined
+          ? { accountId: normalizedAccountId }
+          : {}),
+      };
 
       const contact = await prisma.contact.update({
-        where: { id: parseInt(id) },
+        where: { id },
         data: updateData,
         include: {
           account: true,
@@ -261,9 +401,19 @@ export class ContactController {
       });
 
       res.json(contact);
-    } catch (error: any) {
-      if (error.code === "P2025") {
-        // Record not found
+    } catch (error: unknown) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        return res
+          .status(409)
+          .json({ error: "A contact with this email already exists" });
+      }
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2025"
+      ) {
         return handleNotFoundError(res, "Contact", "Update contact");
       }
       handleError(error, res, "Update contact");
@@ -274,12 +424,12 @@ export class ContactController {
     try {
       const { q } = req.query;
 
-      if (!q) {
+      if (typeof q !== "string") {
         return res.status(400).json({ error: 'Search query "q" is required' });
       }
 
-      const searchTerm = (q as string).trim();
-      if (searchTerm.length === 0) {
+      const searchTerm = q.trim();
+      if (searchTerm.length === 0 || searchTerm.length > 200) {
         return res.status(400).json({ error: 'Search query "q" is required' });
       }
 
@@ -306,6 +456,7 @@ export class ContactController {
             },
           },
         },
+        take: 50,
       });
       const response = contacts.map(contact => ({
         ...contact,
@@ -315,12 +466,8 @@ export class ContactController {
         })),
       }));
 
-      console.log(
-        `Search found ${contacts.length} contacts with query: "${searchTerm}"`
-      );
       res.json(response);
     } catch (error) {
-      console.error("Search Contacts Error:", error);
       handleError(error, res, "Search contacts");
     }
   }

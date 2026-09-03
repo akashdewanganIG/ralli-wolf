@@ -1,26 +1,31 @@
 import { Router } from "express";
 import { ContactController } from "../controllers/contacts.controller.js";
-import { requireAuth } from "../middleware/auth.middleware.js";
+import {
+  requireAuth,
+  requirePermission,
+} from "../middleware/auth.middleware.js";
 
 const router = Router();
 const contactController = new ContactController();
 
-// Apply authentication to ALL routes
-router.use(requireAuth);
+router.use(requireAuth, requirePermission("accounts.view"));
 
-// GET /api/contacts
 router.get("/", contactController.getAllContacts);
 
-// GET /api/contacts/search
 router.get("/search", contactController.searchContacts);
 
-// POST /api/contacts
-router.post("/", contactController.createContact);
+router.post(
+  "/",
+  requirePermission("accounts.manage"),
+  contactController.createContact
+);
 
-// GET /api/contacts/:id
 router.get("/:id", contactController.getContactById);
 
-// PUT /api/contacts/:id
-router.put("/:id", contactController.updateContact);
+router.put(
+  "/:id",
+  requirePermission("accounts.manage"),
+  contactController.updateContact
+);
 
 export default router;

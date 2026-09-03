@@ -1,12 +1,9 @@
 import { Router } from "express";
 import { AuthController } from "../controllers/auth.controller.js";
-import { LoginOtpController } from "../controllers/loginOtp.controller.js";
-import { AuthMethodsController } from "../controllers/authMethods.controller.js";
-import {
-  requireAuth,
-  requireAdminSecret,
-} from "../middleware/auth.middleware.js";
-import { rateLimit } from "../middleware/rateLimit.js";
+import { LoginOtpController } from "../controllers/login-otp.controller.js";
+import { AuthMethodsController } from "../controllers/auth-methods.controller.js";
+import { requireAuth } from "../middleware/auth.middleware.js";
+import { rateLimit } from "../middleware/rate-limit.js";
 
 const router = Router();
 const authController = new AuthController();
@@ -17,12 +14,9 @@ const emailRateLimitKey = (req: { body?: { email?: unknown } }) =>
     ? req.body.email.trim().toLowerCase()
     : "";
 
-// The OTP routes never see an email address, so they are throttled per
-// sign-in attempt instead.
 const mfaRateLimitKey = (req: { body?: { mfaToken?: unknown } }) =>
   typeof req.body?.mfaToken === "string" ? req.body.mfaToken : "";
 
-// POST /api/auth/login
 router.post(
   "/login",
   rateLimit({
@@ -33,8 +27,6 @@ router.post(
   authController.login
 );
 
-// Second factor. Both routes are keyed off the MFA token minted by /login,
-// so neither can be reached without a verified password.
 router.post(
   "/login/otp/resend",
   rateLimit({
@@ -54,24 +46,10 @@ router.post(
   (req, res) => loginOtpController.verify(req, res)
 );
 
-// POST /api/auth/developer-login
-router.post("/developer-login", authController.developerLogin);
-
-// POST /api/auth/logout
 router.post("/logout", requireAuth, authController.logout);
 
-// GET /api/auth/me
 router.get("/me", requireAuth, authController.getCurrentUser);
 
-// POST /api/auth/create-test-admin - Development/Testing only
-router.post("/create-test-admin", authController.createTestAdmin);
-
-// POST /api/auth/create-system-admin - Protected by ADMIN-SECRET
-router.post("/create-system-admin", requireAdminSecret, (req, res) =>
-  authController.createSystemAdmin(req, res)
-);
-
-// Forgot password (OTP via email)
 router.post(
   "/forgot-password",
   rateLimit({
@@ -90,11 +68,12 @@ router.post(
   }),
   authController.verifyForgotPassword
 );
-router.post("/forgot-password/reset", authController.resetPassword);
+router.post(
+  "/forgot-password/reset",
+  rateLimit({ windowMs: 10 * 60 * 1000, max: 10 }),
+  authController.resetPassword
+);
 
-// ---- Authentication method management ------------------------------------
-// All behind requireAuth: these act on the signed-in account only, never on
-// an id supplied by the client.
 const userRateLimitKey = (req: { user?: { id?: number } }) =>
   req.user?.id ? String(req.user.id) : "";
 
@@ -107,7 +86,7 @@ router.post("/methods/totp/setup", requireAuth, (req, res) =>
 router.post("/methods/totp/verify", requireAuth, (req, res) =>
   authMethodsController.verifyTotp(req, res)
 );
-// Sending mail is the abusable step, so it carries the tighter limit.
+
 router.post(
   "/methods/email/send",
   requireAuth,
@@ -118,7 +97,7 @@ router.post(
   }),
   (req, res) => authMethodsController.sendEmailCode(req, res)
 );
-// Sets a password and turns password sign-in back on.
+
 router.post("/methods/password", requireAuth, (req, res) =>
   authMethodsController.setPassword(req, res)
 );
@@ -129,7 +108,6 @@ router.delete("/methods/:method", requireAuth, (req, res) =>
   authMethodsController.disable(req, res)
 );
 
-// Change password (self-service)
 router.post("/change-password", requireAuth, authController.changePassword);
 
 export default router;

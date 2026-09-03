@@ -7,7 +7,7 @@ import { Input } from "@repo/ui/components/ui/input";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Checkbox } from "@repo/ui";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   DetailRow,
   ErrorBanner,
@@ -18,7 +18,7 @@ import {
   StatCard,
   StatusBadge,
 } from "@/components/supply-chain/shared";
-import { usePickList, useWmsMutations } from "@/hooks/useSupplyChain";
+import { usePickList, useWmsMutations } from "@/hooks/use-supply-chain";
 import {
   formatDate,
   formatDateTime,

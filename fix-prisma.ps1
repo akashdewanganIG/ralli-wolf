@@ -1,10 +1,10 @@
-# Fix Prisma Windows Permission Issue
+
 Write-Host "Fixing Prisma Windows permission issue..."
 
-# Kill any running Node processes that might be locking files
+
 Get-Process -Name "node" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
-# Remove Prisma cache directories
+
 if (Test-Path "node_modules\.prisma") {
     Remove-Item -Path "node_modules\.prisma" -Recurse -Force -ErrorAction SilentlyContinue
     Write-Host "Removed root .prisma cache"
@@ -15,7 +15,7 @@ if (Test-Path "packages\db\node_modules\.prisma") {
     Write-Host "Removed db package .prisma cache"
 }
 
-# Try to generate Prisma client with retry logic
+
 $maxRetries = 3
 $retryCount = 0
 

@@ -1,15 +1,5 @@
 import type { QuoteStatus } from "./quote-enums";
 
-export type DummyPricebook = {
-  id: number;
-  name: string;
-};
-
-export type DummyProduct = {
-  id: number;
-  name: string;
-};
-
 export type Quote = {
   id: string;
   quoteNumber: string;
@@ -33,23 +23,4 @@ export type Quote = {
   description?: string;
   pricebookId?: number;
   pricebookName?: string;
-};
-
-export type QuoteLineItem = {
-  id: string;
-  quoteId: string;
-  lineName: string;
-  number: number;
-  productId: number;
-  productName: string;
-  listUnitPrice: number;
-  quantity: number;
-  netPrice: number;
-  description?: string;
-  pricebookId?: number;
-  pricebookName?: string;
-  createdBy: string;
-  createdAt: string;
-  lastModifiedBy: string;
-  lastModifiedAt: string;
 };

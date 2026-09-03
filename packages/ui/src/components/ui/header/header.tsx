@@ -7,9 +7,9 @@ import { cn } from "@repo/ui/lib/utils";
 export interface HeaderProps extends React.HTMLAttributes<HTMLElement> {
   icon?: React.ReactNode;
   notificationSlot?: React.ReactNode;
-  /** Rendered left of the notification bell; used for the system-status menu. */
+
   actionSlot?: React.ReactNode;
-  /** Passed through to the account menu, e.g. the theme switch. */
+
   preferences?: React.ReactNode;
   user?: UserProfile;
   onEditProfile?: () => void;
@@ -46,7 +46,6 @@ export function Header({
           "flex h-16 w-full max-w-screen-3xl items-center justify-between bg-navbar px-4 sm:px-6 xl:px-8"
         )}
       >
-        {/* Left side - Icon */}
         <div className="min-w-0 flex items-center">
           {icon && (
             <div className="flex items-center space-x-2 text-primary">
@@ -55,17 +54,13 @@ export function Header({
           )}
         </div>
 
-        {/* Center - Tabs */}
         {tabs && <div className="flex-1 flex justify-center">{tabs}</div>}
 
-        {/* Right side - Notifications and Profile */}
         <div className="flex shrink-0 items-center gap-2">
           {actionSlot}
 
-          {/* Notification bell — rendered by the app layer so it can use app hooks */}
           {notificationSlot}
 
-          {/* Profile Dropdown */}
           {user && (
             <ProfileDropdown
               user={user}

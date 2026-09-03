@@ -17,7 +17,6 @@ export type QuoteLineItemRow = {
 
 type QuoteLineItemsTableProps = {
   items: QuoteLineItemRow[];
-  onRowClick?: (item: QuoteLineItemRow) => void;
   count: number;
   currentPage: number;
   totalPages: number;
@@ -28,7 +27,6 @@ type QuoteLineItemsTableProps = {
 
 export function QuoteLineItemsTable({
   items,
-  onRowClick,
   count,
   currentPage,
   totalPages,
@@ -63,9 +61,7 @@ export function QuoteLineItemsTable({
         key: "listPrice",
         label: "List Price",
         render: v => (
-          <span className="text-muted-foreground">
-            {formatMoney(v)}
-          </span>
+          <span className="text-muted-foreground">{formatMoney(v)}</span>
         ),
       },
       {
@@ -81,18 +77,14 @@ export function QuoteLineItemsTable({
         key: "unitPrice",
         label: "Unit Price",
         render: v => (
-          <span className="text-muted-foreground">
-            {formatMoney(v)}
-          </span>
+          <span className="text-muted-foreground">{formatMoney(v)}</span>
         ),
       },
       {
         key: "totalPrice",
         label: "Total Price",
         render: v => (
-          <span className="text-muted-foreground">
-            {formatMoney(v)}
-          </span>
+          <span className="text-muted-foreground">{formatMoney(v)}</span>
         ),
       },
     ],
@@ -111,7 +103,6 @@ export function QuoteLineItemsTable({
         itemsPerPage={itemsPerPage}
         onPageChange={onPageChange}
         onItemsPerPageChange={onItemsPerPageChange}
-        onRowClick={onRowClick}
       />
     </div>
   );

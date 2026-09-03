@@ -4,13 +4,14 @@ import * as React from "react";
 import {
   Button,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@repo/ui";
-import { useGenerateQuote } from "@/hooks/useOpportunities";
+import { useGenerateQuote } from "@/hooks/use-opportunities";
 import { toast } from "@/lib/toast";
 
 type CreateQuoteDialogProps = {
@@ -54,18 +55,20 @@ export function CreateQuoteDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md gap-0 overflow-hidden">
         <DialogHeader>
           <DialogTitle>Create Quote</DialogTitle>
           <DialogDescription>
             Do you want to create a quote with current line items in product?
           </DialogDescription>
         </DialogHeader>
-        {errorMessage && (
-          <p className="text-sm text-destructive" role="alert">
-            {errorMessage}
-          </p>
-        )}
+        <DialogBody>
+          {errorMessage && (
+            <p className="text-sm text-destructive" role="alert">
+              {errorMessage}
+            </p>
+          )}
+        </DialogBody>
         <DialogFooter>
           <Button
             variant="outline"

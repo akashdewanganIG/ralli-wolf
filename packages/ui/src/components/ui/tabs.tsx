@@ -10,12 +10,6 @@ type TabsContextValue = {
 
 const TabsContext = React.createContext<TabsContextValue | null>(null);
 
-/**
- * The tab state, or `null` outside a `<Tabs>`.
- *
- * Nullable so `CategorySwitcher` can tell "inside a Tabs, adopt its state" from
- * "standalone, use my own props" instead of silently binding to a dummy value.
- */
 export function useTabsOptional(): TabsContextValue | null {
   return React.useContext(TabsContext);
 }
@@ -36,10 +30,6 @@ type TabsProps = {
   className?: string;
 };
 
-/**
- * Holds which category is showing. Render the control with `CategorySwitcher`
- * and the panels with `TabsContents`/`TabsContent`.
- */
 function Tabs({
   defaultValue,
   value,

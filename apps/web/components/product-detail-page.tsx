@@ -1,7 +1,7 @@
 "use client";
 
-import { usePricebookEntries } from "@/hooks/usePricebookEntries";
-import { useProduct } from "@/hooks/useProducts";
+import { usePricebookEntries } from "@/hooks/use-pricebook-entries";
+import { useProduct } from "@/hooks/use-products";
 import { PriceBookEntry } from "@/lib/api/types";
 import { DetailCard, DetailPageHeader } from "@repo/ui";
 import { Badge } from "@repo/ui/components/ui/badge";
@@ -19,8 +19,8 @@ import {
   Tag,
 } from "@repo/ui/icons";
 import React from "react";
-import { AddPricebookEntryModal } from "./AddPricebookEntryModal";
-import { EditPricebookEntryModal } from "./EditPricebookEntryModal";
+import { AddPricebookEntryModal } from "./add-pricebook-entry-modal";
+import { EditPricebookEntryModal } from "./edit-pricebook-entry-modal";
 import { DataTable, TableColumn } from "./data-table";
 import {
   ActivityFeedSkeleton,
@@ -32,18 +32,22 @@ import {
 
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { formatMoney } from "@/lib/utils/decimal";
+import { useAuth } from "@/contexts/auth-context";
+import { roleHasPermission } from "@repo/db/permissions";
 
 interface ProductDetailPageProps {
   productId: number;
   onBack?: () => void;
-  onEdit?: () => void;
-  onDelete?: () => void;
 }
 
 export function ProductDetailPage({
   productId,
   onBack,
 }: ProductDetailPageProps) {
+  const { user } = useAuth();
+  const canManagePricebooks =
+    !!user &&
+    roleHasPermission(user.role || "", user.permissions, "pricebooks.manage");
   const {
     data: product,
     isLoading: productLoading,
@@ -51,7 +55,7 @@ export function ProductDetailPage({
   } = useProduct(productId);
 
   const { data: pricebookEntriesData, isLoading: pricebookEntriesLoading } =
-    usePricebookEntries({ productId });
+    usePricebookEntries({ productId }, { enabled: canManagePricebooks });
 
   const [showAddPriceBookEntryModal, setShowAddPriceBookEntryModal] =
     React.useState(false);
@@ -251,45 +255,51 @@ export function ProductDetailPage({
           )}
         </DetailCard>
 
-        <div className="bg-surface p-4 rounded-lg shadow-sm border">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold">Price Book Entries</h2>
-            <Button
-              variant="outline"
-              onClick={handleAddPriceBookEntry}
-              className="gap-2"
-            >
-              <Plus className="h-4 w-4" /> Add Price Book Entry
-            </Button>
+        {canManagePricebooks && (
+          <div className="bg-surface p-4 rounded-lg shadow-sm border">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold">Price Book Entries</h2>
+              <Button
+                variant="outline"
+                onClick={handleAddPriceBookEntry}
+                className="gap-2"
+              >
+                <Plus className="h-4 w-4" /> Add Price Book Entry
+              </Button>
+            </div>
+            {pricebookEntriesLoading ? (
+              <p>Loading price book entries...</p>
+            ) : (
+              <DataTable
+                data={pbeData}
+                columns={pricebookEntryColumns}
+                title="Price Book Entries"
+                count={pbeData.length}
+                getRowHref={item => `/sales/price-books/${item.priceBookId}`}
+              />
+            )}
           </div>
-          {pricebookEntriesLoading ? (
-            <p>Loading price book entries...</p>
-          ) : (
-            <DataTable
-              data={pbeData}
-              columns={pricebookEntryColumns}
-              title="Price Book Entries"
-              count={pbeData.length}
-              getRowHref={item => `/sales/price-books/${item.priceBookId}`}
-            />
-          )}
-        </div>
+        )}
       </div>
-      <AddPricebookEntryModal
-        open={showAddPriceBookEntryModal}
-        onOpenChange={setShowAddPriceBookEntryModal}
-        productId={productId}
-        pricebookEntries={pbeData}
-      />
-      <EditPricebookEntryModal
-        open={!!editingEntry}
-        onOpenChange={open => {
-          if (!open) {
-            setEditingEntry(null);
-          }
-        }}
-        entry={editingEntry}
-      />
+      {canManagePricebooks && (
+        <>
+          <AddPricebookEntryModal
+            open={showAddPriceBookEntryModal}
+            onOpenChange={setShowAddPriceBookEntryModal}
+            productId={productId}
+            pricebookEntries={pbeData}
+          />
+          <EditPricebookEntryModal
+            open={!!editingEntry}
+            onOpenChange={open => {
+              if (!open) {
+                setEditingEntry(null);
+              }
+            }}
+            entry={editingEntry}
+          />
+        </>
+      )}
     </div>
   );
 }

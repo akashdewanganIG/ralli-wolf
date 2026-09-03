@@ -7,7 +7,7 @@ import { Button } from "@repo/ui/components/ui/button";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { Tag } from "@repo/ui/components/ui/tag";
 
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   ErrorBanner,
   PageHeader,
@@ -15,10 +15,10 @@ import {
   SimpleTable,
   StatCard,
 } from "@/components/supply-chain/shared";
-import { usePlanningBoard, usePlanningMutations } from "@/hooks/useFinance";
-import type { PlanningBoardRow } from "@/lib/api/financeServices";
+import { usePlanningBoard, usePlanningMutations } from "@/hooks/use-finance";
+import type { PlanningBoardRow } from "@/lib/api/finance-services";
 import { formatDate, formatQuantity } from "@/lib/utils/decimal";
-import { DataTransfer } from "@/components/data-transfer/DataTransfer";
+import { DataTransfer } from "@/components/data-transfer/data-transfer";
 
 const OP_TONE: Record<string, "neutral" | "active" | "progress" | "pending"> = {
   PENDING: "neutral",
@@ -28,7 +28,6 @@ const OP_TONE: Record<string, "neutral" | "active" | "progress" | "pending"> = {
   CANCELLED: "neutral",
 };
 
-/** The routing for one order, laid out step by step. */
 function Operations({ order }: { order: PlanningBoardRow }) {
   if (order.operations.length === 0) {
     return (
@@ -70,7 +69,7 @@ function Operations({ order }: { order: PlanningBoardRow }) {
 
 export default function PlanningPage() {
   const { data, isLoading, error } = usePlanningBoard();
-  // No data is no data, whether it is still coming or never arrived.
+
   const unknown = isLoading || Boolean(error);
   const { scheduleOrder } = usePlanningMutations();
   const [open, setOpen] = React.useState<number | null>(null);
@@ -209,8 +208,6 @@ export default function PlanningPage() {
                       Schedule
                     </Button>
                   ) : row.bom ? (
-                    // Dead-end otherwise: the fix is always to put a routing on
-                    // the BOM, so send the planner straight there.
                     <Link
                       href={`/bom/${row.bom.id}?tab=routing`}
                       onClick={event => event.stopPropagation()}

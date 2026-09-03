@@ -1,32 +1,71 @@
 import { Request, Response } from "express";
 import { prisma } from "@repo/db";
+import { Prisma } from "@prisma/client";
 import {
   handleError,
   handleValidationError,
   handleNotFoundError,
-} from "../utils/errorHandler.js";
+} from "../utils/error-handler.js";
+import { parsePositiveInteger } from "../utils/validators.js";
+
+const ANALYTICS_EVENT_SELECT = {
+  id: true,
+  campaignId: true,
+  contactId: true,
+  leadId: true,
+  eventType: true,
+  eventData: true,
+  occurredAt: true,
+} satisfies Prisma.AnalyticsEventSelect;
+
+const MAX_EVENTS_PER_REQUEST = 200;
 
 export class AnalyticsController {
   async getAllEvents(req: Request, res: Response) {
     try {
       const { campaignId, contactId, leadId, eventType } = req.query;
 
-      const where: any = {};
-      if (campaignId) where.campaignId = parseInt(campaignId as string);
-      if (contactId) where.contactId = parseInt(contactId as string);
-      if (leadId) where.leadId = parseInt(leadId as string);
-      if (eventType) where.eventType = eventType;
+      const where: Prisma.AnalyticsEventWhereInput = {};
+      for (const [field, raw] of [
+        ["campaignId", campaignId],
+        ["contactId", contactId],
+        ["leadId", leadId],
+      ] as const) {
+        if (raw === undefined) continue;
+        const id = parsePositiveInteger(raw);
+        if (id === null) {
+          return handleValidationError(
+            res,
+            `Invalid ${field}`,
+            field,
+            "Get all analytics events"
+          );
+        }
+        where[field] = id;
+      }
+      if (eventType !== undefined) {
+        if (
+          typeof eventType !== "string" ||
+          !eventType.trim() ||
+          eventType.trim().length > 80
+        ) {
+          return handleValidationError(
+            res,
+            "eventType must be between 1 and 80 characters",
+            "eventType",
+            "Get all analytics events"
+          );
+        }
+        where.eventType = eventType.trim();
+      }
 
       const events = await prisma.analyticsEvent.findMany({
         where,
-        include: {
-          campaign: true,
-          contact: true,
-          lead: true,
-        },
+        select: ANALYTICS_EVENT_SELECT,
         orderBy: {
           occurredAt: "desc",
         },
+        take: MAX_EVENTS_PER_REQUEST,
       });
       res.json(events);
     } catch (error) {
@@ -34,33 +73,10 @@ export class AnalyticsController {
     }
   }
 
-  async createEvent(req: Request, res: Response) {
-    try {
-      const { campaignId, contactId, leadId, eventType, eventData } = req.body;
-      const event = await prisma.analyticsEvent.create({
-        data: {
-          campaignId,
-          contactId,
-          leadId,
-          eventType,
-          eventData: eventData || {},
-        },
-        include: {
-          campaign: true,
-          contact: true,
-          lead: true,
-        },
-      });
-      res.status(201).json(event);
-    } catch (error) {
-      handleError(error, res, "Create analytics event");
-    }
-  }
-
   async getEventById(req: Request, res: Response) {
     try {
-      const { id } = req.params;
-      if (!id) {
+      const id = parsePositiveInteger(req.params.id);
+      if (id === null) {
         return handleValidationError(
           res,
           "Event ID is required",
@@ -69,12 +85,8 @@ export class AnalyticsController {
         );
       }
       const event = await prisma.analyticsEvent.findUnique({
-        where: { id: parseInt(id) },
-        include: {
-          campaign: true,
-          contact: true,
-          lead: true,
-        },
+        where: { id },
+        select: ANALYTICS_EVENT_SELECT,
       });
 
       if (!event) {
@@ -89,8 +101,8 @@ export class AnalyticsController {
 
   async getEventsByCampaign(req: Request, res: Response) {
     try {
-      const { campaignId } = req.params;
-      if (!campaignId) {
+      const campaignId = parsePositiveInteger(req.params.campaignId);
+      if (campaignId === null) {
         return handleValidationError(
           res,
           "Campaign ID is required",
@@ -99,14 +111,12 @@ export class AnalyticsController {
         );
       }
       const events = await prisma.analyticsEvent.findMany({
-        where: { campaignId: parseInt(campaignId) },
-        include: {
-          contact: true,
-          lead: true,
-        },
+        where: { campaignId },
+        select: ANALYTICS_EVENT_SELECT,
         orderBy: {
           occurredAt: "desc",
         },
+        take: MAX_EVENTS_PER_REQUEST,
       });
       res.json(events);
     } catch (error) {
@@ -116,8 +126,8 @@ export class AnalyticsController {
 
   async getEventsByContact(req: Request, res: Response) {
     try {
-      const { contactId } = req.params;
-      if (!contactId) {
+      const contactId = parsePositiveInteger(req.params.contactId);
+      if (contactId === null) {
         return handleValidationError(
           res,
           "Contact ID is required",
@@ -126,14 +136,12 @@ export class AnalyticsController {
         );
       }
       const events = await prisma.analyticsEvent.findMany({
-        where: { contactId: parseInt(contactId) },
-        include: {
-          campaign: true,
-          lead: true,
-        },
+        where: { contactId },
+        select: ANALYTICS_EVENT_SELECT,
         orderBy: {
           occurredAt: "desc",
         },
+        take: MAX_EVENTS_PER_REQUEST,
       });
       res.json(events);
     } catch (error) {
@@ -143,8 +151,8 @@ export class AnalyticsController {
 
   async getEventsByLead(req: Request, res: Response) {
     try {
-      const { leadId } = req.params;
-      if (!leadId) {
+      const leadId = parsePositiveInteger(req.params.leadId);
+      if (leadId === null) {
         return handleValidationError(
           res,
           "Lead ID is required",
@@ -153,14 +161,12 @@ export class AnalyticsController {
         );
       }
       const events = await prisma.analyticsEvent.findMany({
-        where: { leadId: parseInt(leadId) },
-        include: {
-          campaign: true,
-          contact: true,
-        },
+        where: { leadId },
+        select: ANALYTICS_EVENT_SELECT,
         orderBy: {
           occurredAt: "desc",
         },
+        take: MAX_EVENTS_PER_REQUEST,
       });
       res.json(events);
     } catch (error) {

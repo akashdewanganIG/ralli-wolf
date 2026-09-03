@@ -30,7 +30,6 @@ export const LeadSearchInput: React.FC<LeadSearchInputProps> = React.memo(
     const inputRef = useRef<HTMLInputElement>(null);
     const isControlled = value !== undefined;
 
-    // Only sync local value with prop value if it's a controlled component
     useEffect(() => {
       if (isControlled) {
         setLocalValue(value);
@@ -86,7 +85,6 @@ export const LeadSearchInput: React.FC<LeadSearchInputProps> = React.memo(
           )}
         </div>
 
-        {/* Search result count */}
         {showResultCount && hasValue && resultCount !== undefined && (
           <div className="mt-1 text-xs text-muted-foreground">
             {isSearching

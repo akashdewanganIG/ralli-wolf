@@ -1,67 +1,61 @@
-import { assertRequiredEnvironment } from "./config/environment.js";
+import { assertRequiredEnvironment, serverPort } from "./config/environment.js";
 import { createApp } from "./app.js";
 import { setupRoutes } from "./routes/index.js";
 import { prisma } from "@repo/db";
-import { processScheduledWhatsappCampaigns } from "./jobs/whatsappScheduler.js";
-import { startInventorySchedulers } from "./jobs/inventoryScheduler.js";
-import { startFinanceSchedulers } from "./jobs/financeScheduler.js";
+import { startWhatsappScheduler } from "./jobs/whatsapp-scheduler.js";
+import { startInventorySchedulers } from "./jobs/inventory-scheduler.js";
+import { startFinanceSchedulers } from "./jobs/finance-scheduler.js";
+import { embeddedSchedulersEnabled } from "./jobs/scheduler-lease.js";
+import { logError, logInfo } from "./utils/logger.js";
 
-// Before anything binds a port or opens a connection: a service that cannot
-// sign a token or deliver a sign-in code should fail the deploy, not the user.
 assertRequiredEnvironment();
 
 const app = createApp();
-const PORT = process.env.PORT || 4000;
+const port = serverPort();
 
-// Setup all routes
 setupRoutes(app);
 
-// Start server
-app.listen(PORT, () => {
-  // Report the address the service is actually reachable at. Printing
-  // `localhost` on a deployed instance is misleading in the logs, so the
-  // public origin is used whenever it is configured.
-  const publicUrl = (
-    process.env.API_PUBLIC_URL?.trim() || `http://localhost:${PORT}`
-  ).replace(/\/+$/, "");
-  console.log(`🚀 API server listening on port ${PORT} (${publicUrl})`);
-  console.log(`📊 Health check: ${publicUrl}/health`);
-
-  // Lightweight in-process scheduler for WhatsApp campaigns.
-  // Runs once per minute; adjust interval via WHATSAPP_SCHEDULER_INTERVAL_MS if needed.
-  const intervalMs =
-    Number(process.env.WHATSAPP_SCHEDULER_INTERVAL_MS || "") || 60_000;
-
-  console.log(
-    `🕒 WhatsApp scheduler running every ${Math.round(
-      intervalMs / 1000
-    )}s (set WHATSAPP_SCHEDULER_INTERVAL_MS to change)`
-  );
-
-  const timer = setInterval(() => {
-    // Fire-and-forget; errors are logged inside the job.
-    void processScheduledWhatsappCampaigns();
-  }, intervalMs);
-
-  // Ensure the interval does not keep Node.js from exiting on shutdown.
-  timer.unref();
-
-  // Supply-chain schedulers: reorder alert sweep and reservation expiry.
-  startInventorySchedulers();
-
-  // Ledger sweep: one digest a day of everything past its due date.
-  startFinanceSchedulers();
+const server = app.listen(port, () => {
+  logInfo("api_server_started", { port });
+  if (embeddedSchedulersEnabled()) {
+    logInfo("embedded_schedulers_enabled");
+    startWhatsappScheduler();
+    startInventorySchedulers();
+    startFinanceSchedulers();
+  } else {
+    logInfo("embedded_schedulers_disabled");
+  }
+});
+server.on("error", error => {
+  logError("api_server_error", error, { port });
+  void prisma.$disconnect().finally(() => process.exit(1));
 });
 
-// Graceful shutdown
-process.on("SIGINT", async () => {
-  console.log("🛑 Shutting down server...");
-  await prisma.$disconnect();
-  process.exit(0);
-});
+let shuttingDown = false;
+async function shutdown(signal: "SIGINT" | "SIGTERM"): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  logInfo("api_server_shutdown_started", { signal });
+  const forceTimer = setTimeout(() => {
+    logError("api_server_shutdown_timeout", new Error("Shutdown timed out"), {
+      signal,
+    });
+    process.exit(1);
+  }, 10_000);
+  forceTimer.unref();
+  server.close(async error => {
+    clearTimeout(forceTimer);
+    try {
+      await prisma.$disconnect();
+    } finally {
+      if (error) {
+        logError("api_server_shutdown_failed", error, { signal });
+        process.exit(1);
+      }
+      process.exit(0);
+    }
+  });
+}
 
-process.on("SIGTERM", async () => {
-  console.log("🛑 Shutting down server...");
-  await prisma.$disconnect();
-  process.exit(0);
-});
+process.on("SIGINT", () => void shutdown("SIGINT"));
+process.on("SIGTERM", () => void shutdown("SIGTERM"));

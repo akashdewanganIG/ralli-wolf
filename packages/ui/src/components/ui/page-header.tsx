@@ -20,7 +20,7 @@ export function PageHeader({
   breadcrumb?: Array<{ label: string; href?: string }>;
   className?: string;
   titleClassName?: string;
-  /** Keeps the supporting text visible instead of folding it into a tooltip. */
+
   descriptionInline?: boolean;
 }) {
   const supportingText = description ?? subtitle;
@@ -60,13 +60,7 @@ export function PageHeader({
           >
             {title}
           </h1>
-          {/* The description lives behind the info icon rather than under the
-              title. It explains what a screen is, which matters once and is
-              noise on every later visit — and keeping it inline meant every
-              listing page opened with two rows of chrome before its toolbar.
 
-              `descriptionInline` is the escape hatch for the rare page whose
-              supporting text is an instruction rather than a description. */}
           {supportingText ? (
             descriptionInline ? null : (
               <InfoHint label={supportingText} />

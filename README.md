@@ -23,12 +23,12 @@ Modern, type-safe marketing CRM built with a monorepo architecture. Includes a N
 
 ## Documentation
 
-| Document | What it covers |
-|---|---|
-| [Architecture](./docs/ARCHITECTURE.md) | System design, request flow, and the data-model dependencies that decide what can be created before what — with diagrams |
-| [User flows & call-to-action reference](./docs/USER_FLOWS.md) | Every action button explained, and the order to work through the app in (start with the warehouse) |
-| [Supply chain modules](./docs/SUPPLY_CHAIN_MODULES.md) | Module reference and API endpoints |
-| [Local setup](./docs/LOCAL_SETUP.md) | Getting it running |
+| Document                                                      | What it covers                                                                                                           |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| [Architecture](./docs/architecture.md)                        | System design, request flow, and the data-model dependencies that decide what can be created before what — with diagrams |
+| [User flows & call-to-action reference](./docs/user-flows.md) | Every action button explained, and the order to work through the app in (start with the warehouse)                       |
+| [Supply chain modules](./docs/supply-chain-modules.md)        | Module reference and API endpoints                                                                                       |
+| [Local setup](./docs/local-setup.md)                          | Getting it running                                                                                                       |
 
 ## Repository Structure
 
@@ -44,7 +44,6 @@ custom-marketing-crm-suite/
       prisma/
         schema.prisma
         seed.ts
-      switch-db.ps1 | switch-db.sh
     ui/                   # Shared UI components
     eslint-config/        # Shared ESLint configs
     typescript-config/    # Shared TS configs
@@ -55,13 +54,12 @@ custom-marketing-crm-suite/
 
 ## Local Development
 
-> **📖 New to the project?** Check out the **[Complete Local Setup Guide](./docs/LOCAL_SETUP.md)** for detailed step-by-step instructions, environment variable configuration, and troubleshooting tips.
+> **📖 New to the project?** Check out the **[Complete Local Setup Guide](./docs/local-setup.md)** for detailed step-by-step instructions, environment variable configuration, and troubleshooting tips.
 
 Prerequisites:
 
-- Node 18+
+- Node 20.9+
 - Docker Desktop (for local PostgreSQL)
-- PowerShell (Windows) for `db:switch:*` scripts
 
 1. Install dependencies
 
@@ -73,11 +71,12 @@ npm install
 
 ```bash
 docker-compose up -d
-# Exposes Postgres on localhost:5433 with DB=innovun_crm, user=postgres, password=password
+
 ```
 
 3. Configure environment
-   Create a root `.env` with:
+   Copy `.env.example` to a root `.env`, generate independent security keys as
+   described in the [setup guide](./docs/local-setup.md), and configure:
 
 ```bash
 DATABASE_URL="postgresql://postgres:password@localhost:5433/innovun_crm?schema=public"
@@ -89,8 +88,11 @@ DIRECT_URL="postgresql://postgres:password@localhost:5433/innovun_crm?schema=pub
 ```bash
 npm run db:generate
 npm run db:deploy
-npm run db:seed
 ```
+
+Create the initial administrator with the one-time out-of-band bootstrap CLI;
+there is no HTTP bootstrap or developer-login backdoor. See the setup guide for
+the required confirmation and password policy.
 
 To add a complete, non-destructive demo workspace to the currently configured
 database, run:
@@ -113,22 +115,26 @@ the seed finishes.
 5. Run apps
 
 ```bash
-# Run all dev servers (un-cached, persistent)
+
 npm run dev
 
-# Or run individually
+
 cd apps/api && npm run dev         # http://localhost:4000
-cd apps/web && npm run dev         # http://localhost:3000
+cd apps/web && npm run dev         # http://localhost:3001
 ```
 
 Useful DB scripts (from repo root):
 
 ```bash
-npm run db:switch:local       # point db package to local .env
-npm run db:switch:production  # point db package to production .env
 npm run db:studio             # Prisma Studio
-npm run db:reset              # Reset database
+npm run db:reset              # Guarded destructive reset; skips demo seeding
 ```
+
+Destructive commands are disabled in production and require two invocation
+scoped confirmations: `ALLOW_DESTRUCTIVE_SEED=I_UNDERSTAND_THIS_DELETES_DATA`
+and `DESTRUCTIVE_DATABASE_CONFIRM=<host>:<port>/<database>`. The second value
+must exactly match the active `DIRECT_URL` or `DATABASE_URL`, preventing a
+stale generic opt-in from applying to a different database.
 
 Note: Prisma CLI now loads environment from the root `.env` via `dotenv-cli` wrapping in `@repo/db` scripts.
 
@@ -137,21 +143,21 @@ Note: Prisma CLI now loads environment from the root `.env` via `dotenv-cli` wra
 Use the root scripts to swap the active `.env`:
 
 ```bash
-# Use local Docker database
+
 npm run env:switch:local
 
-# Use production database (Supabase)
+
 npm run env:switch:production
 ```
 
 Create these files at the repo root (not committed):
 
 ```bash
-# .env.local
+
 DATABASE_URL="postgresql://postgres:password@localhost:5433/innovun_crm?schema=public"
 DIRECT_URL="postgresql://postgres:password@localhost:5433/innovun_crm?schema=public"
 
-# .env.production (Supabase example placeholders)
+
 DATABASE_URL="postgresql://USER:PASSWORD@db.<project-ref>.supabase.co:5432/postgres?sslmode=require&schema=public"
 DIRECT_URL="postgresql://USER:PASSWORD@db.<project-ref>.supabase.co:5432/postgres?sslmode=require&schema=public"
 ```
@@ -170,7 +176,7 @@ From repository root:
 
 From `apps/web`:
 
-- `npm run dev` (Next.js on port 3000)
+- `npm run dev` (Next.js on port 3001)
 - `npm run build`, `npm run start`, `npm run lint`, `npm run check-types`
 
 From `apps/api`:
@@ -200,7 +206,8 @@ DIRECT_URL="postgresql://postgres:password@localhost:5433/innovun_crm?schema=pub
 ```bash
 JWT_SECRET="your-super-secret-jwt-key-change-me-in-production"
 JWT_EXPIRES_IN="24h"
-ENCRYPTION_KEY="your-32-character-encryption-key-here"
+
+ENCRYPTION_KEY="base64:REPLACE_WITH_GENERATED_VALUE"
 ```
 
 **Server Configuration:**
@@ -213,7 +220,6 @@ NODE_ENV="development"
 **Frontend (Next.js):**
 
 ```bash
-NEXT_PUBLIC_COMPANY_NAME="InnoCRM"
 NEXT_PUBLIC_API_URL="http://localhost:4000"
 ```
 
@@ -228,12 +234,11 @@ AWS_REGION="ap-southeast-2"
 S3_BUCKET_NAME="your-bucket-name"
 ```
 
-See [docs/WHATSAPP_S3_SETUP.md](./docs/WHATSAPP_S3_SETUP.md) for detailed setup.
+See [docs/whatsapp-s3-setup.md](./docs/whatsapp-s3-setup.md) for detailed setup.
 
 **MSG91 (WhatsApp & SMS):**
 
 ```bash
-MSG91_BASE_URL="https://control.msg91.com/api/v5"
 MSG91_AUTH_KEY="your-msg91-auth-key"
 ```
 
@@ -247,12 +252,19 @@ RESEND_FROM_EMAIL="Ralli Wolf <no-reply@yourdomain.com>"
 RESEND_REPLY_TO=""   # optional
 ```
 
-**Developer Access:**
+**Initial administrator (one-time CLI):**
 
 ```bash
-DEVELOPER_LOGIN_EMAIL="developer@innovun.com"
-DEVELOPER_LOGIN_PASSWORD="admin123"
+ALLOW_ADMIN_BOOTSTRAP="CREATE_INITIAL_ADMIN"
+BOOTSTRAP_ADMIN_EMAIL="admin@your-domain.example"
+BOOTSTRAP_ADMIN_FIRST_NAME="Initial"
+BOOTSTRAP_ADMIN_LAST_NAME="Administrator"
+BOOTSTRAP_ADMIN_PASSWORD="<strong-unique-password>"
+npm run prisma:bootstrap-admin -w @repo/db
 ```
+
+Remove the confirmation and password after the command succeeds. It refuses to
+run once an active administrator exists.
 
 For a complete list of environment variables with descriptions, see [`.env.example`](./.env.example).
 
@@ -323,7 +335,7 @@ The API includes the following route modules (see [Postman Collection](./docs/po
 - **Dashboard**: `/api/dashboard` - Dashboard metrics and KPIs
 - **Exports**: `/api/exports` - Data export functionality
 
-**Supply Chain** (see [docs/SUPPLY_CHAIN_MODULES.md](./docs/SUPPLY_CHAIN_MODULES.md)):
+**Supply Chain** (see [docs/supply-chain-modules.md](./docs/supply-chain-modules.md)):
 
 - **Inventory**: `/api/inventory` - Real-time stock, lots, ledger, alerts, reorder policies, counts, valuation
 - **Materials**: `/api/materials` - Material master, BOM availability, shortages, consumption & wastage, requisitions
@@ -342,7 +354,7 @@ The API includes the following route modules (see [Postman Collection](./docs/po
 - **Webhooks**: `/api/webhooks` - Webhook endpoints for external services
 - **Aakraman**: `/api/aakraman` - Aakraman integration
 
-For detailed endpoint documentation, request/response schemas, and testing examples, refer to the [Postman collection](./docs/postman/crm-backend.postman_collection.json) and [API testing guide](./docs/postman/README.md).
+For detailed endpoint documentation, request/response schemas, and testing examples, refer to the [Postman collection](./docs/postman/crm-backend.postman-collection.json) and [API testing guide](./docs/postman/README.md).
 
 ## Troubleshooting
 
@@ -350,7 +362,7 @@ For detailed endpoint documentation, request/response schemas, and testing examp
 - Prisma errors: re-run `npm run db:generate` and `npm run db:deploy`
 - Type errors: run `npm run check-types` in root and per-app
 
-For more detailed troubleshooting, see [docs/LOCAL_SETUP.md](./docs/LOCAL_SETUP.md).
+For more detailed troubleshooting, see [docs/local-setup.md](./docs/local-setup.md).
 
 ## Documentation
 
@@ -358,14 +370,14 @@ This project includes comprehensive documentation for various aspects:
 
 ### Setup & Configuration
 
-- **[Local Setup Guide](./docs/LOCAL_SETUP.md)** - Complete guide for setting up the project locally
-- **[Supply Chain Modules](./docs/SUPPLY_CHAIN_MODULES.md)** - Inventory, Material, Warehouse, BOM and Purchasing: setup, design decisions, API reference
-- **[WhatsApp S3 Setup](./docs/WHATSAPP_S3_SETUP.md)** - Setting up S3 for WhatsApp campaigns
+- **[Local Setup Guide](./docs/local-setup.md)** - Complete guide for setting up the project locally
+- **[Supply Chain Modules](./docs/supply-chain-modules.md)** - Inventory, Material, Warehouse, BOM and Purchasing: setup, design decisions, API reference
+- **[WhatsApp S3 Setup](./docs/whatsapp-s3-setup.md)** - Setting up S3 for WhatsApp campaigns
 - **[API Documentation](./docs/postman/)** - Postman collection and API testing guide
 
 ### Future Plans
 
-- **[Future Scope](./docs/FUTURE_SCOPE.md)** - Planned features and roadmap
+- **[Future Scope](./docs/future-scope.md)** - Planned features and roadmap
 
 ## License
 

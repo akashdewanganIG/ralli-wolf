@@ -1,4 +1,4 @@
--- CreateTable
+
 CREATE TABLE "password_resets" (
     "id" SERIAL NOT NULL,
     "user_id" INTEGER NOT NULL,
@@ -12,5 +12,5 @@ CREATE TABLE "password_resets" (
     CONSTRAINT "password_resets_pkey" PRIMARY KEY ("id")
 );
 
--- AddForeignKey
+
 ALTER TABLE "password_resets" ADD CONSTRAINT "password_resets_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;

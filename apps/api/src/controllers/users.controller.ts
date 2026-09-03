@@ -1,10 +1,10 @@
 import { Request, Response } from "express";
 import { prisma } from "@repo/db";
-import { UserRole, Region } from "@prisma/client";
+import { Prisma, UserRole, Region } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import ExcelJS from "exceljs";
 import { parse } from "csv-parse/sync";
-import { generateUserPassword } from "../utils/password.utils.js";
+import { generateAccountPlaceholder } from "../utils/password.utils.js";
 import { emailService } from "../services/email.service.js";
 import {
   handleError,
@@ -12,106 +12,157 @@ import {
   handleNotFoundError,
   handleConflictError,
   validateRequiredFields,
-} from "../utils/errorHandler.js";
+} from "../utils/error-handler.js";
 import {
   isValidEmail,
   isValidPhone,
   isValidName,
+  parseBoundedInteger,
+  parsePositiveInteger,
 } from "../utils/validators.js";
-import { parsePhoneNumber } from "../utils/phoneHelper.js";
+import { parsePhoneNumber } from "../utils/phone-helper.js";
 import { createNotification } from "./notification.controller.js";
 import { NotificationType } from "@prisma/client";
 import { recordAuditLog } from "../utils/audit.utils.js";
 import { isPermission } from "@repo/db/permissions";
+import { logError } from "../utils/logger.js";
 
-// Valid regions for import
 const VALID_REGIONS = ["SOUTH", "NORTH", "EAST", "WEST_1", "WEST_2", "APTOC"];
 const VALID_ROLES = ["ADMIN", "SALES"];
-/** Roles an admin may assign through the API. */
+
 const ASSIGNABLE_ROLES: UserRole[] = [
   UserRole.ADMIN,
   UserRole.SALES,
   UserRole.CUSTOM,
 ];
 const DEFAULT_REGION = "SOUTH";
+const MAX_IMPORT_ROWS = 1_000;
 
-// Every dashboard account needs a usable sign-in path, whatever its role.
-const shouldSendCredentialEmail = (_role: UserRole) => true;
+interface UploadedImportFile {
+  buffer: Buffer;
+  mimetype: string;
+  originalname: string;
+}
+
+interface ImportedUserResult {
+  row: number;
+  email: string;
+  firstName: string;
+  lastName: string;
+  invitationEmailSent: boolean;
+}
+
+interface ImportedUserInput {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  role?: string;
+  region?: string;
+  location?: string;
+}
+
+const isImportedUserInput = (value: unknown): value is ImportedUserInput => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const row = value as Record<string, unknown>;
+  return (
+    typeof row.firstName === "string" &&
+    typeof row.lastName === "string" &&
+    typeof row.email === "string" &&
+    ["phone", "role", "region", "location"].every(
+      field => row[field] === undefined || typeof row[field] === "string"
+    )
+  );
+};
+
+const importFailureMessage = (error: unknown): string =>
+  error instanceof Prisma.PrismaClientKnownRequestError &&
+  error.code === "P2002"
+    ? "User with this email already exists"
+    : "User could not be created";
+
+const shouldSendInvitationEmail = (_role: UserRole) => true;
+
+function withoutAuthenticationSecrets<
+  T extends {
+    passwordHash: string;
+    sessionVersion: number;
+    passwordEnabled: boolean;
+    totpSecret: string | null;
+    totpVerifiedAt: Date | null;
+    emailOtpVerifiedAt: Date | null;
+  },
+>(user: T) {
+  const {
+    passwordHash: _passwordHash,
+    sessionVersion: _sessionVersion,
+    passwordEnabled: _passwordEnabled,
+    totpSecret: _totpSecret,
+    totpVerifiedAt: _totpVerifiedAt,
+    emailOtpVerifiedAt: _emailOtpVerifiedAt,
+    ...safeUser
+  } = user;
+  return safeUser;
+}
 
 export class UserController {
   async getAllUsers(req: Request, res: Response) {
     try {
-      // Extract and validate pagination parameters
-      const pageParam = req.query.page as string;
-      const limitParam = req.query.limit as string;
-
-      // Validate page parameter
-      const page = Math.max(1, parseInt(pageParam) || 1);
-
-      // Validate limit parameter with custom support
-      const requestedLimit = parseInt(limitParam);
+      const page =
+        req.query.page === undefined
+          ? 1
+          : parseBoundedInteger(req.query.page, 1, 1_000_000);
       const limit =
-        requestedLimit >= 1 && requestedLimit <= 100 ? requestedLimit : 10;
+        req.query.limit === undefined
+          ? 10
+          : parseBoundedInteger(req.query.limit, 1, 100);
+      if (page === null || limit === null) {
+        return handleValidationError(
+          res,
+          "Page must be a positive integer and limit must be between 1 and 100",
+          "pagination",
+          "Get all users"
+        );
+      }
 
-      // Calculate pagination offset
       const skip = (page - 1) * limit;
 
       const { role, region } = req.query;
-      const developerEmail =
-        process.env.DEVELOPER_LOGIN_EMAIL?.trim() || undefined;
-      const developerName =
-        process.env.DEVELOPER_LOGIN_NAME?.trim() || "Developer Access";
 
-      // Build where clause based on query params
-      const whereClause: any = {
-        deletedAt: null, // Exclude soft-deleted users
+      const whereClause: Prisma.UserWhereInput = {
+        deletedAt: null,
       };
       if (role) {
+        if (
+          typeof role !== "string" ||
+          !Object.values(UserRole).includes(role as UserRole)
+        ) {
+          return handleValidationError(
+            res,
+            "Invalid user role",
+            "role",
+            "Get all users"
+          );
+        }
         whereClause.role = role as UserRole;
       }
       if (region) {
+        if (
+          typeof region !== "string" ||
+          !Object.values(Region).includes(region as Region)
+        ) {
+          return handleValidationError(
+            res,
+            "Invalid region",
+            "region",
+            "Get all users"
+          );
+        }
         whereClause.region = region as Region;
       }
-      // Hide only the configured developer account. Company-domain users are
-      // legitimate managed accounts and must remain visible after creation.
-      const andFilters: any[] = [];
 
-      if (developerEmail) {
-        andFilters.push({
-          NOT: [
-            {
-              email: {
-                equals: developerEmail,
-                mode: "insensitive",
-              },
-            },
-            {
-              AND: [
-                { role: UserRole.ADMIN },
-                { firstName: { equals: developerName, mode: "insensitive" } },
-              ],
-            },
-          ],
-        } as any);
-      } else {
-        // If email is not configured, still attempt to hide the conventional developer account by name + role
-        andFilters.push({
-          NOT: {
-            AND: [
-              { role: UserRole.ADMIN },
-              { firstName: { equals: developerName, mode: "insensitive" } },
-            ],
-          },
-        } as any);
-      }
-      if (andFilters.length > 0) {
-        whereClause.AND = andFilters;
-      }
-
-      // Execute count query with filters
       const totalItems = await prisma.user.count({ where: whereClause });
 
-      // Execute paginated query with filters
       const users = await prisma.user.findMany({
         where: whereClause,
         skip,
@@ -133,12 +184,10 @@ export class UserController {
         },
       });
 
-      // Calculate pagination metadata
       const totalPages = Math.ceil(totalItems / limit);
       const hasNextPage = page < totalPages;
       const hasPreviousPage = page > 1;
 
-      // Return standardized pagination response
       res.json({
         data: users,
         pagination: {
@@ -160,7 +209,6 @@ export class UserController {
       const { firstName, lastName, email, phone, role, region, location } =
         req.body;
 
-      // Validate required fields (region is optional for all users)
       const requiredFields = ["firstName", "lastName", "email", "role"];
       if (
         !validateRequiredFields(req.body, requiredFields, res, "Create user")
@@ -168,10 +216,8 @@ export class UserController {
         return;
       }
 
-      // Normalize email: trim whitespace and convert to lowercase for consistent storage
       const normalizedEmail = email.trim().toLowerCase();
 
-      // Validate firstName
       if (!isValidName(firstName)) {
         return handleValidationError(
           res,
@@ -181,7 +227,6 @@ export class UserController {
         );
       }
 
-      // Validate lastName
       if (!isValidName(lastName)) {
         return handleValidationError(
           res,
@@ -191,17 +236,15 @@ export class UserController {
         );
       }
 
-      // Validate email format (use original email for validation message)
       if (!isValidEmail(normalizedEmail)) {
         return handleValidationError(
           res,
-          "Invalid email format. Email must be a valid address ending with .com, .co, .in, .org, .net, .edu, .gov, .io, or .info",
+          "Invalid email address",
           "email",
           "Create user"
         );
       }
 
-      // Validate phone if provided
       if (phone && !isValidPhone(phone)) {
         return handleValidationError(
           res,
@@ -211,7 +254,6 @@ export class UserController {
         );
       }
 
-      // Validate region (optional for all users)
       if (region) {
         const validRegions = [
           Region.SOUTH,
@@ -231,10 +273,6 @@ export class UserController {
         }
       }
 
-      // Validate the role and its permission list. ADMIN and SALES resolve
-      // their permissions from the catalogue; only CUSTOM stores its own.
-      // (The old "only one System Admin" rule is gone with that tier: ADMIN is
-      // now an ordinary role that any number of accounts can hold.)
       if (!ASSIGNABLE_ROLES.includes(role)) {
         return handleValidationError(
           res,
@@ -261,7 +299,6 @@ export class UserController {
         );
       }
 
-      // Check if user with this email already exists (use normalized email)
       const existingUser = await prisma.user.findUnique({
         where: { email: normalizedEmail, deletedAt: null },
       });
@@ -274,16 +311,13 @@ export class UserController {
         );
       }
 
-      // Generate random password
-      const generatedPassword = generateUserPassword();
-      const passwordHash = await bcrypt.hash(generatedPassword, 10);
+      const accountPlaceholder = generateAccountPlaceholder();
+      const passwordHash = await bcrypt.hash(accountPlaceholder, 12);
 
-      // Parse phone number to extract country code
       const parsedPhone = phone ? parsePhoneNumber(phone) : null;
       const countryCode = parsedPhone?.countryCode || "91";
       const localPhone = parsedPhone?.localNumber || phone;
 
-      // Normalize location: trim, remove extra spaces, and capitalize each word
       const normalizedLocation = location
         ? location
             .trim()
@@ -296,7 +330,6 @@ export class UserController {
             .join(" ")
         : null;
 
-      // Create user (store normalized email)
       const user = await prisma.user.create({
         data: {
           firstName,
@@ -305,8 +338,7 @@ export class UserController {
           phone: localPhone,
           countryCode,
           passwordHash,
-          // The generated password goes out by email in plaintext, so it is
-          // good for exactly one sign-in and must then be replaced.
+
           mustChangePassword: true,
           role,
           permissions: customPermissions,
@@ -328,54 +360,40 @@ export class UserController {
         },
       });
 
-      const sendCredentialEmail = shouldSendCredentialEmail(role as UserRole);
+      const sendInvitationEmail = shouldSendInvitationEmail(role as UserRole);
 
-      let credentialEmailSent = false;
+      let invitationEmailSent = false;
 
-      // Every dashboard user needs a usable sign-in path, including Sales.
-      // Await delivery so the client never claims an email was sent when the
-      // provider rejected it. The account itself remains created either way.
-      if (sendCredentialEmail) {
+      if (sendInvitationEmail) {
         const fullName = [firstName, lastName].filter(Boolean).join(" ");
         try {
-          credentialEmailSent = await emailService.sendUserCreationEmail({
+          invitationEmailSent = await emailService.sendUserInvitationEmail({
             name: fullName,
             email: normalizedEmail,
-            password: generatedPassword,
             role,
           });
-        } catch (error) {
-          console.error("Failed to send user creation email:", error);
+        } catch {
+          invitationEmailSent = false;
         }
       }
 
-      // Return user data (without password hash)
       res.status(201).json({
         ...user,
-        credentialEmailSent,
-        message: credentialEmailSent
-          ? "User created successfully. Login credentials were sent by email."
-          : "User created successfully, but the credential email could not be delivered. They can still use Email code on the login page.",
+        invitationEmailSent,
+        message: invitationEmailSent
+          ? "User created successfully. A password-setup invitation was sent by email."
+          : "User created successfully, but the invitation email could not be delivered. They can use Forgot password to establish access.",
       });
     } catch (error) {
       handleError(error, res, "Create user");
     }
   }
 
-  /**
-   * Re-issue an account's sign-in credentials and email them.
-   * POST /api/users/:id/resend-credentials
-   *
-   * The stored password is a bcrypt hash, so the original cannot be recovered
-   * and re-sent. This mints a fresh one instead, which also makes the action
-   * safe to use when the first email went to the wrong place: whatever was in
-   * that message stops working the moment this succeeds.
-   */
   async resendCredentials(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const userId = Number(id);
-      if (!id || Number.isNaN(userId)) {
+      const userId = parsePositiveInteger(id);
+      if (userId === null) {
         return handleValidationError(
           res,
           "User ID must be a valid number",
@@ -389,18 +407,15 @@ export class UserController {
         return handleNotFoundError(res, "User", "Resend credentials");
       }
 
-      const generatedPassword = generateUserPassword();
-      const passwordHash = await bcrypt.hash(generatedPassword, 10);
+      const accountPlaceholder = generateAccountPlaceholder();
+      const passwordHash = await bcrypt.hash(accountPlaceholder, 12);
 
       const fullName =
         [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email;
 
-      // Send first, then persist. If the provider rejects the message the old
-      // password keeps working, which beats silently locking the user out.
-      const emailSent = await emailService.sendUserCreationEmail({
+      const emailSent = await emailService.sendUserInvitationEmail({
         name: fullName,
         email: user.email,
-        password: generatedPassword,
         role: user.role,
       });
 
@@ -416,7 +431,11 @@ export class UserController {
 
       await prisma.user.update({
         where: { id: userId },
-        data: { passwordHash, mustChangePassword: true },
+        data: {
+          passwordHash,
+          mustChangePassword: true,
+          sessionVersion: { increment: 1 },
+        },
       });
 
       await recordAuditLog({
@@ -431,7 +450,7 @@ export class UserController {
       res.json({
         success: true,
         email: user.email,
-        message: `New sign-in credentials were sent to ${user.email}.`,
+        message: `A password-setup invitation was sent to ${user.email}.`,
       });
     } catch (error) {
       handleError(error, res, "Resend credentials");
@@ -451,8 +470,8 @@ export class UserController {
         );
       }
 
-      const userId = parseInt(id);
-      if (isNaN(userId)) {
+      const userId = parsePositiveInteger(id);
+      if (userId === null) {
         return handleValidationError(
           res,
           "User ID must be a valid number",
@@ -473,10 +492,7 @@ export class UserController {
         return handleNotFoundError(res, "User", "Get user by ID");
       }
 
-      // `include` returns every scalar, which would put the bcrypt hash on the
-      // wire. Nothing needs it, so drop it before responding.
-      const { passwordHash: _passwordHash, ...safeUser } = user;
-      res.json(safeUser);
+      res.json(withoutAuthenticationSecrets(user));
     } catch (error) {
       handleError(error, res, "Get user by ID");
     }
@@ -495,8 +511,8 @@ export class UserController {
         );
       }
 
-      const userId = parseInt(id);
-      if (isNaN(userId)) {
+      const userId = parsePositiveInteger(id);
+      if (userId === null) {
         return handleValidationError(
           res,
           "User ID must be a valid number",
@@ -505,10 +521,28 @@ export class UserController {
         );
       }
 
-      const updateData = { ...req.body };
+      const {
+        firstName,
+        lastName,
+        email,
+        phone,
+        role,
+        region,
+        location,
+        permissions,
+      } = req.body ?? {};
+      const updateData = {
+        ...(firstName !== undefined ? { firstName } : {}),
+        ...(lastName !== undefined ? { lastName } : {}),
+        ...(email !== undefined ? { email } : {}),
+        ...(phone !== undefined ? { phone } : {}),
+        ...(role !== undefined ? { role } : {}),
+        ...(region !== undefined ? { region } : {}),
+        ...(location !== undefined ? { location } : {}),
+        ...(permissions !== undefined ? { permissions } : {}),
+        countryCode: undefined as string | undefined,
+      };
 
-      // Role and permissions are editable: a person's responsibilities change,
-      // and re-creating the account to reflect that would lose their history.
       if (updateData.role !== undefined) {
         if (!ASSIGNABLE_ROLES.includes(updateData.role)) {
           return handleValidationError(
@@ -533,12 +567,9 @@ export class UserController {
           }
           updateData.permissions = selected;
         } else {
-          // ADMIN and SALES resolve from the catalogue, so a stale stored list
-          // would be dead weight that reappears if the role flips back.
           updateData.permissions = [];
         }
       } else if (updateData.permissions !== undefined) {
-        // Permissions sent without a role only make sense for a CUSTOM account.
         const target = await prisma.user.findUnique({
           where: { id: userId },
           select: { role: true },
@@ -552,7 +583,6 @@ export class UserController {
         }
       }
 
-      // Validate firstName if being updated
       if (
         updateData.firstName !== undefined &&
         !isValidName(updateData.firstName)
@@ -565,7 +595,6 @@ export class UserController {
         );
       }
 
-      // Validate lastName if being updated
       if (
         updateData.lastName !== undefined &&
         !isValidName(updateData.lastName)
@@ -578,17 +607,18 @@ export class UserController {
         );
       }
 
-      // Validate email format if email is being updated
       if (updateData.email !== undefined && !isValidEmail(updateData.email)) {
         return handleValidationError(
           res,
-          "Invalid email format. Email must be a valid address ending with .com, .co, .in, .org, .net, .edu, .gov, .io, or .info",
+          "Invalid email address",
           "email",
           "Update user"
         );
       }
+      if (updateData.email !== undefined) {
+        updateData.email = updateData.email.trim().toLowerCase();
+      }
 
-      // Validate phone if being updated
       if (
         updateData.phone !== undefined &&
         updateData.phone &&
@@ -602,7 +632,6 @@ export class UserController {
         );
       }
 
-      // Validate region if being updated (convert empty string to null for optional region)
       if (updateData.region !== undefined) {
         if (updateData.region === "" || updateData.region === null) {
           updateData.region = null;
@@ -626,17 +655,30 @@ export class UserController {
         }
       }
 
-      // Parse phone number to extract country code if phone is being updated
       if (updateData.phone) {
         const parsedPhone = parsePhoneNumber(updateData.phone);
         if (parsedPhone) {
           updateData.phone = parsedPhone.localNumber;
           updateData.countryCode = parsedPhone.countryCode;
         }
+      } else if (updateData.phone === "") {
+        updateData.phone = null;
       }
 
-      // Read the role before writing, so the notice below fires on an actual
-      // change rather than on every save that happens to include a role.
+      if (
+        updateData.location !== undefined &&
+        updateData.location !== null &&
+        (typeof updateData.location !== "string" ||
+          updateData.location.length > 255)
+      ) {
+        return handleValidationError(
+          res,
+          "Location must be text with at most 255 characters",
+          "location",
+          "Update user"
+        );
+      }
+
       const before = await prisma.user.findUnique({
         where: { id: userId },
         select: { role: true },
@@ -654,12 +696,12 @@ export class UserController {
           title: `Your role is now ${user.role}`,
           message: `An administrator changed your role from ${before.role} to ${user.role}. What you can reach in Ralli Wolf has changed accordingly.`,
         }).catch(error =>
-          console.error("[Users] Role change notice failed:", error)
+          logError("user_role_change_notification_failed", error)
         );
       }
 
-      res.json(user);
-    } catch (error: any) {
+      res.json(withoutAuthenticationSecrets(user));
+    } catch (error) {
       handleError(error, res, "Update user");
     }
   }
@@ -677,8 +719,8 @@ export class UserController {
         );
       }
 
-      const userId = parseInt(id);
-      if (isNaN(userId)) {
+      const userId = parsePositiveInteger(id);
+      if (userId === null) {
         return handleValidationError(
           res,
           "User ID must be a valid number",
@@ -687,18 +729,15 @@ export class UserController {
         );
       }
 
-      // Soft delete: set deletedAt and deletedBy
       await prisma.user.update({
         where: { id: userId },
         data: {
           deletedAt: new Date(),
           deletedBy: req.user?.id,
+          sessionVersion: { increment: 1 },
         },
       });
 
-      // Sent after the write, so it only ever describes an account that really
-      // was switched off. Without it the person simply stops being able to
-      // sign in, with nothing telling them why.
       void createNotification({
         userId,
         type: NotificationType.ACCOUNT_DEACTIVATED,
@@ -706,32 +745,21 @@ export class UserController {
         message:
           "An administrator has deactivated your account, so you will no longer be able to sign in. If you believe this is a mistake, contact them.",
       }).catch(error =>
-        console.error("[Users] Deactivation notice failed:", error)
+        logError("user_deactivation_notification_failed", error)
       );
 
       res.status(204).send();
-    } catch (error: any) {
+    } catch (error) {
       handleError(error, res, "Delete user");
     }
   }
 
-  /**
-   * Import users from CSV/Excel data
-   * POST /api/users/import
-   */
   async importUsers(req: Request, res: Response) {
     try {
-      const { users: usersData } = req.body as {
-        users: Array<{
-          firstName: string;
-          lastName: string;
-          phone: string;
-          email: string;
-          role: string;
-          region?: string;
-          location?: string;
-        }>;
-      };
+      const usersData =
+        req.body && typeof req.body === "object"
+          ? (req.body as Record<string, unknown>).users
+          : undefined;
 
       if (!usersData || !Array.isArray(usersData) || usersData.length === 0) {
         return handleValidationError(
@@ -741,9 +769,17 @@ export class UserController {
           "Import users"
         );
       }
+      if (usersData.length > MAX_IMPORT_ROWS) {
+        return handleValidationError(
+          res,
+          `A single import cannot exceed ${MAX_IMPORT_ROWS} users`,
+          "users",
+          "Import users"
+        );
+      }
 
       const results = {
-        success: [] as any[],
+        success: [] as ImportedUserResult[],
         errors: [] as { row: number; email: string; error: string }[],
       };
 
@@ -751,7 +787,7 @@ export class UserController {
         const userData = usersData[i];
         const rowNum = i + 1;
 
-        if (!userData) {
+        if (!isImportedUserInput(userData)) {
           results.errors.push({
             row: rowNum,
             email: "N/A",
@@ -761,7 +797,6 @@ export class UserController {
         }
 
         try {
-          // Validate required fields
           if (!userData.firstName || !userData.lastName || !userData.email) {
             results.errors.push({
               row: rowNum,
@@ -770,8 +805,18 @@ export class UserController {
             });
             continue;
           }
+          if (
+            !isValidName(userData.firstName) ||
+            !isValidName(userData.lastName)
+          ) {
+            results.errors.push({
+              row: rowNum,
+              email: userData.email || "N/A",
+              error: "First and last names cannot exceed 255 characters",
+            });
+            continue;
+          }
 
-          // Validate email
           const normalizedEmail = userData.email.trim().toLowerCase();
           if (!isValidEmail(normalizedEmail)) {
             results.errors.push({
@@ -782,7 +827,6 @@ export class UserController {
             continue;
           }
 
-          // Check if user already exists
           const existingUser = await prisma.user.findUnique({
             where: { email: normalizedEmail },
           });
@@ -796,7 +840,6 @@ export class UserController {
             continue;
           }
 
-          // Validate phone if provided
           if (userData.phone && !isValidPhone(userData.phone)) {
             results.errors.push({
               row: rowNum,
@@ -806,7 +849,6 @@ export class UserController {
             continue;
           }
 
-          // Validate and normalize role
           const role = (userData.role?.toUpperCase() || "SALES") as UserRole;
           if (!VALID_ROLES.includes(role)) {
             results.errors.push({
@@ -817,7 +859,6 @@ export class UserController {
             continue;
           }
 
-          // Validate and normalize region
           let region: Region | null = null;
           if (userData.region) {
             const normalizedRegion = userData.region
@@ -826,24 +867,26 @@ export class UserController {
             if (VALID_REGIONS.includes(normalizedRegion)) {
               region = normalizedRegion as Region;
             } else {
-              region = DEFAULT_REGION as Region;
+              results.errors.push({
+                row: rowNum,
+                email: userData.email,
+                error: `Invalid region. Must be one of: ${VALID_REGIONS.join(", ")}`,
+              });
+              continue;
             }
           } else {
             region = DEFAULT_REGION as Region;
           }
 
-          // Generate password
-          const generatedPassword = generateUserPassword();
-          const passwordHash = await bcrypt.hash(generatedPassword, 10);
+          const accountPlaceholder = generateAccountPlaceholder();
+          const passwordHash = await bcrypt.hash(accountPlaceholder, 12);
 
-          // Parse phone
           const parsedPhone = userData.phone
             ? parsePhoneNumber(userData.phone)
             : null;
           const countryCode = parsedPhone?.countryCode || "91";
           const localPhone = parsedPhone?.localNumber || userData.phone;
 
-          // Normalize location
           const normalizedLocation = userData.location
             ? userData.location
                 .trim()
@@ -855,8 +898,15 @@ export class UserController {
                 )
                 .join(" ")
             : null;
+          if (normalizedLocation && normalizedLocation.length > 255) {
+            results.errors.push({
+              row: rowNum,
+              email: userData.email,
+              error: "Location cannot exceed 255 characters",
+            });
+            continue;
+          }
 
-          // Create user
           await prisma.user.create({
             data: {
               firstName: userData.firstName.trim(),
@@ -865,29 +915,26 @@ export class UserController {
               phone: localPhone || null,
               countryCode,
               passwordHash,
+              mustChangePassword: true,
               role,
               region,
               location: normalizedLocation,
             },
           });
 
-          // Send welcome email (async)
-          if (shouldSendCredentialEmail(role)) {
+          let invitationEmailSent = false;
+          if (shouldSendInvitationEmail(role)) {
             const fullName =
               `${userData.firstName} ${userData.lastName}`.trim();
-            emailService
-              .sendUserCreationEmail({
+            try {
+              invitationEmailSent = await emailService.sendUserInvitationEmail({
                 name: fullName,
                 email: normalizedEmail,
-                password: generatedPassword,
                 role,
-              })
-              .catch(error => {
-                console.error(
-                  `Failed to send email to ${normalizedEmail}:`,
-                  error
-                );
               });
+            } catch (error) {
+              logError("user_import_invitation_failed", error, { row: rowNum });
+            }
           }
 
           results.success.push({
@@ -895,12 +942,14 @@ export class UserController {
             email: normalizedEmail,
             firstName: userData.firstName,
             lastName: userData.lastName,
+            invitationEmailSent,
           });
-        } catch (error: any) {
+        } catch (error) {
+          logError("user_import_row_failed", error, { row: rowNum });
           results.errors.push({
             row: rowNum,
             email: userData.email || "N/A",
-            error: error.message || "Unknown error",
+            error: importFailureMessage(error),
           });
         }
       }
@@ -915,10 +964,6 @@ export class UserController {
     }
   }
 
-  /**
-   * Get import template info
-   * GET /api/users/import/template
-   */
   async getImportTemplate(req: Request, res: Response) {
     res.json({
       columns: [
@@ -952,16 +997,11 @@ export class UserController {
     });
   }
 
-  /**
-   * Download Excel template with data validation (picklists for role and region)
-   * GET /api/users/import/template/download
-   */
   async downloadTemplate(req: Request, res: Response) {
     try {
       const workbook = new ExcelJS.Workbook();
       const sheet = workbook.addWorksheet("Users");
 
-      // Define columns
       sheet.columns = [
         { header: "First Name", key: "firstName", width: 20 },
         { header: "Last Name", key: "lastName", width: 20 },
@@ -972,7 +1012,6 @@ export class UserController {
         { header: "Location", key: "location", width: 20 },
       ];
 
-      // Style header row
       const headerRow = sheet.getRow(1);
       headerRow.font = { bold: true };
       headerRow.fill = {
@@ -981,7 +1020,6 @@ export class UserController {
         fgColor: { argb: "FFE0E0E0" },
       };
 
-      // Add data validation (picklists) for Role column (E2:E1000)
       const roleValidation: ExcelJS.DataValidation = {
         type: "list",
         allowBlank: true,
@@ -991,7 +1029,6 @@ export class UserController {
         error: `Role must be one of: ${VALID_ROLES.join(", ")}`,
       };
 
-      // Add data validation for Region column (F2:F1000)
       const regionValidation: ExcelJS.DataValidation = {
         type: "list",
         allowBlank: true,
@@ -1001,13 +1038,11 @@ export class UserController {
         error: `Region must be one of: ${VALID_REGIONS.join(", ")}`,
       };
 
-      // Apply validation to rows 2-1000
       for (let row = 2; row <= 1000; row++) {
         sheet.getCell(`E${row}`).dataValidation = roleValidation;
         sheet.getCell(`F${row}`).dataValidation = regionValidation;
       }
 
-      // Add example row
       sheet.addRow({
         firstName: "John",
         lastName: "Doe",
@@ -1018,7 +1053,6 @@ export class UserController {
         location: "Mumbai",
       });
 
-      // Add instructions sheet
       const instructionsSheet = workbook.addWorksheet("Instructions");
       instructionsSheet.columns = [
         { header: "Instructions", key: "instruction", width: 80 },
@@ -1052,7 +1086,7 @@ export class UserController {
         },
         {
           instruction:
-            "  - A random password will be generated and emailed to each user",
+            "  - Each user receives an invitation to set a private password",
         },
       ]);
 
@@ -1071,10 +1105,6 @@ export class UserController {
     }
   }
 
-  /**
-   * Download CSV template
-   * GET /api/users/import/template/download/csv
-   */
   async downloadTemplateCsv(req: Request, res: Response) {
     try {
       const headers = [
@@ -1116,52 +1146,53 @@ export class UserController {
         "Content-Disposition",
         'attachment; filename="users-import-template.csv"'
       );
-      res.send("\uFEFF" + csvContent); // BOM for Excel compatibility
+      res.send("\uFEFF" + csvContent);
     } catch (error) {
       handleError(error, res, "Download CSV template");
     }
   }
 
-  /**
-   * Detect file type from uploaded file
-   */
-  private detectFileType(file: any): "xlsx" | "csv" {
-    const filename = file.originalname || "";
-    const mimetype = file.mimetype || "";
-
-    if (filename.toLowerCase().endsWith(".csv")) return "csv";
-    if (filename.toLowerCase().endsWith(".xlsx")) return "xlsx";
-    if (mimetype === "text/csv" || mimetype === "application/csv") return "csv";
-    if (
-      mimetype ===
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-      return "xlsx";
-
-    return "xlsx";
+  private detectFileType(file: UploadedImportFile): "xlsx" | "csv" | null {
+    const filename = file.originalname.toLowerCase();
+    if (filename.endsWith(".csv")) {
+      return file.buffer.subarray(0, 1_024).includes(0) ? null : "csv";
+    }
+    if (filename.endsWith(".xlsx")) {
+      const signature = file.buffer.subarray(0, 4).toString("hex");
+      return ["504b0304", "504b0506", "504b0708"].includes(signature)
+        ? "xlsx"
+        : null;
+    }
+    return null;
   }
 
-  /**
-   * Parse CSV file
-   */
   private parseCsvFile(buffer: Buffer): {
     headerMap: Record<string, number>;
-    rows: any[][];
+    rows: unknown[][];
   } {
-    const records = parse(buffer, {
+    const parsed: unknown = parse(buffer, {
       columns: false,
       skip_empty_lines: true,
       trim: true,
       bom: true,
+      max_record_size: 10_000,
     });
 
-    if (records.length === 0) {
+    if (!Array.isArray(parsed) || parsed.length === 0) {
       throw new Error("Empty CSV file");
     }
+    if (parsed.length > MAX_IMPORT_ROWS + 1) {
+      throw new Error(`A single import cannot exceed ${MAX_IMPORT_ROWS} users`);
+    }
+    if (!parsed.every(record => Array.isArray(record) && record.length <= 50)) {
+      throw new Error("CSV rows must contain at most 50 columns");
+    }
+    const records = parsed as unknown[][];
 
     const headerRow = records[0];
+    if (!headerRow) throw new Error("CSV header row is required");
     const headerMap: Record<string, number> = {};
-    headerRow.forEach((header: string, index: number) => {
+    headerRow.forEach((header, index) => {
       const normalized = String(header || "")
         .trim()
         .toLowerCase()
@@ -1172,13 +1203,9 @@ export class UserController {
     return { headerMap, rows: records.slice(1) };
   }
 
-  /**
-   * Import users from file upload (CSV or Excel)
-   * POST /api/users/import/file
-   */
   async importUsersFile(req: Request, res: Response) {
     try {
-      const file = (req as any).file as any | undefined;
+      const file = (req as Request & { file?: UploadedImportFile }).file;
       if (!file) {
         return handleValidationError(
           res,
@@ -1189,7 +1216,7 @@ export class UserController {
       }
 
       const fileType = this.detectFileType(file);
-      if (!["xlsx", "csv"].includes(fileType)) {
+      if (fileType === null) {
         return handleValidationError(
           res,
           "Unsupported file format. Please use .xlsx or .csv",
@@ -1199,21 +1226,38 @@ export class UserController {
       }
 
       let headerMap: Record<string, number> = {};
-      let rows: any[][] = [];
+      let rows: unknown[][] = [];
 
       if (fileType === "csv") {
         const parsed = this.parseCsvFile(file.buffer);
         headerMap = parsed.headerMap;
         rows = parsed.rows;
       } else {
-        // Excel parsing
         const workbook = new ExcelJS.Workbook();
-        await workbook.xlsx.load(file.buffer);
+        await workbook.xlsx.load(
+          file.buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]
+        );
         const ws = workbook.worksheets[0];
         if (!ws) {
           return handleValidationError(
             res,
             "Empty workbook",
+            "file",
+            "Import users"
+          );
+        }
+        if (ws.rowCount - 1 > MAX_IMPORT_ROWS) {
+          return handleValidationError(
+            res,
+            `A single import cannot exceed ${MAX_IMPORT_ROWS} users`,
+            "file",
+            "Import users"
+          );
+        }
+        if (ws.columnCount > 50) {
+          return handleValidationError(
+            res,
+            "Import files cannot contain more than 50 columns",
             "file",
             "Import users"
           );
@@ -1225,30 +1269,19 @@ export class UserController {
             .trim()
             .toLowerCase()
             .replace(/\s+/g, "");
-          headerMap[header] = colNumber - 1; // 0-based index
+          headerMap[header] = colNumber - 1;
         });
 
-        // Collect all rows
         for (let r = 2; r <= ws.rowCount; r++) {
           const row = ws.getRow(r);
-          const rowData: any[] = [];
+          const rowData: unknown[] = [];
           row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-            let val = cell.value;
-            if (val == null) val = "";
-            else if (typeof val === "object" && "text" in val)
-              val = (val as any).text;
-            else if (typeof val === "object" && "richText" in val) {
-              val = (val as any).richText
-                .map((r: any) => r?.text || "")
-                .join("");
-            }
-            rowData[colNumber - 1] = String(val).trim();
+            rowData[colNumber - 1] = cell.text.trim();
           });
           if (rowData.some(v => v)) rows.push(rowData);
         }
       }
 
-      // Map header names to indices
       const getCol = (keys: string[]): number => {
         for (const key of keys) {
           if (headerMap[key] !== undefined) return headerMap[key];
@@ -1268,9 +1301,20 @@ export class UserController {
       const roleCol = getCol(["role"]);
       const regionCol = getCol(["region"]);
       const locationCol = getCol(["location"]);
+      if (firstNameCol < 0 || lastNameCol < 0 || emailCol < 0) {
+        return handleValidationError(
+          res,
+          "The file must contain First Name, Last Name, and Email columns",
+          "file",
+          "Import users"
+        );
+      }
+
+      const getRowText = (row: unknown[], column: number): string =>
+        column >= 0 ? String(row[column] ?? "").trim() : "";
 
       const results = {
-        success: [] as any[],
+        success: [] as ImportedUserResult[],
         errors: [] as {
           row: number;
           firstName: string;
@@ -1286,28 +1330,24 @@ export class UserController {
 
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
-        if (!row) continue; // Skip if row is undefined
+        if (!row) continue;
 
-        const rowNum = i + 2; // 1-based, accounting for header
+        const rowNum = i + 2;
 
-        const firstName =
-          firstNameCol >= 0 ? (row[firstNameCol] || "").trim() : "";
-        const lastName =
-          lastNameCol >= 0 ? (row[lastNameCol] || "").trim() : "";
-        const email =
-          emailCol >= 0 ? (row[emailCol] || "").trim().toLowerCase() : "";
-        const phone = phoneCol >= 0 ? (row[phoneCol] || "").trim() : "";
+        const firstName = getRowText(row, firstNameCol);
+        const lastName = getRowText(row, lastNameCol);
+        const email = getRowText(row, emailCol).toLowerCase();
+        const phone = getRowText(row, phoneCol);
         const role =
           roleCol >= 0
-            ? (row[roleCol] || "SALES").trim().toUpperCase()
+            ? (getRowText(row, roleCol) || "SALES").toUpperCase()
             : "SALES";
         const region =
           regionCol >= 0
-            ? (row[regionCol] || "").trim().toUpperCase().replace(" ", "_")
+            ? getRowText(row, regionCol).toUpperCase().replace(/\s+/g, "_")
             : "";
-        // Normalize location: trim, remove extra spaces, and capitalize each word
-        const rawLocation =
-          locationCol >= 0 ? (row[locationCol] || "").trim() : "";
+
+        const rawLocation = getRowText(row, locationCol);
         const location = rawLocation
           ? rawLocation
               .replace(/\s+/g, " ")
@@ -1331,21 +1371,23 @@ export class UserController {
           error: "",
         };
 
-        // Validate required fields
-        if (!firstName || !lastName || !email) {
+        if (!isValidName(firstName) || !isValidName(lastName) || !email) {
           errorRow.error = "First name, last name, and email are required";
           results.errors.push(errorRow);
           continue;
         }
 
-        // Validate email
         if (!isValidEmail(email)) {
           errorRow.error = "Invalid email format";
           results.errors.push(errorRow);
           continue;
         }
+        if (location.length > 255) {
+          errorRow.error = "Location cannot exceed 255 characters";
+          results.errors.push(errorRow);
+          continue;
+        }
 
-        // Check if user already exists
         const existingUser = await prisma.user.findUnique({ where: { email } });
         if (existingUser) {
           errorRow.error = "User with this email already exists";
@@ -1353,43 +1395,39 @@ export class UserController {
           continue;
         }
 
-        // Validate phone if provided
         if (phone && !isValidPhone(phone)) {
           errorRow.error = "Invalid phone number format (must be 10 digits)";
           results.errors.push(errorRow);
           continue;
         }
 
-        // Validate role
         if (!VALID_ROLES.includes(role)) {
           errorRow.error = `Invalid role. Must be one of: ${VALID_ROLES.join(", ")}`;
           results.errors.push(errorRow);
           continue;
         }
 
-        // Validate and set region
         let finalRegion: Region | null = null;
         if (region) {
           if (VALID_REGIONS.includes(region)) {
             finalRegion = region as Region;
           } else {
-            finalRegion = DEFAULT_REGION as Region;
+            errorRow.error = `Invalid region. Must be one of: ${VALID_REGIONS.join(", ")}`;
+            results.errors.push(errorRow);
+            continue;
           }
         } else {
           finalRegion = DEFAULT_REGION as Region;
         }
 
         try {
-          // Generate password
-          const generatedPassword = generateUserPassword();
-          const passwordHash = await bcrypt.hash(generatedPassword, 10);
+          const accountPlaceholder = generateAccountPlaceholder();
+          const passwordHash = await bcrypt.hash(accountPlaceholder, 12);
 
-          // Parse phone
           const parsedPhone = phone ? parsePhoneNumber(phone) : null;
           const countryCode = parsedPhone?.countryCode || "91";
           const localPhone = parsedPhone?.localNumber || phone;
 
-          // Create user
           await prisma.user.create({
             data: {
               firstName,
@@ -1398,25 +1436,27 @@ export class UserController {
               phone: localPhone || null,
               countryCode,
               passwordHash,
+              mustChangePassword: true,
               role: role as UserRole,
               region: finalRegion,
               location: location || null,
             },
           });
 
-          // Send welcome email with password (async)
-          if (shouldSendCredentialEmail(role as UserRole)) {
+          let invitationEmailSent = false;
+          if (shouldSendInvitationEmail(role as UserRole)) {
             const fullName = `${firstName} ${lastName}`.trim();
-            emailService
-              .sendUserCreationEmail({
+            try {
+              invitationEmailSent = await emailService.sendUserInvitationEmail({
                 name: fullName,
                 email,
-                password: generatedPassword,
                 role,
-              })
-              .catch(error => {
-                console.error(`Failed to send email to ${email}:`, error);
               });
+            } catch (error) {
+              logError("user_file_import_invitation_failed", error, {
+                row: rowNum,
+              });
+            }
           }
 
           results.success.push({
@@ -1424,14 +1464,15 @@ export class UserController {
             email,
             firstName,
             lastName,
+            invitationEmailSent,
           });
-        } catch (error: any) {
-          errorRow.error = error.message || "Unknown error";
+        } catch (error) {
+          logError("user_file_import_row_failed", error, { row: rowNum });
+          errorRow.error = importFailureMessage(error);
           results.errors.push(errorRow);
         }
       }
 
-      // Generate error report if there are errors
       let report:
         | { filename: string; mimeType: string; base64: string }
         | undefined;
@@ -1450,7 +1491,6 @@ export class UserController {
           { header: "Error Reason", key: "error", width: 50 },
         ];
 
-        // Style header
         const headerRow = errorSheet.getRow(1);
         headerRow.font = { bold: true };
         headerRow.fill = {

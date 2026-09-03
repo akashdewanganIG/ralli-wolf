@@ -1,22 +1,35 @@
 import { Router } from "express";
 import { CampaignController } from "../controllers/campaigns.controller.js";
+import {
+  requireAuth,
+  requirePermission,
+} from "../middleware/auth.middleware.js";
 
 const router = Router();
 const campaignController = new CampaignController();
 
-// GET /api/campaigns
+router.use(requireAuth, requirePermission("campaigns.view"));
+
 router.get("/", campaignController.getAllCampaigns);
 
-// POST /api/campaigns
-router.post("/", campaignController.createCampaign);
+router.post(
+  "/",
+  requirePermission("campaigns.manage"),
+  campaignController.createCampaign
+);
 
-// GET /api/campaigns/:id
 router.get("/:id", campaignController.getCampaignById);
 
-// PUT /api/campaigns/:id
-router.put("/:id", campaignController.updateCampaign);
+router.put(
+  "/:id",
+  requirePermission("campaigns.manage"),
+  campaignController.updateCampaign
+);
 
-// DELETE /api/campaigns/:id
-router.delete("/:id", campaignController.deleteCampaign);
+router.delete(
+  "/:id",
+  requirePermission("campaigns.manage"),
+  campaignController.deleteCampaign
+);
 
 export default router;

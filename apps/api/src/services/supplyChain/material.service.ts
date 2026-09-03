@@ -11,14 +11,13 @@ import { DomainError, NotFoundError } from "./errors.js";
 import {
   ZERO,
   percentageOf,
+  requirePositive,
   roundCost,
   roundQuantity,
-  toDecimal,
 } from "./decimal.js";
 
 type Tx = Prisma.TransactionClient;
 
-/** Item types that the Material Management module is responsible for. */
 export const MATERIAL_ITEM_TYPES: ItemType[] = [
   ItemType.RAW_MATERIAL,
   ItemType.COMPONENT,
@@ -38,9 +37,9 @@ export interface ShortageLine {
   availableQuantity: Prisma.Decimal;
   incomingQuantity: Prisma.Decimal;
   safetyStock: Prisma.Decimal;
-  /** Positive when there is not enough free stock to cover the build. */
+
   shortfallQuantity: Prisma.Decimal;
-  /** Shortfall once stock already on order is taken into account. */
+
   netShortfallQuantity: Prisma.Decimal;
   coveragePercent: Prisma.Decimal;
   isShort: boolean;
@@ -51,19 +50,11 @@ export interface ShortageLine {
     priority: number;
     conversionFactor: Prisma.Decimal;
     availableQuantity: Prisma.Decimal;
-    /** Units of the original component this substitute could cover. */
+
     coverableQuantity: Prisma.Decimal;
   }>;
 }
 
-/**
- * Can we build `quantity` of this product from stock on hand?
- *
- * The BOM is exploded to its leaves, demand for a component appearing in
- * several branches is summed, and each line is compared against free stock in
- * the target warehouse. Safety stock is reported but not netted off, so a
- * planner can see both "can I build it" and "would building it eat my buffer".
- */
 export async function checkMaterialAvailability(input: {
   productId: number;
   bomId?: number | null;
@@ -75,18 +66,13 @@ export async function checkMaterialAvailability(input: {
   bomId: number;
   bomNumber: string;
   requestedQuantity: Prisma.Decimal;
-  /** Largest whole build the current free stock supports. */
+
   buildableQuantity: Prisma.Decimal;
   canBuild: boolean;
   totalMaterialCost: Prisma.Decimal;
   lines: ShortageLine[];
 }> {
-  const quantity = toDecimal(input.quantity, "quantity");
-  if (quantity.lessThanOrEqualTo(0)) {
-    throw new DomainError("quantity must be greater than zero", {
-      code: "VALIDATION_ERROR",
-    });
-  }
+  const quantity = requirePositive(input.quantity, "quantity");
 
   const { bom, components } = await explodeBom({
     productId: input.productId,
@@ -94,8 +80,6 @@ export async function checkMaterialAvailability(input: {
     quantity,
   });
 
-  // Only leaf components consume stock; a sub-assembly with its own BOM is
-  // represented by its children.
   const leaves = components.filter(
     component => !component.hasChildBom && !component.isPhantom
   );
@@ -206,7 +190,6 @@ export async function checkMaterialAvailability(input: {
         })
       : entry.substitutes;
 
-    // How many complete builds this one line supports.
     const perBuild = entry.quantity.dividedBy(quantity);
     const ratio = perBuild.isZero() ? null : available.dividedBy(perBuild);
     if (
@@ -266,21 +249,13 @@ export async function checkMaterialAvailability(input: {
 export interface IssueMaterialLine {
   productId: number;
   quantity: Prisma.Decimal | number | string;
-  /** CONSUMED (used in the build) or WASTED (scrapped). */
+
   consumptionType?: "CONSUMED" | "WASTED";
   reasonCode?: string | null;
   binId?: number | null;
   lotId?: number | null;
 }
 
-/**
- * Issue material out of stock against a requisition or production order.
- *
- * Every issue is posted through the stock engine, so it consumes real cost
- * layers and lands in the ledger. Consumption and wastage are separated at
- * the point of issue, which is what makes the wastage report meaningful
- * instead of a guess derived from a variance.
- */
 export async function issueMaterial(
   tx: Tx,
   input: {
@@ -311,13 +286,11 @@ export async function issueMaterial(
     }>;
   }> = [];
 
-  // Deterministic order keeps concurrent issues from deadlocking.
   for (const line of sortLockOrder(
     input.lines.map(line => ({ ...line, productId: line.productId }))
   )) {
     const consumptionType = line.consumptionType ?? "CONSUMED";
-    const quantity = toDecimal(line.quantity, "quantity");
-    if (quantity.lessThanOrEqualTo(0)) continue;
+    const quantity = requirePositive(line.quantity, "quantity");
 
     const issued = await issueStock(tx, {
       productId: line.productId,
@@ -410,12 +383,6 @@ export async function issueMaterial(
   return results;
 }
 
-/**
- * Consumption and wastage over a period, per material.
- *
- * Wastage percent is scrap over everything issued, both taken from posted
- * ledger rows — there is no estimate anywhere in this figure.
- */
 export async function getConsumptionReport(options: {
   from: Date;
   to: Date;
@@ -553,10 +520,6 @@ export async function getConsumptionReport(options: {
   };
 }
 
-/**
- * Compare what a production order actually consumed against what its BOM said
- * it should. A positive variance means more material went in than planned.
- */
 export async function getProductionVariance(productionOrderId: number) {
   const order = await prisma.productionOrder.findUnique({
     where: { id: productionOrderId },

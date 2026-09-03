@@ -11,31 +11,14 @@ import {
 import { Check, Search } from "@repo/ui/icons";
 import { cn } from "@repo/ui/lib/utils";
 
-import { useCurrency } from "@/contexts/CurrencyContext";
+import { useCurrency } from "@/contexts/currency-context";
 import { currencySymbol, distinctCurrencySymbol } from "@/lib/utils/decimal";
 
-/**
- * Display currency for the whole application.
- *
- * Sits with the status and account menus because it is a workspace-wide
- * setting, not a property of whichever screen you happen to be on — and it
- * behaves like one: the choice is remembered per browser and every amount, in
- * every section, follows it until it is changed again.
- *
- * The trigger shows the ISO code rather than the symbol. Several currencies
- * share `$` and `¥`, so the symbol alone cannot say which one is active.
- *
- * The list is long — the workspace carries every major trading currency — so
- * the menu is capped in height, scrolls, and is filtered by a search box.
- * Without the cap the menu renders taller than the viewport and, because the
- * dropdown clips its overflow, most currencies become unreachable.
- */
 export function CurrencyToggle({ className }: { className?: string }) {
   const { currency, symbol, options, updateCurrency } = useCurrency();
   const [query, setQuery] = React.useState("");
   const [open, setOpen] = React.useState(false);
 
-  // Always offer the current selection, even before the list has loaded.
   const list = React.useMemo(() => {
     const seen = new Map<
       string,
@@ -63,7 +46,7 @@ export function CurrencyToggle({ className }: { className?: string }) {
       open={open}
       onOpenChange={next => {
         setOpen(next);
-        // Reopening should start from the full list, not the last search.
+
         if (!next) setQuery("");
       }}
     >
@@ -71,8 +54,6 @@ export function CurrencyToggle({ className }: { className?: string }) {
         <button
           type="button"
           className={cn(
-            // Matches the status and account triggers so the three read as one
-            // group of workspace controls.
             "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 text-[0.8125rem] font-medium text-foreground outline-none transition-[background-color,border-color] duration-150 hover:border-border-strong hover:bg-surface-subtle focus-visible:ring-2 focus-visible:ring-ring/30",
             className
           )}
@@ -103,8 +84,6 @@ export function CurrencyToggle({ className }: { className?: string }) {
             type="text"
             value={query}
             onChange={e => setQuery(e.target.value)}
-            // Radix moves focus to the first item on open; typing here must not
-            // be hijacked by the menu's own type-ahead.
             onKeyDown={e => e.stopPropagation()}
             placeholder="Search currency or code"
             aria-label="Search currencies"
@@ -112,7 +91,6 @@ export function CurrencyToggle({ className }: { className?: string }) {
           />
         </div>
 
-        {/* Capped and scrollable: the full list is ~100 rows. */}
         <div className="max-h-[min(20rem,60svh)] overflow-y-auto">
           {filtered.length === 0 ? (
             <p className="px-2.5 py-6 text-center text-xs text-muted-foreground">

@@ -28,12 +28,9 @@ import {
   parsePagination,
   requireArray,
   requireUserId,
-} from "../utils/supplyChainHttp.js";
+} from "../utils/supply-chain-http.js";
 
 export class WmsController {
-  // ---------------------------------------------------------------- putaway
-
-  /** GET /api/wms/putaway-tasks */
   async listPutawayTasks(req: Request, res: Response) {
     const operation = "List putaway tasks";
     try {
@@ -109,7 +106,6 @@ export class WmsController {
     }
   }
 
-  /** GET /api/wms/putaway-suggestions */
   async putawaySuggestions(req: Request, res: Response) {
     const operation = "Suggest putaway bins";
     try {
@@ -125,7 +121,6 @@ export class WmsController {
     }
   }
 
-  /** PATCH /api/wms/putaway-tasks/:id/assign */
   async assignPutawayTask(req: Request, res: Response) {
     const operation = "Assign putaway task";
     try {
@@ -149,7 +144,6 @@ export class WmsController {
     }
   }
 
-  /** POST /api/wms/putaway-tasks/:id/complete */
   async completePutaway(req: Request, res: Response) {
     const operation = "Complete putaway task";
     try {
@@ -171,9 +165,6 @@ export class WmsController {
     }
   }
 
-  // -------------------------------------------------------------- picking
-
-  /** GET /api/wms/pick-lists */
   async listPickLists(req: Request, res: Response) {
     const operation = "List pick lists";
     try {
@@ -212,7 +203,6 @@ export class WmsController {
     }
   }
 
-  /** GET /api/wms/pick-lists/:id */
   async getPickList(req: Request, res: Response) {
     const operation = "Get pick list";
     try {
@@ -277,11 +267,6 @@ export class WmsController {
     }
   }
 
-  /**
-   * POST /api/wms/pick-lists
-   * Build a pick list. Pass `salesOrderId` to pull the lines straight off a
-   * sales order, or `lines` to pick ad hoc.
-   */
   async createPickList(req: Request, res: Response) {
     const operation = "Create pick list";
     try {
@@ -345,7 +330,6 @@ export class WmsController {
     }
   }
 
-  /** PATCH /api/wms/pick-lists/:id/release */
   async releasePickList(req: Request, res: Response) {
     const operation = "Release pick list";
     try {
@@ -360,7 +344,6 @@ export class WmsController {
     }
   }
 
-  /** PATCH /api/wms/pick-lists/:id/cancel */
   async cancelPickList(req: Request, res: Response) {
     const operation = "Cancel pick list";
     try {
@@ -372,7 +355,6 @@ export class WmsController {
     }
   }
 
-  /** POST /api/wms/pick-tasks/:id/confirm */
   async confirmPick(req: Request, res: Response) {
     const operation = "Confirm pick";
     try {
@@ -394,9 +376,6 @@ export class WmsController {
     }
   }
 
-  // -------------------------------------------------------------- packing
-
-  /** POST /api/wms/pick-lists/:id/packages */
   async createPackage(req: Request, res: Response) {
     const operation = "Pack goods";
     try {
@@ -434,7 +413,6 @@ export class WmsController {
     }
   }
 
-  /** POST /api/wms/pick-lists/:id/ship */
   async ship(req: Request, res: Response) {
     const operation = "Ship packages";
     try {
@@ -442,7 +420,7 @@ export class WmsController {
       const packageIds = requireArray<number>(
         req.body.packageIds,
         "packageIds"
-      ).map(value => Number(value));
+      ).map((value, index) => parseId(String(value), `packageIds[${index}]`));
 
       const remaining = await prisma.$transaction(tx =>
         shipPackages(tx, { packageIds, pickListId })
@@ -455,7 +433,6 @@ export class WmsController {
     }
   }
 
-  /** GET /api/wms/packages */
   async listPackages(req: Request, res: Response) {
     const operation = "List packages";
     try {
@@ -500,10 +477,6 @@ export class WmsController {
     }
   }
 
-  /**
-   * GET /api/wms/dashboard
-   * The floor's workload at a glance.
-   */
   async dashboard(req: Request, res: Response) {
     const operation = "WMS dashboard";
     try {

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@repo/ui/components/ui/button";
 import { Input } from "@repo/ui/components/ui/input";
 import { useRouter } from "next/navigation";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import { SearchFilterToolbar } from "@repo/ui/components/ui/toolbar";
 import {
   ErrorBanner,
@@ -17,11 +17,12 @@ import {
   StatusBadge,
   DEFAULT_PAGE_SIZE,
 } from "@/components/supply-chain/shared";
-import { useSupplierMutations, useSuppliers } from "@/hooks/useSupplyChain";
+import { useSupplierMutations, useSuppliers } from "@/hooks/use-supply-chain";
 import { formatPercent } from "@/lib/utils/decimal";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { FormDialog } from "@repo/ui/components/ui/form-dialog";
-import { DataTransfer } from "@/components/data-transfer/DataTransfer";
+import { DataTransfer } from "@/components/data-transfer/data-transfer";
+import { ItemThumbnail } from "@/components/supply-chain/item-thumbnail";
 
 export default function SuppliersPage() {
   const router = useRouter();
@@ -102,111 +103,103 @@ export default function SuppliersPage() {
           onOpenChange={setShowForm}
           title="New supplier"
           description="Leave the code blank to have one generated from the supplier sequence."
+          onSubmit={submit}
+          bodyClassName="gap-3 md:grid-cols-4"
+          isSubmitting={create.isPending}
+          submitDisabled={!form.name}
+          submitLabel="Create supplier"
         >
-          <form onSubmit={submit} className="grid gap-4 md:grid-cols-4">
-            <Field label="Code">
-              <Input
-                value={form.code}
-                onChange={e => setForm({ ...form, code: e.target.value })}
-                placeholder="Auto"
-              />
-            </Field>
-            <Field label="Name" className="md:col-span-2">
-              <Input
-                required
-                value={form.name}
-                onChange={e => setForm({ ...form, name: e.target.value })}
-              />
-            </Field>
-            <Field label="Status">
-              <SelectField
-                value={form.status}
-                onChange={e => setForm({ ...form, status: e.target.value })}
-              >
-                <option value="DRAFT">Draft</option>
-                <option value="ACTIVE">Active</option>
-                <option value="ON_HOLD">On hold</option>
-              </SelectField>
-            </Field>
-            <Field label="Legal name" className="md:col-span-2">
-              <Input
-                value={form.legalName}
-                onChange={e => setForm({ ...form, legalName: e.target.value })}
-              />
-            </Field>
-            <Field label="GST number">
-              <Input
-                value={form.gstNumber}
-                onChange={e => setForm({ ...form, gstNumber: e.target.value })}
-              />
-            </Field>
-            <Field label="Currency">
-              <Input
-                value={form.currencyCode}
-                onChange={e =>
-                  setForm({ ...form, currencyCode: e.target.value })
-                }
-              />
-            </Field>
-            <Field label="Email">
-              <Input
-                type="email"
-                value={form.email}
-                onChange={e => setForm({ ...form, email: e.target.value })}
-              />
-            </Field>
-            <Field label="Phone">
-              <Input
-                value={form.phone}
-                onChange={e => setForm({ ...form, phone: e.target.value })}
-              />
-            </Field>
-            <Field label="City">
-              <Input
-                value={form.city}
-                onChange={e => setForm({ ...form, city: e.target.value })}
-              />
-            </Field>
-            <Field label="State">
-              <Input
-                value={form.state}
-                onChange={e => setForm({ ...form, state: e.target.value })}
-              />
-            </Field>
-            <Field label="Payment terms">
-              <Input
-                value={form.paymentTerms}
-                onChange={e =>
-                  setForm({ ...form, paymentTerms: e.target.value })
-                }
-                placeholder="e.g. Net 30"
-              />
-            </Field>
-            <Field label="Credit days">
-              <Input
-                inputMode="numeric"
-                value={form.creditDays}
-                onChange={e => setForm({ ...form, creditDays: e.target.value })}
-              />
-            </Field>
-            <Field
-              label="Lead time (days)"
-              hint="Used to work out when an order from this supplier should arrive"
+          <Field label="Code">
+            <Input
+              value={form.code}
+              onChange={e => setForm({ ...form, code: e.target.value })}
+              placeholder="Auto"
+            />
+          </Field>
+          <Field label="Name" className="md:col-span-2">
+            <Input
+              required
+              value={form.name}
+              onChange={e => setForm({ ...form, name: e.target.value })}
+            />
+          </Field>
+          <Field label="Status">
+            <SelectField
+              value={form.status}
+              onChange={e => setForm({ ...form, status: e.target.value })}
             >
-              <Input
-                inputMode="numeric"
-                value={form.leadTimeDays}
-                onChange={e =>
-                  setForm({ ...form, leadTimeDays: e.target.value })
-                }
-              />
-            </Field>
-            <div className="md:col-span-4 dialog-form-actions">
-              <Button type="submit" disabled={!form.name || create.isPending}>
-                {create.isPending ? "Creating…" : "Create supplier"}
-              </Button>
-            </div>
-          </form>
+              <option value="DRAFT">Draft</option>
+              <option value="ACTIVE">Active</option>
+              <option value="ON_HOLD">On hold</option>
+            </SelectField>
+          </Field>
+          <Field label="Legal name" className="md:col-span-2">
+            <Input
+              value={form.legalName}
+              onChange={e => setForm({ ...form, legalName: e.target.value })}
+            />
+          </Field>
+          <Field label="GST number">
+            <Input
+              value={form.gstNumber}
+              onChange={e => setForm({ ...form, gstNumber: e.target.value })}
+            />
+          </Field>
+          <Field label="Currency">
+            <Input
+              value={form.currencyCode}
+              onChange={e => setForm({ ...form, currencyCode: e.target.value })}
+            />
+          </Field>
+          <Field label="Email">
+            <Input
+              type="email"
+              value={form.email}
+              onChange={e => setForm({ ...form, email: e.target.value })}
+            />
+          </Field>
+          <Field label="Phone">
+            <Input
+              value={form.phone}
+              onChange={e => setForm({ ...form, phone: e.target.value })}
+            />
+          </Field>
+          <Field label="City">
+            <Input
+              value={form.city}
+              onChange={e => setForm({ ...form, city: e.target.value })}
+            />
+          </Field>
+          <Field label="State">
+            <Input
+              value={form.state}
+              onChange={e => setForm({ ...form, state: e.target.value })}
+            />
+          </Field>
+          <Field label="Payment terms">
+            <Input
+              value={form.paymentTerms}
+              onChange={e => setForm({ ...form, paymentTerms: e.target.value })}
+              placeholder="e.g. Net 30"
+            />
+          </Field>
+          <Field label="Credit days">
+            <Input
+              inputMode="numeric"
+              value={form.creditDays}
+              onChange={e => setForm({ ...form, creditDays: e.target.value })}
+            />
+          </Field>
+          <Field
+            label="Lead time (days)"
+            hint="Used to work out when an order from this supplier should arrive"
+          >
+            <Input
+              inputMode="numeric"
+              value={form.leadTimeDays}
+              onChange={e => setForm({ ...form, leadTimeDays: e.target.value })}
+            />
+          </Field>
         </FormDialog>
 
         <Panel
@@ -257,9 +250,14 @@ export default function SuppliersPage() {
               {
                 header: "Supplier",
                 cell: row => (
-                  <div>
-                    <p className="font-mono text-xs text-primary">{row.code}</p>
-                    <p className="text-sm">{row.name}</p>
+                  <div className="flex items-center gap-2.5">
+                    <ItemThumbnail url={row.logoUrl} alt={row.name} />
+                    <div>
+                      <p className="font-mono text-xs text-primary">
+                        {row.code}
+                      </p>
+                      <p className="text-sm">{row.name}</p>
+                    </div>
                   </div>
                 ),
               },

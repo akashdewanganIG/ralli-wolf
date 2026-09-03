@@ -3,14 +3,6 @@
 import React from "react";
 import { cn } from "@repo/ui/lib/utils";
 
-/**
- * Re-exported, not redefined.
- *
- * There were two skeleton primitives with different fills and no
- * reduced-motion handling between them. This module keeps the page-shaped
- * compositions the CRM screens already import, but the block itself now comes
- * from the shared UI package so both halves of the app animate identically.
- */
 export { Skeleton } from "@repo/ui/components/ui/skeleton";
 export {
   SkeletonRegion,

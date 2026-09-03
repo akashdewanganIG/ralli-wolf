@@ -7,7 +7,7 @@ import { Input } from "@repo/ui/components/ui/input";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { Tag } from "@repo/ui/components/ui/tag";
 
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   ErrorBanner,
   Field,
@@ -21,17 +21,16 @@ import {
   usePayables,
   useReceivables,
   useUninvoiced,
-} from "@/hooks/useFinance";
+} from "@/hooks/use-finance";
 import type {
   CustomerInvoiceRow,
   SupplierInvoiceRow,
-} from "@/lib/api/financeServices";
+} from "@/lib/api/finance-services";
 import { formatDate, formatMoney } from "@/lib/utils/decimal";
-import { DataTransfer } from "@/components/data-transfer/DataTransfer";
+import { DataTransfer } from "@/components/data-transfer/data-transfer";
 
 type Side = "PAYABLE" | "RECEIVABLE";
 
-/** A received purchase order or a shipped sales order, flattened to one shape. */
 type BillableRow = {
   id: number;
   number: string;
@@ -54,12 +53,6 @@ const STATUS_TONE: Record<
   WRITTEN_OFF: "danger",
 };
 
-/**
- * Accounts payable and receivable share a shape: a list of invoices, each with
- * an outstanding balance and a due date, and one action — settle some of it.
- * One component serves both so the two ledgers cannot drift apart in either
- * behaviour or layout.
- */
 export function InvoiceLedger({ side }: { side: Side }) {
   const isPayable = side === "PAYABLE";
   const [overdueOnly, setOverdueOnly] = React.useState(false);
@@ -80,7 +73,7 @@ export function InvoiceLedger({ side }: { side: Side }) {
     useFinanceMutations();
 
   const query = isPayable ? payables : receivables;
-  // No data is no data, whether it is still coming or never arrived.
+
   const unknown = query.isLoading || Boolean(query.error);
   const queryData = query.data?.data;
   const rows = React.useMemo(
@@ -88,9 +81,6 @@ export function InvoiceLedger({ side }: { side: Side }) {
     [queryData]
   );
 
-  // Totals belong to one currency. The headline is whichever currency carries
-  // the most invoices on screen; the rest are named rather than added in, for
-  // the same reason the API refuses to add them.
   const totals = React.useMemo(() => {
     const per = new Map<
       string,
@@ -118,8 +108,6 @@ export function InvoiceLedger({ side }: { side: Side }) {
     };
   }, [rows]);
 
-  // The two sides carry different field names for the same four facts, so they
-  // are normalised once here rather than being branched on in every cell.
   const billable: BillableRow[] = React.useMemo(() => {
     const d = uninvoiced.data?.data;
     if (!d) return [];
@@ -144,8 +132,7 @@ export function InvoiceLedger({ side }: { side: Side }) {
 
   const openPayment = (row: SupplierInvoiceRow | CustomerInvoiceRow) => {
     setPaying(row);
-    // Pre-fill with the full balance: settling in full is the common case, and
-    // it is easier to reduce a number than to type one.
+
     setAmount(row.outstanding);
     setReference("");
   };
@@ -358,8 +345,6 @@ export function InvoiceLedger({ side }: { side: Side }) {
               {
                 header: "Due",
                 cell: row => {
-                  // The server reports days-past-due on every invoice. One that
-                  // has been settled is not late, whatever its due date says.
                   const late =
                     row.ageing.days > 0 && Number(row.outstanding) > 0;
                   return (

@@ -49,11 +49,10 @@ export function ConfirmationDialog({
     setIsProcessing(true);
     try {
       await onConfirm();
-      // Only close dialog if onConfirm doesn't throw an error
+
       onOpenChange(false);
     } catch {
-      // Error handling is done in the parent component
-      // Don't close the dialog on error
+      return;
     } finally {
       setIsProcessing(false);
     }
@@ -99,7 +98,6 @@ export function ConfirmationDialog({
   );
 }
 
-// Specific components for common actions
 interface ConvertConfirmationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -161,7 +159,7 @@ interface DeleteConfirmationDialogProps {
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void | Promise<void>;
   itemName: string;
-  itemType: "lead" | "contact" | "account" | "opportunity";
+  itemType: "lead" | "contact" | "account" | "opportunity" | "campaign";
   isLoading?: boolean;
   disabled?: boolean;
 }
@@ -185,6 +183,8 @@ export function DeleteConfirmationDialog({
         return "Delete Account";
       case "opportunity":
         return "Delete Opportunity";
+      case "campaign":
+        return "Delete Campaign";
       default:
         return "Delete Item";
     }
@@ -200,6 +200,8 @@ export function DeleteConfirmationDialog({
         return `Are you sure you want to delete "${itemName}"? This action cannot be undone and will permanently remove the account and all associated data.`;
       case "opportunity":
         return `Are you sure you want to delete "${itemName}"?`;
+      case "campaign":
+        return `Are you sure you want to delete "${itemName}"? This action cannot be undone and will permanently remove the campaign and its tracking data.`;
       default:
         return `Are you sure you want to delete "${itemName}"? This action cannot be undone.`;
     }

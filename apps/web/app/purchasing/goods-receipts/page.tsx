@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Input } from "@repo/ui/components/ui/input";
 import { useRouter } from "next/navigation";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   ErrorBanner,
   FilterBar,
@@ -15,8 +15,8 @@ import {
   StatusBadge,
   DEFAULT_PAGE_SIZE,
 } from "@/components/supply-chain/shared";
-import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
-import { useGoodsReceipts, useSuppliers } from "@/hooks/useSupplyChain";
+import { WarehouseFilter } from "@/components/supply-chain/warehouse-filter";
+import { useGoodsReceipts, useSuppliers } from "@/hooks/use-supply-chain";
 import {
   formatDate,
   formatMoney,
@@ -24,7 +24,7 @@ import {
   humanizeEnum,
 } from "@/lib/utils/decimal";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
-import { DataTransfer } from "@/components/data-transfer/DataTransfer";
+import { DataTransfer } from "@/components/data-transfer/data-transfer";
 
 export default function GoodsReceiptsPage() {
   const router = useRouter();

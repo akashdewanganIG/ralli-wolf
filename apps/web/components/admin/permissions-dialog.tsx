@@ -6,6 +6,7 @@ import { Button } from "@repo/ui/components/ui/button";
 import { Checkbox } from "@repo/ui/components/ui/checkbox";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -18,14 +19,6 @@ import {
   type Permission,
 } from "@repo/db/permissions";
 
-/**
- * Permission picker for the CUSTOM role.
- *
- * Wider than the surrounding user dialogs on purpose: the catalogue is long, and
- * scanning it in a narrow column turns a one-screen decision into a scroll hunt.
- * Selections are held locally and only handed back on save, so cancelling leaves
- * the caller's state untouched.
- */
 export function PermissionsDialog({
   open,
   onOpenChange,
@@ -41,7 +34,6 @@ export function PermissionsDialog({
 }) {
   const [draft, setDraft] = React.useState<Permission[]>(value);
 
-  // Re-seed each time the dialog opens so it always reflects the current user.
   React.useEffect(() => {
     if (open) setDraft(value);
   }, [open, value]);
@@ -80,7 +72,7 @@ export function PermissionsDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        <DialogBody>
           <div className="grid gap-4 lg:grid-cols-2">
             {PERMISSION_GROUPS.map(group => {
               const groupPermissions = group.permissions.map(p => p.value);
@@ -142,7 +134,7 @@ export function PermissionsDialog({
               );
             })}
           </div>
-        </div>
+        </DialogBody>
 
         <DialogFooter className="items-center justify-between border-t border-border px-5 py-3.5 sm:justify-between">
           <p className="text-xs text-muted-foreground">

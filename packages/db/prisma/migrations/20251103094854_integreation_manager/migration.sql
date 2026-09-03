@@ -1,4 +1,4 @@
--- CreateTable
+
 CREATE TABLE "integration_credentials" (
     "id" TEXT NOT NULL,
     "provider" TEXT NOT NULL,
@@ -13,7 +13,7 @@ CREATE TABLE "integration_credentials" (
     CONSTRAINT "integration_credentials_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
+
 CREATE TABLE "app_config" (
     "id" TEXT NOT NULL,
     "key" TEXT NOT NULL,
@@ -29,8 +29,8 @@ CREATE TABLE "app_config" (
     CONSTRAINT "app_config_pkey" PRIMARY KEY ("id")
 );
 
--- CreateIndex
+
 CREATE UNIQUE INDEX "integration_credentials_provider_key" ON "integration_credentials"("provider");
 
--- CreateIndex
+
 CREATE UNIQUE INDEX "app_config_key_key" ON "app_config"("key");

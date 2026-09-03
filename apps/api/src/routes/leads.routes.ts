@@ -1,9 +1,11 @@
 import { Router } from "express";
 import { LeadController } from "../controllers/leads.controller.js";
 import multer from "multer";
-import { LeadsImportController } from "../controllers/leadsImport.controller.js";
-import { requireAuth, requireRole } from "../middleware/auth.middleware.js";
-import { UserRole } from "@prisma/client";
+import { LeadsImportController } from "../controllers/leads-import.controller.js";
+import {
+  requireAuth,
+  requirePermission,
+} from "../middleware/auth.middleware.js";
 
 const router = Router();
 const leadController = new LeadController();
@@ -13,32 +15,33 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024, files: 1 },
 });
 
-// Require authentication for all lead routes
 router.use(requireAuth);
+router.use(requirePermission("leads.view"));
 
-// GET routes (logic for role handled in controller)
 router.get("/", leadController.getAllLeads.bind(leadController));
-router.get("/all", leadController.getAllLeadsComplete.bind(leadController));
 router.get(
   "/assignment/stats",
-  requireRole([UserRole.ADMIN]),
+  requirePermission("leads.manage"),
   leadController.getAssignmentStats.bind(leadController)
 );
-router.get("/filter", leadController.filterLeads.bind(leadController));
-router.get(
-  "/by-status/:status",
-  leadController.getLeadsByStatus.bind(leadController)
-);
-router.get(
-  "/by-source/:source",
-  leadController.getLeadsBySource.bind(leadController)
-);
-router.get(
-  "/by-owner/:ownerId",
-  leadController.getLeadsByOwner.bind(leadController)
-);
-router.get("/by-score", leadController.getLeadsByScore.bind(leadController));
 router.get("/search", leadController.searchLeads.bind(leadController));
+
+router.get("/import/template", requirePermission("data.import"), (req, res) =>
+  leadsImportController.downloadTemplate(req, res)
+);
+router.get(
+  "/import/template-csv",
+  requirePermission("data.import"),
+  (req, res) => leadsImportController.downloadTemplateCsv(req, res)
+);
+router.post(
+  "/import",
+  requirePermission("data.import"),
+  requirePermission("leads.manage"),
+  upload.single("file"),
+  (req, res) => leadsImportController.importLeads(req, res)
+);
+
 router.get("/:id", leadController.getLeadById.bind(leadController));
 router.get(
   "/:id/conversion-history",
@@ -49,63 +52,50 @@ router.get(
   leadController.getFormSubmissionsByLead.bind(leadController)
 );
 
-// Lead conversion and assignment - only admin/system admin
 router.post(
   "/",
-  requireRole([UserRole.ADMIN]),
+  requirePermission("leads.manage"),
   leadController.createLead.bind(leadController)
 );
 router.put(
   "/:id",
-  requireRole([UserRole.ADMIN]),
+  requirePermission("leads.manage"),
   leadController.updateLead.bind(leadController)
 );
 router.delete(
   "/:id",
-  requireRole([UserRole.ADMIN]),
+  requirePermission("leads.manage"),
   leadController.deleteLead.bind(leadController)
 );
 router.post(
   "/:id/convert",
-  requireRole([UserRole.ADMIN]),
+  requirePermission("leads.manage"),
   leadController.convertLeadToContact.bind(leadController)
 );
 router.post(
   "/convert-bulk",
-  requireRole([UserRole.ADMIN]),
+  requirePermission("leads.manage"),
   leadController.convertLeadsBulk.bind(leadController)
 );
 router.put(
   "/:id/assign",
-  requireRole([UserRole.ADMIN]),
+  requirePermission("leads.manage"),
   leadController.assignLeadToUser.bind(leadController)
 );
 router.post(
   "/assign-bulk",
-  requireRole([UserRole.ADMIN]),
+  requirePermission("leads.manage"),
   leadController.assignLeadsBulkToUser.bind(leadController)
 );
-// Lead claim - allow any authenticated user (logic in controller for role)
-router.put("/:id/claim", leadController.claimLead.bind(leadController));
-router.post("/claim-bulk", leadController.claimLeadsBulk.bind(leadController));
-router.put(
-  "/:id/score",
-  requireRole([UserRole.ADMIN]),
-  leadController.updateLeadScore.bind(leadController)
-);
 
-// Import/Template routes (leads only)
-router.get("/import/template", (req, res) =>
-  leadsImportController.downloadTemplate(req, res)
-);
-router.get("/import/template-csv", (req, res) =>
-  leadsImportController.downloadTemplateCsv(req, res)
+router.put(
+  "/:id/claim",
+  requirePermission("leads.manage"),
+  leadController.claimLead.bind(leadController)
 );
 router.post(
-  "/import",
-  requireRole([UserRole.ADMIN]),
-  upload.single("file"),
-  (req, res) => leadsImportController.importLeads(req, res)
+  "/claim-bulk",
+  requirePermission("leads.manage"),
+  leadController.claimLeadsBulk.bind(leadController)
 );
-
 export default router;

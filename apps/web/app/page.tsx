@@ -3,11 +3,9 @@ import {
   AnalyticsDashboard,
   AnalyticsDashboardSkeleton,
 } from "@/components/analytics-dashboard";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
-// import { redirect } from "next/navigation";
+import { ProtectedRoute } from "@/components/protected-route";
 
 export default function Home() {
-  // redirect('/sales/orders');
   const fallback = (
     <MainLayout>
       <AnalyticsDashboardSkeleton />

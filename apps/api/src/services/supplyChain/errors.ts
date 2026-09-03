@@ -1,8 +1,3 @@
-/**
- * Errors raised by the supply-chain services when a business rule is broken.
- * Controllers translate these into HTTP responses; anything else that escapes
- * a service is a genuine bug and becomes a 500.
- */
 export class DomainError extends Error {
   readonly status: number;
   readonly code: string;

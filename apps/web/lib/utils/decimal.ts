@@ -1,12 +1,3 @@
-/**
- * Helpers for the decimal strings the supply-chain API returns.
- *
- * The API sends quantities and money as strings so nothing is lost in transit.
- * Converting to `number` is fine for *display* — no realistic stock figure
- * exceeds 2^53 — but never send a converted number back to the server for a
- * quantity or price; pass the original string through.
- */
-
 export type DecimalLike = string | number | null | undefined;
 
 export function toNumber(value: DecimalLike, fallback = 0): number {
@@ -15,7 +6,6 @@ export function toNumber(value: DecimalLike, fallback = 0): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-/** Trim trailing zeros so 12.5000 reads as 12.5 but 12.0000 reads as 12. */
 export function formatQuantity(
   value: DecimalLike,
   maximumFractionDigits = 4
@@ -28,18 +18,8 @@ export function formatQuantity(
   });
 }
 
-/**
- * The currency every amount is shown in, unless a caller names one.
- *
- * A module-level value rather than a hook because `formatMoney` is a plain
- * function called from ~90 places — inside column definitions, inline in JSX,
- * and in helpers that are not components and cannot hold a subscription.
- * `CurrencyProvider` owns it and re-renders the tree when it changes, so this
- * is never read while stale.
- */
 let activeCurrency = "INR";
 
-/** Called by `CurrencyProvider`; not intended for use anywhere else. */
 export function setActiveCurrency(code: string) {
   if (code) activeCurrency = code;
 }
@@ -48,25 +28,6 @@ export function getActiveCurrency(): string {
   return activeCurrency;
 }
 
-/**
- * The symbol to show for a currency code.
- *
- * The `currencies` table stores a symbol per row, and for a good third of the
- * world those are scripts a Latin UI font has no glyphs for: AED, BHD, DZD,
- * IQD, JOD, KWD, MAD, OMR, QAR, SAR, TND and YER all carry Arabic-script
- * symbols that render as slivers or blanks, and being right-to-left they also
- * reorder the text around them.
- *
- * `Intl.NumberFormat` already knows every ISO 4217 currency — it is the
- * runtime's own CLDR data, so it needs no package and cannot go stale the way
- * a checked-in table does. In an English locale it returns a symbol only where
- * a legible one exists and the ISO code otherwise, which is exactly how these
- * currencies are written in English-language finance anyway.
- *
- * `symbol` rather than `narrowSymbol` on purpose: narrow strips the
- * disambiguating prefix and turns USD, CAD, AUD, NZD, HKD, MXN and eight more
- * into an identical bare "$".
- */
 const symbolCache = new Map<string, string>();
 
 export function currencySymbol(
@@ -88,7 +49,6 @@ export function currencySymbol(
         .formatToParts(1)
         .find(part => part.type === "currency")?.value ?? code;
   } catch {
-    // An unknown or malformed code throws rather than returning anything.
     resolved = fallback ?? code;
   }
 
@@ -96,13 +56,6 @@ export function currencySymbol(
   return resolved;
 }
 
-/**
- * The symbol only when it says something the ISO code does not.
- *
- * For roughly half the world's currencies the canonical "symbol" *is* the
- * code, so a row that already prints the code would otherwise print it twice.
- * Returns an empty string in that case, leaving the slot blank.
- */
 export function distinctCurrencySymbol(
   code: string | null | undefined,
   fallback?: string | null
@@ -123,7 +76,6 @@ export function formatMoney(
       maximumFractionDigits: 2,
     });
   } catch {
-    // An unknown ISO code should not blank out the figure.
     return `${currency} ${toNumber(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
   }
 }
@@ -157,7 +109,6 @@ export function formatDateTime(value: string | null | undefined): string {
   });
 }
 
-/** Days from now until `value`; negative when the date has passed. */
 export function daysUntil(value: string | null | undefined): number | null {
   if (!value) return null;
   const date = new Date(value);
@@ -165,7 +116,6 @@ export function daysUntil(value: string | null | undefined): number | null {
   return Math.ceil((date.getTime() - Date.now()) / 86_400_000);
 }
 
-/** Turn SCREAMING_SNAKE_CASE enum values into readable labels. */
 export function humanizeEnum(value: string | null | undefined): string {
   if (!value) return "—";
   return value

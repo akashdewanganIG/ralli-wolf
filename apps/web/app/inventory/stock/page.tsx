@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Checkbox } from "@repo/ui/components/ui/checkbox";
 import { Input } from "@repo/ui/components/ui/input";
 import { useRouter } from "next/navigation";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   ErrorBanner,
   PageHeader,
@@ -15,15 +15,16 @@ import {
   StatusBadge,
   DEFAULT_PAGE_SIZE,
 } from "@/components/supply-chain/shared";
-import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
-import { useStockPositions } from "@/hooks/useSupplyChain";
+import { WarehouseFilter } from "@/components/supply-chain/warehouse-filter";
+import { useStockPositions } from "@/hooks/use-supply-chain";
+import { ItemThumbnail } from "@/components/supply-chain/item-thumbnail";
 import { formatMoney, formatQuantity, humanizeEnum } from "@/lib/utils/decimal";
-import type { ItemType, StockPositionRow } from "@/lib/api/types/supplyChain";
+import type { ItemType, StockPositionRow } from "@/lib/api/types/supply-chain";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { DashboardToolbar } from "@repo/ui/components/ui/dashboard-toolbar";
 import { SearchInput } from "@repo/ui/components/ui/search-input";
 import { Tag } from "@repo/ui/components/ui/tag";
-import { DataTransfer } from "@/components/data-transfer/DataTransfer";
+import { DataTransfer } from "@/components/data-transfer/data-transfer";
 
 const ITEM_TYPES: ItemType[] = [
   "FINISHED_GOOD",
@@ -147,11 +148,17 @@ export default function StockPositionsPage() {
               {
                 header: "Item",
                 cell: row => (
-                  <div>
-                    <p className="font-mono text-xs text-primary">
-                      {row.product.code}
-                    </p>
-                    <p className="text-sm">{row.product.name}</p>
+                  <div className="flex items-center gap-2.5">
+                    <ItemThumbnail
+                      url={row.product.imageUrl}
+                      alt={row.product.name}
+                    />
+                    <div>
+                      <p className="font-mono text-xs text-primary">
+                        {row.product.code}
+                      </p>
+                      <p className="text-sm">{row.product.name}</p>
+                    </div>
                   </div>
                 ),
               },

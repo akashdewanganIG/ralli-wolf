@@ -24,18 +24,10 @@ import {
   useMarkNotificationRead,
   useMarkAllNotificationsRead,
   type AppNotification,
-} from "@/hooks/useNotifications";
+} from "@/hooks/use-notifications";
 import { Skeleton, SkeletonRegion } from "@repo/ui/components/ui/skeleton";
 import { Tag } from "@repo/ui/components/ui/tag";
 
-/**
- * An icon for every `NotificationType` the API can send.
- *
- * Covers the whole enum, not just the types that happen to fire today — an
- * unmapped type used to fall back to a generic bell, which is what a reader
- * saw for goods receipts and stock alerts. Line icons rather than emoji, so
- * these match every other icon in the app and inherit colour from the theme.
- */
 const TYPE_ICONS: Record<string, IconComponent> = {
   LEAD_ASSIGNED: Users,
   LEAD_UPDATED: Pencil,
@@ -117,7 +109,6 @@ export function NotificationDropdown() {
   const unreadCount = data?.unreadCount ?? 0;
   const notifications = data?.data ?? [];
 
-  // Close on outside click
   React.useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) {
@@ -147,7 +138,6 @@ export function NotificationDropdown() {
 
   return (
     <div ref={ref} className="relative">
-      {/* Bell button */}
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
@@ -165,7 +155,6 @@ export function NotificationDropdown() {
         )}
       </button>
 
-      {/* Dropdown panel */}
       {open && (
         <div
           id="notification-panel"
@@ -173,7 +162,6 @@ export function NotificationDropdown() {
           aria-label="Notifications"
           className="fixed inset-x-4 top-[4.25rem] z-50 w-auto overflow-hidden rounded-xl border border-border bg-surface shadow-lg sm:absolute sm:inset-x-auto sm:right-0 sm:top-12 sm:w-80"
         >
-          {/* Header */}
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <span className="text-sm font-semibold text-foreground">
               Notifications
@@ -196,7 +184,6 @@ export function NotificationDropdown() {
             )}
           </div>
 
-          {/* List */}
           <div className="max-h-[min(26rem,70svh)] overflow-y-auto">
             {isLoading ? (
               <SkeletonRegion label="Loading notifications" className="p-2">
@@ -212,7 +199,6 @@ export function NotificationDropdown() {
                 ))}
               </SkeletonRegion>
             ) : isError ? (
-              /* "Caught up" would be a lie when the request failed. */
               <div className="flex flex-col items-center gap-1.5 px-6 py-10 text-center">
                 <AlertTriangle
                   aria-hidden="true"
@@ -226,11 +212,6 @@ export function NotificationDropdown() {
                 </p>
               </div>
             ) : notifications.length === 0 ? (
-              /*
-                Without this the panel opened as an empty box with a header and
-                nothing under it, which reads as a failure to load rather than
-                as having nothing to show.
-              */
               <div className="flex flex-col items-center gap-1.5 px-6 py-10 text-center">
                 <Bell
                   aria-hidden="true"
@@ -254,8 +235,6 @@ export function NotificationDropdown() {
             )}
           </div>
 
-          {/* Somewhere to go when the answer to a notification is "stop sending
-              me this". */}
           <div className="border-t border-border px-4 py-2.5">
             <button
               type="button"

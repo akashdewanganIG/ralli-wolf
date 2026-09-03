@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { RoleGuard } from "@/components/guards/RoleGuard";
+import { RoleGuard } from "@/components/guards/role-guard";
 import { ApprovalDetailPage } from "@/components/approvals/approval-detail-page";
 
 export default function ApprovalDetailRoutePage() {
@@ -9,7 +9,7 @@ export default function ApprovalDetailRoutePage() {
   const approvalId = String(params?.id ?? "");
 
   return (
-    <RoleGuard allowedRoles={["ADMIN", "ADMIN", "SALES"]}>
+    <RoleGuard allowedRoles={["ADMIN", "SALES"]}>
       <ApprovalDetailPage approvalId={approvalId} />
     </RoleGuard>
   );

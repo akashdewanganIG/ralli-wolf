@@ -3,28 +3,25 @@ import type { Request } from "express";
 import { InvoiceController } from "../controllers/invoice.controller.js";
 import {
   requireAuth,
-  requireRole,
+  requirePermission,
   requireSubdealerAuth,
 } from "../middleware/auth.middleware.js";
-import { UserRole } from "@prisma/client";
 import multer from "multer";
-import { rateLimit } from "../middleware/rateLimit.js";
+import { rateLimit } from "../middleware/rate-limit.js";
 
 const router = Router();
 const invoiceController = new InvoiceController();
 
-// Configure multer for invoice file uploads (PDFs and images)
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
+    fileSize: 10 * 1024 * 1024,
   },
   fileFilter: (
     _req: Request,
-    file: any,
+    file: Express.Multer.File,
     cb: (error: Error | null, acceptFile: boolean) => void
   ) => {
-    // Accept PDF files and image files (JPEG, PNG only)
     const allowedMimeTypes = [
       "application/pdf",
       "image/jpeg",
@@ -39,37 +36,41 @@ const upload = multer({
   },
 });
 
-// Upload invoice (protected - sub-dealer auth required)
 router.post(
   "/",
-  rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 10, // 10 uploads per 15 minutes per phone/IP
-    keyGenerator: req => String(req.body?.phone || req.ip || ""),
-  }),
   requireSubdealerAuth,
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    keyGenerator: req => String(req.subdealer?.id || req.ip || ""),
+  }),
   upload.single("file"),
   invoiceController.uploadInvoice.bind(invoiceController)
 );
 
-// All other routes require authentication and ADMIN role
 router.use(requireAuth);
-router.use(requireRole([UserRole.ADMIN]));
+router.use(requirePermission("finance.view"));
 
-// Get all invoices (ADMIN only)
 router.get("/", invoiceController.getAllInvoices.bind(invoiceController));
 
-// Get invoice by ID (ADMIN only)
+router.get(
+  "/:id/file",
+  invoiceController.downloadInvoiceFile.bind(invoiceController)
+);
+
 router.get("/:id", invoiceController.getInvoiceById.bind(invoiceController));
 
-// Update invoice (ADMIN only, with optional file upload)
 router.put(
   "/:id",
+  requirePermission("finance.manage"),
   upload.single("file"),
   invoiceController.updateInvoice.bind(invoiceController)
 );
 
-// Delete invoice (ADMIN only)
-router.delete("/:id", invoiceController.deleteInvoice.bind(invoiceController));
+router.delete(
+  "/:id",
+  requirePermission("finance.manage"),
+  invoiceController.deleteInvoice.bind(invoiceController)
+);
 
 export default router;

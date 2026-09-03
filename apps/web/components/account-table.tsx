@@ -4,20 +4,20 @@ import React from "react";
 import { DataTable, TableColumn } from "./data-table";
 import { Account } from "../lib/api/types";
 import AccountEditModal, { AccountEditValues } from "./account-edit-modal";
-import { useUpdateAccount } from "@/hooks/useAccounts";
+import { useUpdateAccount } from "@/hooks/use-accounts";
 import { toast } from "@/lib/toast";
+import { safeHttpUrl } from "@/lib/validation";
 
 interface AccountTableProps {
   accounts: Account[];
   onAccountClick?: (account: Account) => void;
-  onDeleteAccount?: (account: Account) => void;
   showCheckboxes?: boolean;
   selectedItems?: string[];
   onSelectionChange?: (selectedIds: string[]) => void;
-  // Search props
+
   searchQuery?: string;
   isSearchMode?: boolean;
-  // Pagination props
+
   currentPage?: number;
   totalPages?: number;
   totalCount?: number;
@@ -29,14 +29,13 @@ interface AccountTableProps {
 export const AccountTable: React.FC<AccountTableProps> = ({
   accounts,
   onAccountClick,
-  onDeleteAccount,
   showCheckboxes = false,
   selectedItems = [],
   onSelectionChange,
-  // Search props
+
   searchQuery,
   isSearchMode = false,
-  // Pagination props
+
   currentPage = 1,
   totalPages = 1,
   totalCount,
@@ -80,46 +79,29 @@ export const AccountTable: React.FC<AccountTableProps> = ({
           );
         }
 
-        // Remove https://, http://, www. and get just the domain
-        const cleanDomain = value
+        const website = safeHttpUrl(String(value));
+        const cleanDomain = String(value)
           .replace(/^https?:\/\//, "")
           .replace(/^www\./, "");
 
-        // Truncate if longer than 20 chars: show first 7 + "..." + last 7
         let displayText = cleanDomain;
         if (cleanDomain.length > 20) {
           displayText = `${cleanDomain.slice(0, 7)}...${cleanDomain.slice(-7)}`;
         }
 
-        return (
+        return website ? (
           <a
-            href={`https://${cleanDomain}`}
+            href={website}
             target="_blank"
             rel="noopener noreferrer"
             className="text-info-foreground hover:text-info"
           >
             {displayText}
           </a>
+        ) : (
+          <span className="text-muted-foreground">{displayText}</span>
         );
       },
-    },
-    {
-      key: "contact",
-      label: "Contact",
-      render: value => (
-        <span className="text-muted-foreground">
-          {value || "No contact specified"}
-        </span>
-      ),
-    },
-    {
-      key: "email",
-      label: "Email",
-      render: value => (
-        <span className="text-muted-foreground">
-          {value || "No email provided"}
-        </span>
-      ),
     },
     {
       key: "createdAt",
@@ -164,15 +146,6 @@ export const AccountTable: React.FC<AccountTableProps> = ({
               setEditOpen(true);
             },
           },
-          { label: "View Contacts", onClick: () => {} },
-          ...(onDeleteAccount
-            ? [
-                {
-                  label: "Delete Account",
-                  onClick: (account: Account) => onDeleteAccount(account),
-                },
-              ]
-            : []),
         ]}
         onRowClick={onAccountClick}
         getRowHref={account => `/leads/accounts/${account.id}`}
@@ -186,8 +159,6 @@ export const AccountTable: React.FC<AccountTableProps> = ({
         itemsPerPage={itemsPerPage}
         onPageChange={onPageChange}
         onItemsPerPageChange={onItemsPerPageChange}
-        showFilter={true}
-        customFilter={<></>}
         columnPreferenceKey="account-table"
       />
       <AccountEditModal
@@ -195,17 +166,18 @@ export const AccountTable: React.FC<AccountTableProps> = ({
         onOpenChange={setEditOpen}
         initialValues={{
           name: editingAccount?.name || "",
-          website: (editingAccount as any)?.website || "",
-          email: (editingAccount as any)?.email || "",
-          phone: (editingAccount as any)?.phone || "",
+          industry: editingAccount?.industry || "",
+          website: editingAccount?.website || "",
+          phone: editingAccount?.phone || "",
+          description: editingAccount?.description || "",
         }}
         isSaving={updateAccountMutation.isPending}
         onSave={async (values: AccountEditValues) => {
           if (!editingAccount) return;
           try {
             await updateAccountMutation.mutateAsync({
-              id: parseInt(String(editingAccount.id as any)),
-              data: values as any,
+              id: editingAccount.id,
+              data: values,
             });
             toast.success("Account updated successfully");
           } catch (err) {

@@ -29,7 +29,7 @@ export interface SelectFieldProps
   onChange?: (event: SelectFieldChangeEvent) => void;
   onBlur?: React.FocusEventHandler<HTMLButtonElement>;
   contentClassName?: string;
-  /** Height/padding/type scale. Shared with Input, Textarea and Button. */
+
   size?: ControlSize;
 }
 

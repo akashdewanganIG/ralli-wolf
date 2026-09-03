@@ -4,15 +4,8 @@ import { PageHeader } from "@repo/ui/components/ui/page-header";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 import { NotificationPreferences } from "@/components/notification-preferences";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 
-/**
- * Per-user notification settings.
- *
- * Not behind a role guard: these are the signed-in user's own preferences, so
- * everyone with an account can reach them. It sits under Administration
- * because that is where the rest of the account-level settings live.
- */
 export default function NotificationSettingsPage() {
   return (
     <ProtectedRoute>

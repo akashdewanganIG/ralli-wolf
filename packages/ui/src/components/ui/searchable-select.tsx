@@ -16,7 +16,7 @@ import { cn } from "../../lib/utils";
 export type SearchableSelectItem = {
   value: string;
   label: React.ReactNode;
-  /** Optional: if provided, used for searching instead of rendered label */
+
   searchText?: string;
   disabled?: boolean;
 };
@@ -31,7 +31,7 @@ type SearchableSelectProps = {
   triggerClassName?: string;
   contentClassName?: string;
   disabled?: boolean;
-  /** Height/padding/type scale. Shared with Input, Textarea and Button. */
+
   size?: ControlSize;
 };
 
@@ -75,12 +75,7 @@ export function SearchableSelect({
       <SelectTrigger size={size} className={cn(triggerClassName)}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
-      <SelectContent
-        className={cn(
-          "w-[var(--radix-select-trigger-width)] max-w-[90vw]",
-          contentClassName
-        )}
-      >
+      <SelectContent className={cn("max-w-[90vw]", contentClassName)}>
         <div
           className="sticky top-0 z-10 border-b bg-popover p-2"
           onClick={e => e.stopPropagation()}
@@ -95,7 +90,7 @@ export function SearchableSelect({
               className="pl-9"
               onKeyDown={e => {
                 e.stopPropagation();
-                // Prevent Radix Select from intercepting typing
+
                 if (
                   e.key !== "Escape" &&
                   e.key !== "Enter" &&

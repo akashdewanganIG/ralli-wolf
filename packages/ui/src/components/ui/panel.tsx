@@ -3,22 +3,6 @@ import * as React from "react";
 import { InfoHint } from "@repo/ui/components/ui/info-hint";
 import { cn } from "@repo/ui/lib/utils";
 
-/**
- * The bordered card every page builds its content out of.
- *
- * This started life inside the dashboard, which meant any other page wanting
- * the same object had to re-describe it — and settings, which did exactly that,
- * drifted: two-line headers, tinted header bands, an icon chip per card, and
- * five different paddings. Declaring it once is what makes "consistent with the
- * dashboard" a fact rather than an intention.
- *
- * The header is deliberately a single row. Descriptions explain what a panel is,
- * which matters the first time and is noise every time after, so they fold into
- * the info hint rather than taking a second line on every card forever.
- *
- * `action` is pinned to the foot behind its own rule, so a column of panels has
- * a straight bottom edge no matter how uneven their content is.
- */
 export function Panel({
   title,
   description,
@@ -28,13 +12,13 @@ export function Panel({
   bodyClassName = "",
 }: {
   title: React.ReactNode;
-  /** Folded into the info hint beside the title. */
+
   description?: React.ReactNode;
-  /** Full-width action rendered at the foot of the panel. */
+
   action?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
-  /** For content that supplies its own padding, e.g. a full-bleed list. */
+
   bodyClassName?: string;
 }) {
   return (
@@ -62,12 +46,6 @@ export function Panel({
   );
 }
 
-/**
- * A titled run of panels.
- *
- * The heading is the only place a section explains itself, which is what keeps
- * the panels underneath free of their own preambles.
- */
 export function PanelSection({
   id,
   title,

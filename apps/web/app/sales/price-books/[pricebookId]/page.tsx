@@ -2,8 +2,8 @@
 
 import { use } from "react";
 import { useRouter } from "next/navigation";
-import { usePricebook } from "@/hooks/usePricebooks";
-import { usePricebookEntriesByPriceBookId } from "@/hooks/usePricebookEntries";
+import { usePricebook } from "@/hooks/use-pricebooks";
+import { usePricebookEntriesByPriceBookId } from "@/hooks/use-pricebook-entries";
 import { DataTable } from "@/components/data-table";
 import type { TableColumn } from "@/components/data-table";
 import type { PriceBookEntry } from "@/lib/api/types";
@@ -21,11 +21,6 @@ import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { formatMoney } from "@/lib/utils/decimal";
 import { CategorySwitcher } from "@repo/ui/components/ui/category-switcher";
 
-/**
- * A price book is denominated in its own currency, so its prices are shown in
- * that currency rather than the display currency — relabelling a EUR price
- * book as USD would misstate what a customer is actually quoted.
- */
 const buildEntryColumns = (
   currencyCode?: string
 ): TableColumn<PriceBookEntry>[] => [
@@ -81,7 +76,7 @@ interface PageProps {
 
 export default function PriceBookDetailPage({ params }: PageProps) {
   const { pricebookId } = use(params);
-  const priceBookId = parseInt(pricebookId);
+  const priceBookId = /^\d+$/.test(pricebookId) ? Number(pricebookId) : 0;
   const router = useRouter();
 
   const {
@@ -102,8 +97,7 @@ export default function PriceBookDetailPage({ params }: PageProps) {
     );
   }
 
-  // The API wraps the single record: { data: PriceBook } — the TS type is incorrect
-  const pb = (pbData as any)?.data ?? pbData;
+  const pb = pbData;
 
   if (pbError || !pb) {
     return (
@@ -140,10 +134,8 @@ export default function PriceBookDetailPage({ params }: PageProps) {
         />
 
         <TabsContents>
-          {/* ── Details Tab ───────────────────────────── */}
           <TabsContent value="details">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              {/* Main info */}
               <div className="lg:col-span-2 space-y-4">
                 <DetailCard
                   title="Price Book Information"
@@ -151,10 +143,7 @@ export default function PriceBookDetailPage({ params }: PageProps) {
                 >
                   <InfoGrid columns={2}>
                     <InfoField label="Name" value={pb.name} />
-                    <InfoField
-                      label="Currency"
-                      value={pb.currencyISOCode ?? "—"}
-                    />
+                    <InfoField label="Currency" value={pb.currencyCode} />
                     <div className="space-y-1.5">
                       <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
                         Status
@@ -177,7 +166,6 @@ export default function PriceBookDetailPage({ params }: PageProps) {
                 </DetailCard>
               </div>
 
-              {/* System info sidebar */}
               <div className="space-y-4">
                 <DetailCard
                   title="System Information"
@@ -216,12 +204,11 @@ export default function PriceBookDetailPage({ params }: PageProps) {
             </div>
           </TabsContent>
 
-          {/* ── Entries Tab ───────────────────────────── */}
           <TabsContent value="entries">
             <DataTable
               title="Price Book Entries"
               data={entries}
-              columns={buildEntryColumns(pb.currencyCode ?? pb.currencyISOCode)}
+              columns={buildEntryColumns(pb.currencyCode)}
               count={entries.length}
               columnPreferenceKey="pricebook-entries"
             />

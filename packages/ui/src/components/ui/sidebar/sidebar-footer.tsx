@@ -13,17 +13,15 @@ export function SidebarFooter({
   return (
     <div
       className={cn(
-        "flex min-h-12 items-center border-t border-sidebar-border px-4 py-3",
+        "flex min-h-12 items-center border-t border-sidebar-border py-3",
+        open ? "px-4" : "px-2",
         className
       )}
       {...props}
     >
-      <div
-        className={cn(
-          "transition-opacity duration-150 ease-in-out w-full",
-          !open && "opacity-0 overflow-hidden"
-        )}
-      >
+      {/* The footer holds an action now, so it stays usable when collapsed:
+          centred rather than faded out. */}
+      <div className={cn("w-full", !open && "flex justify-center")}>
         {children}
       </div>
     </div>

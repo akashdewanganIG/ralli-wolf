@@ -1,23 +1,5 @@
 import { prisma } from "@repo/db";
-
-/**
- * Every dataset the workspace can hand out or take in, in one place.
- *
- * Export used to be three hard-coded branches inside the controller. Adding a
- * fourth meant editing a column map, a switch and a union type in three files,
- * so in practice nothing was ever added. Here an entity is *data*: a label, a
- * column list, and a function that fetches a page of rows. The controller
- * stays the same size whether there are three entities or fifty.
- *
- * `importable` is deliberately sparse. Master data — products, suppliers,
- * warehouses, people — can be loaded from a spreadsheet, because a row is the
- * whole record. Ledger data cannot: a stock movement has to go through the
- * stock service to keep balances and lots consistent, and a payment has to go
- * through the finance service to hold an invoice's balance. Letting a
- * spreadsheet write those rows directly would walk straight past the advisory
- * locks and recomputation that keep them correct, so those entities export
- * only.
- */
+import type { TransferEntityKey } from "./authorization.js";
 
 export type TransferValue = string | number;
 export type TransferRow = Record<string, TransferValue>;
@@ -25,16 +7,15 @@ export type TransferRow = Record<string, TransferValue>;
 export type TransferColumn = {
   header: string;
   key: string;
-  /** Force Excel to treat the column as text — phone numbers, codes, pincodes. */
+
   text?: boolean;
 };
 
 export type TransferEntity = {
-  /** URL segment and file-name stem. */
-  key: string;
-  /** Shown in the picker and used as the sheet name. */
+  key: TransferEntityKey;
+
   label: string;
-  /** Which part of the product it belongs to, for grouping in the UI. */
+
   group:
     | "Marketing & sales"
     | "Supply chain"
@@ -45,13 +26,12 @@ export type TransferEntity = {
     | "Administration";
   columns: TransferColumn[];
   fetch: (skip: number, take: number) => Promise<TransferRow[]>;
-  /** Set when a spreadsheet row can safely become a record. */
+
   importable?: {
-    /** Columns a row must carry to be accepted. */
     required: string[];
-    /** Column used to detect an existing record, so re-import updates it. */
+
     uniqueBy: string;
-    /** Turns one validated row into a create/update. Returns what happened. */
+
     apply: (row: Record<string, string>) => Promise<"created" | "updated">;
   };
 };
@@ -63,13 +43,6 @@ const num = (v: unknown): number =>
 const date = (v: Date | null | undefined): string =>
   v ? v.toISOString().slice(0, 10) : "";
 
-/**
- * A spreadsheet cell that has to land on an enum.
- *
- * People type "assembly line" where the database wants ASSEMBLY_LINE, so the
- * value is normalised before it is checked; anything still unrecognised falls
- * back rather than failing the row over a label.
- */
 function enumOr(
   value: string | undefined,
   allowed: string[],
@@ -82,31 +55,22 @@ function enumOr(
   return normalised && allowed.includes(normalised) ? normalised : fallback;
 }
 
-/** A whole number from a cell, or the default when it is blank or nonsense. */
 function intOr(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : fallback;
 }
 
-/** A decimal string for Prisma, kept as text so nothing is lost on the way. */
 function decOr(value: string | undefined, fallback: string): string {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? String(parsed) : fallback;
 }
 
-/** Trim and drop empty strings, so a blank cell means "not provided". */
 function clean(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
 }
 
-/**
- * The registry.
- *
- * Order matters only for how the picker reads; grouping does the rest.
- */
 export const TRANSFER_ENTITIES: TransferEntity[] = [
-  // ------------------------------------------------ marketing and sales ---
   {
     key: "leads",
     label: "Leads",
@@ -164,8 +128,7 @@ export const TRANSFER_ENTITIES: TransferEntity[] = [
           city: clean(row.city),
           state: clean(row.state),
           pincode: clean(row.pincode),
-          // `source` is an enum, so a spreadsheet cannot invent one. A row
-          // loaded from a file is by definition an import.
+
           source: "IMPORT" as const,
         };
         if (existing) {
@@ -427,7 +390,6 @@ export const TRANSFER_ENTITIES: TransferEntity[] = [
     },
   },
 
-  // ------------------------------------------------------- supply chain ---
   {
     key: "warehouses",
     label: "Warehouses",
@@ -675,7 +637,6 @@ export const TRANSFER_ENTITIES: TransferEntity[] = [
     },
   },
 
-  // ---------------------------------------------------------- inventory ---
   {
     key: "stock-positions",
     label: "Stock positions",
@@ -884,7 +845,6 @@ export const TRANSFER_ENTITIES: TransferEntity[] = [
     },
   },
 
-  // --------------------------------------------------------- production ---
   {
     key: "boms",
     label: "Bills of materials",
@@ -1063,7 +1023,6 @@ export const TRANSFER_ENTITIES: TransferEntity[] = [
     },
   },
 
-  // ------------------------------------------------------------ finance ---
   {
     key: "supplier-invoices",
     label: "Supplier invoices",
@@ -1173,7 +1132,6 @@ export const TRANSFER_ENTITIES: TransferEntity[] = [
     },
   },
 
-  // ----------------------------------------------------- administration ---
   {
     key: "users",
     label: "Users",
@@ -1191,8 +1149,7 @@ export const TRANSFER_ENTITIES: TransferEntity[] = [
         skip,
         take,
         orderBy: { id: "asc" },
-        // Never widen this to the whole row: it carries passwordHash and
-        // totpSecret, and an export is a file that leaves the building.
+
         select: {
           id: true,
           email: true,
@@ -1217,10 +1174,9 @@ export const TRANSFER_ENTITIES: TransferEntity[] = [
 const BY_KEY = new Map(TRANSFER_ENTITIES.map(e => [e.key, e]));
 
 export function findEntity(key: string): TransferEntity | undefined {
-  return BY_KEY.get(key);
+  return BY_KEY.get(key as TransferEntityKey);
 }
 
-/** What the UI needs to build its picker, without the server-side functions. */
 export function entityCatalogue() {
   return TRANSFER_ENTITIES.map(e => ({
     key: e.key,

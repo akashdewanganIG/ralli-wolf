@@ -1,12 +1,19 @@
 "use client";
 
-import { useSegments } from "@/hooks/useSegments";
+import { useSegments } from "@/hooks/use-segments";
 import { segmentService, whatsappService } from "@/lib/api/services";
-import type { MessageTemplate } from "@/lib/api/types";
+import type {
+  MessageTemplate,
+  MessagingAccount,
+  WhatsAppAudience,
+  WhatsAppCreateCampaignPayload,
+  WhatsAppUpdateCampaignPayload,
+} from "@/lib/api/types";
 import { toast } from "@/lib/toast";
 import { Badge, Button, Card, Input, Label } from "@repo/ui";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -40,26 +47,47 @@ import {
 } from "@repo/ui/icons";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { WhatsAppPreview } from "./whatsapp-preview";
+import { WhatsAppPreview, type TemplateComponent } from "./whatsapp-preview";
 import { CategorySwitcher } from "@repo/ui/components/ui/category-switcher";
 
 interface CreateCampaignModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
-  editCampaignId?: number; // If provided, the modal will be in edit mode
+  editCampaignId?: number;
 }
 
 const TOTAL_STEPS = 7;
 
 type CampaignAction = "draft" | "send" | "schedule";
 
+type JsonRecord = Record<string, unknown>;
+
+interface ParameterField {
+  key: string;
+  label: string;
+  type: "text" | "url" | "media";
+  placeholder?: string;
+  mediaType?: string;
+}
+
+function isRecord(value: unknown): value is JsonRecord {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function asText(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
 const ALLOW_AUTH_TEMPLATES =
   process.env.NEXT_PUBLIC_ALLOW_AUTH_TEMPLATES === "true";
 const WHATSAPP_TEXT_ONLY_MVP =
   process.env.NEXT_PUBLIC_WHATSAPP_TEXT_ONLY_MVP === "true";
 
-// Available database fields for dynamic values
 const AVAILABLE_FIELDS = [
   { value: "{{name}}", label: "Name", description: "Contact name" },
   {
@@ -86,7 +114,6 @@ const AVAILABLE_FIELDS = [
   },
 ];
 
-// Field input component with database field dropdown
 interface FieldInputWithDropdownProps {
   fieldKey: string;
   label: string;
@@ -117,7 +144,6 @@ function FieldInputWithDropdown({
       const newValue = textBefore + fieldValue + textAfter;
       onChange(newValue);
 
-      // Focus back on input and set cursor position
       setTimeout(() => {
         input.focus();
         const newCursorPos = cursorPos + fieldValue.length;
@@ -267,7 +293,8 @@ function MediaUploadField({
               </p>
             )}
           <p className="text-xs text-muted-foreground">
-            Enter a publicly accessible URL or upload a file below (max 10MB)
+            Enter a provider-accessible HTTPS URL or upload a private file below
+            (max 10MB)
           </p>
         </div>
       ) : (
@@ -297,8 +324,8 @@ function MediaUploadField({
             )}
           </div>
           <p className="text-xs text-muted-foreground">
-            Upload file to S3 (max 10MB). Files are stored in whatsapp-campaign
-            folder.
+            Uploaded files remain private and receive a short-lived provider
+            link only when the campaign is sent.
           </p>
           <input
             ref={inputRef}
@@ -328,13 +355,17 @@ export function CreateCampaignModal({
   const isEditMode = Boolean(editCampaignId);
   const [currentStep, setCurrentStep] = useState(1);
 
-  // Form state
   const [name, setName] = useState("");
   const [accountId, setAccountId] = useState<number | undefined>(undefined);
   const [templateName, setTemplateName] = useState("");
   const [selectedLanguage, setSelectedLanguage] = useState<string>("");
-  const [toAudience, setToAudience] = useState("all");
+  const [toAudience, setToAudience] = useState<WhatsAppAudience>("all");
   const [segmentId, setSegmentId] = useState<number | undefined>(undefined);
+  const [initialAudience, setInitialAudience] =
+    useState<WhatsAppAudience>("all");
+  const [initialSegmentId, setInitialSegmentId] = useState<number | undefined>(
+    undefined
+  );
   const [paramValues, setParamValues] = useState<Record<string, string>>({});
   const [mediaParams, setMediaParams] = useState<
     Record<string, { handle: string; mediaType: string; fileName?: string }>
@@ -348,17 +379,15 @@ export function CreateCampaignModal({
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleTime, setScheduleTime] = useState("");
 
-  // CSV upload state
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvContacts, setCsvContacts] = useState<Record<string, string>[]>([]);
   const [csvColumns, setCsvColumns] = useState<string[]>([]);
   const [phoneColumnName, setPhoneColumnName] = useState<string>("");
   const [csvLoading, setCsvLoading] = useState(false);
 
-  // UI state
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [accounts, setAccounts] = useState<any[]>([]);
-  const [templates, setTemplates] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<MessagingAccount[]>([]);
+  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [segmentPreview, setSegmentPreview] = useState<{
     total: number;
@@ -395,8 +424,22 @@ export function CreateCampaignModal({
     () => buildTemplateInsights(selectedTemplate),
     [selectedTemplate]
   );
+  const parameterFields = useMemo(
+    () => buildParameterFields(templateInsights.sampleParams),
+    [templateInsights.sampleParams]
+  );
 
-  // Get available languages from selected template
+  useEffect(() => {
+    const mediaFields = parameterFields.filter(
+      (field): field is ParameterField & { mediaType: string } =>
+        field.type === "media" && Boolean(field.mediaType)
+    );
+    mediaFieldKeysRef.current = mediaFields.map(field => field.key);
+    mediaFieldTypesRef.current = Object.fromEntries(
+      mediaFields.map(field => [field.key, field.mediaType])
+    );
+  }, [parameterFields]);
+
   const availableLanguages = useMemo(() => {
     if (!selectedTemplate) return [];
 
@@ -408,7 +451,6 @@ export function CreateCampaignModal({
       return selectedTemplate.languages;
     }
 
-    // Fallback to single language
     if (selectedTemplate.language) {
       return [
         {
@@ -421,7 +463,6 @@ export function CreateCampaignModal({
     return [];
   }, [selectedTemplate]);
 
-  // Reset form when modal closes
   useEffect(() => {
     if (!open) {
       setCurrentStep(1);
@@ -431,6 +472,8 @@ export function CreateCampaignModal({
       setSelectedLanguage("");
       setToAudience("all");
       setSegmentId(undefined);
+      setInitialAudience("all");
+      setInitialSegmentId(undefined);
       setParamValues({});
       setMediaParams({});
       setMediaUploadStatus({});
@@ -449,7 +492,6 @@ export function CreateCampaignModal({
     }
   }, [open]);
 
-  // Load accounts on mount
   useEffect(() => {
     if (!open) return;
     const load = async () => {
@@ -464,22 +506,21 @@ export function CreateCampaignModal({
     load();
   }, [open]);
 
-  // Load campaign config when editing
   useEffect(() => {
     if (!open || !editCampaignId) return;
     const loadConfig = async () => {
       try {
         const config = await whatsappService.getCampaignConfig(editCampaignId);
 
-        // Set form values from config
         setName(config.name);
         setAccountId(config.accountId);
         setTemplateName(config.templateName);
         setSelectedLanguage(config.language || "");
         setToAudience(config.audience);
-        setSegmentId(config.segmentId);
+        setSegmentId(config.segmentId ?? undefined);
+        setInitialAudience(config.audience);
+        setInitialSegmentId(config.segmentId ?? undefined);
 
-        // Parse message params into paramValues
         if (config.messageParams && typeof config.messageParams === "object") {
           const parsedParams: Record<string, string> = {};
           Object.entries(config.messageParams).forEach(([key, value]) => {
@@ -498,7 +539,6 @@ export function CreateCampaignModal({
           setParamValues(parsedParams);
         }
 
-        // Default to draft action for editing
         setCampaignAction("draft");
       } catch {
         setError("Failed to load campaign configuration");
@@ -507,7 +547,6 @@ export function CreateCampaignModal({
     loadConfig();
   }, [open, editCampaignId]);
 
-  // Load templates when account is selected
   useEffect(() => {
     if (!accountId || !open) return;
     const loadTemplates = async () => {
@@ -519,7 +558,7 @@ export function CreateCampaignModal({
           }
           return (tpl.category || "").toUpperCase() !== "AUTHENTICATION";
         });
-        // MVP flag: only show text-only templates when flag is true
+
         if (WHATSAPP_TEXT_ONLY_MVP) {
           filtered = filtered.filter((tpl: MessageTemplate) =>
             isTextOnlyTemplate(tpl)
@@ -544,7 +583,6 @@ export function CreateCampaignModal({
     loadTemplates();
   }, [accountId, open]);
 
-  // Reset template selection when account changes
   useEffect(() => {
     if (accountId) {
       setTemplateName("");
@@ -552,14 +590,12 @@ export function CreateCampaignModal({
     }
   }, [accountId]);
 
-  // Reset language when template changes
   useEffect(() => {
     if (templateName) {
       setSelectedLanguage("");
     }
   }, [templateName]);
 
-  // Reset segment when audience changes
   useEffect(() => {
     if (toAudience !== "segment") {
       setSegmentId(undefined);
@@ -567,7 +603,6 @@ export function CreateCampaignModal({
     }
   }, [toAudience]);
 
-  // Close template dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -598,16 +633,15 @@ export function CreateCampaignModal({
         sample: result.contacts.length,
       });
       setError(null);
-    } catch (err: any) {
-      setError(err?.message || "Failed to preview segment");
+    } catch (error: unknown) {
+      setError(errorMessage(error, "Failed to preview segment"));
     } finally {
       setPreviewLoading(false);
     }
   };
 
   const handleCsvUpload = async (file: File) => {
-    // Validate file size (max 8MB)
-    const maxSizeBytes = 8 * 1024 * 1024; // 8MB
+    const maxSizeBytes = 8 * 1024 * 1024;
     if (file.size > maxSizeBytes) {
       toast.error("File size exceeds maximum allowed size of 8MB");
       return;
@@ -615,7 +649,6 @@ export function CreateCampaignModal({
 
     const fileExtension = file.name.split(".").pop()?.toLowerCase();
 
-    // Validate file type
     if (!["csv", "xlsx", "xls"].includes(fileExtension || "")) {
       toast.error(
         "Unsupported file format. Please upload CSV or Excel (.xlsx, .xls) file"
@@ -623,26 +656,20 @@ export function CreateCampaignModal({
       return;
     }
 
-    // Set loading state
     setCsvLoading(true);
     setError(null);
 
-    // Show loading toast for large files
     const loadingToast =
       file.size > 1024 * 1024 ? toast.loading("Parsing file...") : null;
 
     try {
-      // Use xlsx library to parse both CSV and Excel files
       const reader = new FileReader();
 
       reader.onload = async e => {
         try {
-          // Spreadsheet parsing is only needed after a user selects a file.
-          // Loading it here keeps the large parser out of the initial route bundle.
           const XLSX = await import("xlsx");
           const data = new Uint8Array(e.target?.result as ArrayBuffer);
 
-          // xlsx library handles both CSV and Excel formats automatically
           const workbook = XLSX.read(data, { type: "array" });
           const firstSheetName = workbook.SheetNames[0];
           if (!firstSheetName) {
@@ -660,10 +687,9 @@ export function CreateCampaignModal({
             return;
           }
 
-          // Convert to JSON with header row
-          const jsonData = XLSX.utils.sheet_to_json(firstSheet, {
+          const jsonData = XLSX.utils.sheet_to_json<unknown[]>(firstSheet, {
             header: 1,
-          }) as any[][];
+          });
 
           if (jsonData.length < 2) {
             if (loadingToast) toast.dismiss(loadingToast);
@@ -674,7 +700,6 @@ export function CreateCampaignModal({
             return;
           }
 
-          // First row is headers
           const firstRow = jsonData[0];
           if (!firstRow) {
             if (loadingToast) toast.dismiss(loadingToast);
@@ -714,7 +739,6 @@ export function CreateCampaignModal({
           setCsvContacts(contacts);
           setCsvColumns(headers);
 
-          // Try to auto-detect phone column
           const phoneCol = headers.find(
             col =>
               col.toLowerCase().includes("phone") ||
@@ -732,21 +756,16 @@ export function CreateCampaignModal({
           );
           setError(null);
           setCsvLoading(false);
-        } catch (error: any) {
-          console.error("File parsing error:", error);
+        } catch (error: unknown) {
           if (loadingToast) toast.dismiss(loadingToast);
-          toast.error(
-            `Failed to parse file: ${error.message || "Invalid file format"}`
-          );
+          const message = errorMessage(error, "Invalid file format");
+          toast.error(`Failed to parse file: ${message}`);
           setCsvLoading(false);
-          setError(
-            `File parsing failed: ${error.message || "Invalid file format"}`
-          );
+          setError(`File parsing failed: ${message}`);
         }
       };
 
-      reader.onerror = error => {
-        console.error("FileReader error:", error);
+      reader.onerror = () => {
         if (loadingToast) toast.dismiss(loadingToast);
         toast.error("Failed to read file. Please try again.");
         setCsvLoading(false);
@@ -754,14 +773,12 @@ export function CreateCampaignModal({
       };
 
       reader.readAsArrayBuffer(file);
-    } catch (error: any) {
-      console.error("File upload error:", error);
+    } catch (error: unknown) {
       if (loadingToast) toast.dismiss(loadingToast);
-      toast.error(
-        `Failed to process file: ${error.message || "Unknown error"}`
-      );
+      const message = errorMessage(error, "Unknown error");
+      toast.error(`Failed to process file: ${message}`);
       setCsvLoading(false);
-      setError(`File processing failed: ${error.message || "Unknown error"}`);
+      setError(`File processing failed: ${message}`);
     }
   };
 
@@ -801,7 +818,6 @@ export function CreateCampaignModal({
         }
         return true;
       case 6:
-        // Parameters are now handled with individual fields
         return true;
       case 7:
         if (campaignAction === "schedule") {
@@ -846,8 +862,7 @@ export function CreateCampaignModal({
     });
 
   const handleMediaUpload = async (fieldKey: string, file: File) => {
-    // Validate file size (max 10MB)
-    const maxSizeBytes = 10 * 1024 * 1024; // 10MB
+    const maxSizeBytes = 10 * 1024 * 1024;
     if (file.size > maxSizeBytes) {
       toast.error("File size exceeds maximum allowed size of 10MB");
       return;
@@ -858,23 +873,28 @@ export function CreateCampaignModal({
       const base64 = await fileToBase64(file);
       const base64Payload = base64.split(",")[1] || base64;
 
-      // Upload to S3 via backend
       const response = await whatsappService.uploadCampaignMedia({
         mediaBase64: base64Payload,
         mimeType: file.type,
         filename: file.name,
       });
 
-      // Store the S3 URL directly in paramValues for use in campaign
       setParamValues(prev => ({
         ...prev,
         [fieldKey]: response.url,
       }));
+      setMediaParams(prev => ({
+        ...prev,
+        [fieldKey]: {
+          handle: response.url,
+          mediaType: file.type.split("/")[0]?.toUpperCase() || "DOCUMENT",
+          fileName: file.name,
+        },
+      }));
 
-      toast.success("Media uploaded successfully to S3");
-    } catch (error: any) {
-      console.error("Failed to upload media", error);
-      toast.error(error?.message || "Failed to upload media");
+      toast.success("Media uploaded securely");
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to upload media"));
     } finally {
       setMediaUploadStatus(prev => ({ ...prev, [fieldKey]: false }));
     }
@@ -886,29 +906,23 @@ export function CreateCampaignModal({
     setIsSubmitting(true);
     setError(null);
     try {
-      // Build params from individual field values
-      const params: Record<string, any> = {};
+      const params: Record<string, unknown> = {};
 
-      // First, handle all media fields (both URL and uploaded)
       mediaFieldKeysRef.current.forEach(key => {
         const urlValue = paramValues[key];
-        const uploadedMedia = mediaParams[key];
 
-        // Get media type from the mediaFieldTypesRef (set during field rendering)
         const mediaTypeFromTemplate =
           mediaFieldTypesRef.current[key] || "IMAGE";
 
-        // Check if user entered a URL
         if (
           urlValue &&
           urlValue.trim() &&
           (urlValue.startsWith("http://") || urlValue.startsWith("https://"))
         ) {
-          // Use media type from template hints
           const mediaType = mediaTypeFromTemplate;
           const lowerType = mediaType.toLowerCase();
 
-          const payload: Record<string, any> = { type: lowerType };
+          const payload: Record<string, unknown> = { type: lowerType };
           if (lowerType === "image") {
             payload.image = { link: urlValue };
           } else if (lowerType === "video") {
@@ -920,23 +934,8 @@ export function CreateCampaignModal({
             };
           }
           params[key] = payload;
-        }
-        // Check if user uploaded media (fallback - not recommended for campaigns)
-        else if (uploadedMedia?.handle) {
-          const lowerType = uploadedMedia.mediaType.toLowerCase();
-          const payload: Record<string, any> = { type: lowerType };
-
-          if (lowerType === "image") {
-            payload.image = { id: uploadedMedia.handle };
-          } else if (lowerType === "video") {
-            payload.video = { id: uploadedMedia.handle };
-          } else if (lowerType === "document") {
-            payload.document = {
-              id: uploadedMedia.handle,
-              filename: uploadedMedia.fileName || "attachment.pdf",
-            };
-          }
-          params[key] = payload;
+        } else if (urlValue?.startsWith("s3://whatsapp-campaign/")) {
+          params[key] = urlValue;
         } else {
           throw new Error(
             `Please provide a URL for ${key}. Media must be publicly accessible.`
@@ -944,81 +943,101 @@ export function CreateCampaignModal({
         }
       });
 
-      // Then handle regular text/button fields
       Object.entries(paramValues).forEach(([key, value]) => {
-        // Skip if already handled as media field
         if (mediaFieldKeysRef.current.includes(key)) {
           return;
         }
 
         if (value.trim()) {
-          // Check if it's a button URL field
-          if (key.includes("button") && value.startsWith("http")) {
-            params[key] = { type: "text", subtype: "url", value: value };
+          const sample = templateInsights.sampleParams[key];
+          if (isRecord(sample)) {
+            const type = asText(sample.type) ?? "text";
+            const subtype = asText(sample.subtype);
+            if (type === "coupon_code") {
+              params[key] = {
+                type,
+                ...(subtype ? { subtype } : {}),
+                coupon_code: value,
+              };
+            } else {
+              params[key] = {
+                type,
+                ...(subtype ? { subtype } : {}),
+                value,
+              };
+            }
           } else {
             params[key] = { type: "text", value: value };
           }
         }
       });
 
-      const payload = {
-        name,
-        channel: "whatsapp",
-        accountId,
-        templateName,
-        language: selectedLanguage,
-        toAudience,
-        params,
-        segmentId: toAudience === "segment" ? segmentId : undefined,
-        csvContacts: toAudience === "upload" ? csvContacts : undefined,
-        phoneColumnName: toAudience === "upload" ? phoneColumnName : undefined,
-        scheduledAt:
-          campaignAction === "schedule"
-            ? new Date(`${scheduleDate}T${scheduleTime}`).toISOString()
-            : undefined,
-        // Mark as draft so backend skips generating deliveries; this keeps deliveryStats.total === 0,
-        // which the UI interprets as "Draft".
-        isDraft: campaignAction === "draft",
-      };
-
       let campaignId: number;
 
       if (isEditMode && editCampaignId) {
-        // Update existing campaign
+        const payload: WhatsAppUpdateCampaignPayload = {
+          name,
+          templateName,
+          language: selectedLanguage,
+          params,
+        };
+        const audienceChanged =
+          toAudience !== initialAudience ||
+          (toAudience === "segment" && segmentId !== initialSegmentId);
+        if (audienceChanged) {
+          if (toAudience === "upload") {
+            throw new Error(
+              "An existing campaign cannot be changed to an uploaded audience"
+            );
+          }
+          payload.toAudience = toAudience;
+          payload.segmentId = toAudience === "segment" ? segmentId : null;
+        }
         await whatsappService.updateCampaign(editCampaignId, payload);
         campaignId = editCampaignId;
       } else {
-        // Create new campaign
-        const result = (await whatsappService.createCampaign(payload)) as any;
-        campaignId = result.campaign?.id;
+        if (accountId === undefined) {
+          throw new Error("Select a WhatsApp account");
+        }
+        const payload: WhatsAppCreateCampaignPayload = {
+          name,
+          accountId,
+          templateName,
+          language: selectedLanguage,
+          toAudience,
+          params,
+          segmentId: toAudience === "segment" ? segmentId : undefined,
+          csvContacts: toAudience === "upload" ? csvContacts : undefined,
+          phoneColumnName:
+            toAudience === "upload" ? phoneColumnName : undefined,
+
+          isDraft: campaignAction === "draft",
+        };
+        const result = await whatsappService.createCampaign(payload);
+        campaignId = result.campaign.id;
 
         if (!campaignId) {
           throw new Error("Campaign created but no ID returned");
         }
       }
 
-      // Handle the action
       if (campaignAction === "send") {
-        // Send immediately
         await whatsappService.sendCampaign(campaignId);
       } else if (campaignAction === "schedule") {
-        // Schedule for later - the scheduledAt is already set in payload
-        // Backend will handle scheduling with the scheduledAt timestamp
         await whatsappService.scheduleCampaign(
           campaignId,
           new Date(`${scheduleDate}T${scheduleTime}`).toISOString()
         );
       }
-      // "draft" action: just save, don't send
 
       onSuccess();
       onOpenChange(false);
-    } catch (err: any) {
+    } catch (error: unknown) {
       setError(
-        err?.message ||
-          (isEditMode
-            ? "Failed to update campaign"
-            : "Failed to create campaign")
+        errorMessage(
+          error,
+          isEditMode ? "Failed to update campaign" : "Failed to create campaign"
+        )
       );
     } finally {
       setIsSubmitting(false);
@@ -1051,6 +1070,7 @@ export function CreateCampaignModal({
               <Select
                 value={accountId !== undefined ? String(accountId) : ""}
                 onValueChange={v => setAccountId(v ? Number(v) : undefined)}
+                disabled={isEditMode}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select account…" />
@@ -1190,7 +1210,7 @@ export function CreateCampaignModal({
                   <SelectValue placeholder="Select language…" />
                 </SelectTrigger>
                 <SelectContent>
-                  {availableLanguages.map((lang: any, index: number) => (
+                  {availableLanguages.map((lang, index) => (
                     <SelectItem key={lang.code || index} value={lang.code}>
                       {lang.code.toUpperCase()}
                     </SelectItem>
@@ -1211,7 +1231,19 @@ export function CreateCampaignModal({
           <div className="space-y-4">
             <div className="grid gap-2">
               <Label htmlFor="audience">Audience</Label>
-              <Select value={toAudience} onValueChange={v => setToAudience(v)}>
+              <Select
+                value={toAudience}
+                onValueChange={value => {
+                  if (
+                    value === "all" ||
+                    value === "leads" ||
+                    value === "segment" ||
+                    value === "upload"
+                  ) {
+                    setToAudience(value);
+                  }
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -1219,7 +1251,9 @@ export function CreateCampaignModal({
                   <SelectItem value="all">All contacts</SelectItem>
                   <SelectItem value="leads">All leads</SelectItem>
                   <SelectItem value="segment">Saved segment…</SelectItem>
-                  <SelectItem value="upload">Upload CSV/Excel…</SelectItem>
+                  <SelectItem value="upload" disabled={isEditMode}>
+                    Upload CSV/Excel…
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1393,123 +1427,29 @@ export function CreateCampaignModal({
         );
 
       case 6: {
-        // Extract parameter fields from template insights
-        const paramFields = templateInsights.hints
-          .map(hint => {
-            // Parse hints like "Body variables: {{1}}, {{2}}" or "Header uses image media (configure header_1)"
-            const bodyMatch = hint.match(/Body variables: (.+)/);
-            const headerMatch = hint.match(/Header variables: (.+)/);
-            const headerMediaMatch = hint.match(
-              /Header uses (\w+) media \(configure (\w+)\)/
-            );
-            const buttonMatch = hint.match(/Button (\d+): (\w+)/);
-
-            if (bodyMatch && bodyMatch[1]) {
-              const vars = bodyMatch[1].match(/\{\{(\d+)\}\}/g) || [];
-              return vars.map(v => {
-                const num = v.match(/\d+/)?.[0] || "1";
-                return {
-                  key: `body_${num}`,
-                  label: `Body Variable ${num}`,
-                  type: "text",
-                  placeholder: `Enter value for {{${num}}}`,
-                };
-              });
-            }
-            if (headerMatch && headerMatch[1]) {
-              const vars = headerMatch[1].match(/\{\{(\d+)\}\}/g) || [];
-              return vars.map(v => {
-                const num = v.match(/\d+/)?.[0] || "1";
-                return {
-                  key: `header_${num}`,
-                  label: `Header Variable ${num}`,
-                  type: "text",
-                  placeholder: `Enter value for {{${num}}}`,
-                };
-              });
-            }
-            if (headerMediaMatch) {
-              const [, mediaType = "image", key = "header_1"] =
-                headerMediaMatch;
-              return [
-                {
-                  key,
-                  label: `Header ${mediaType.toUpperCase()} Media`,
-                  type: "media",
-                  mediaType: mediaType.toUpperCase(),
-                },
-              ];
-            }
-            if (buttonMatch) {
-              const [, btnNum, btnType] = buttonMatch;
-              if (btnType === "URL") {
-                return [
-                  {
-                    key: `button_${btnNum}`,
-                    label: `Button ${btnNum} URL`,
-                    type: "url",
-                    placeholder: "https://example.com/page",
-                  },
-                ];
-              }
-              if (btnType === "Copy") {
-                return [
-                  {
-                    key: `button_${btnNum}`,
-                    label: `Button ${btnNum} Coupon Code`,
-                    type: "text",
-                    placeholder: "DISCOUNT20",
-                  },
-                ];
-              }
-            }
-            return [];
-          })
-          .flat();
-
-        // Deduplicate fields
-        const uniqueFields = paramFields.filter(
-          (field, index, self) =>
-            field &&
-            field.key &&
-            index === self.findIndex(f => f?.key === field.key)
-        );
-
-        // Store media fields info for use in handleSubmit
-        const mediaFieldsMap = new Map(
-          uniqueFields
-            .filter(field => field?.type === "media" && field.key)
-            .map(field => [
-              field!.key as string,
-              (field as any).mediaType || "IMAGE",
-            ])
-        );
-        mediaFieldKeysRef.current = Array.from(mediaFieldsMap.keys());
-        mediaFieldTypesRef.current = Object.fromEntries(mediaFieldsMap);
-
-        // Helper function to build preview components with replaced values
-        const buildPreviewComponents = () => {
+        const buildPreviewComponents = (): TemplateComponent[] => {
           if (!selectedTemplate) return [];
 
           const components = extractComponentsArray(
-            (selectedTemplate as any)?.componentsJson ??
-              (selectedTemplate as any)?.components ??
-              null
+            selectedTemplate.components
           );
 
-          return components.map((component: any) => {
-            const type = String(
-              component.type || component.component_type || ""
+          return components.flatMap<TemplateComponent>(component => {
+            const type = (
+              asText(component.type) ??
+              asText(component.component_type) ??
+              ""
             ).toUpperCase();
 
             if (type === "HEADER") {
-              const format = String(
-                component.format || component.format_type || ""
+              const format = (
+                asText(component.format) ??
+                asText(component.format_type) ??
+                ""
               ).toUpperCase();
-              let headerText = component.text || "";
+              let headerText = asText(component.text) ?? "";
               const mediaAttachment = mediaParams["header_1"];
 
-              // Replace header variables with actual values
               if (format === "TEXT" && headerText) {
                 Object.entries(paramValues).forEach(([key, value]) => {
                   if (key.startsWith("header_")) {
@@ -1522,17 +1462,18 @@ export function CreateCampaignModal({
                 });
               }
 
-              return {
-                type: "HEADER" as const,
-                format: format,
-                text: mediaAttachment
-                  ? `[${format.toLowerCase()} media attached${mediaAttachment.fileName ? `: ${mediaAttachment.fileName}` : ""}]`
-                  : headerText || undefined,
-              };
+              return [
+                {
+                  type: "HEADER",
+                  format,
+                  text: mediaAttachment
+                    ? `[${format.toLowerCase()} media attached${mediaAttachment.fileName ? `: ${mediaAttachment.fileName}` : ""}]`
+                    : headerText || undefined,
+                },
+              ];
             } else if (type === "BODY") {
-              let bodyText = component.text || "";
+              let bodyText = asText(component.text) ?? "";
 
-              // Replace body variables with actual values
               Object.entries(paramValues).forEach(([key, value]) => {
                 if (key.startsWith("body_")) {
                   const num = key.replace("body_", "");
@@ -1543,41 +1484,42 @@ export function CreateCampaignModal({
                 }
               });
 
-              return {
-                type: "BODY" as const,
-                text: bodyText,
-              };
+              return [{ type: "BODY", text: bodyText }];
             } else if (type === "FOOTER") {
-              return {
-                type: "FOOTER" as const,
-                text: component.text || undefined,
-              };
+              return [{ type: "FOOTER", text: asText(component.text) }];
             } else if (type === "BUTTONS" || type === "BUTTON") {
               const buttons = getButtonList(component);
-              return {
-                type: "BUTTONS" as const,
-                buttons: buttons.map((btn: any, idx: number) => {
-                  const btnType = String(
-                    btn.sub_type || btn.type || ""
-                  ).toUpperCase();
-                  return {
-                    type:
-                      btnType === "VISIT_WEBSITE"
-                        ? "URL"
-                        : btnType === "CALL_PHONE_NUMBER"
-                          ? "PHONE_NUMBER"
-                          : btnType === "COPY_CODE"
-                            ? "COPY_CODE"
-                            : "QUICK_REPLY",
-                    text: btn.text || `Button ${idx + 1}`,
-                    url: paramValues[`button_${idx + 1}`] || btn.url,
-                    phone_number: btn.phone_number,
-                  };
-                }),
-              };
+              return [
+                {
+                  type: "BUTTONS",
+                  buttons: buttons.map((button, index) => {
+                    const buttonType = (
+                      asText(button.sub_type) ??
+                      asText(button.type) ??
+                      ""
+                    ).toUpperCase();
+                    return {
+                      type:
+                        buttonType === "VISIT_WEBSITE" || buttonType === "URL"
+                          ? "URL"
+                          : buttonType === "CALL_PHONE_NUMBER" ||
+                              buttonType === "PHONE_NUMBER"
+                            ? "PHONE_NUMBER"
+                            : buttonType === "COPY_CODE"
+                              ? "COPY_CODE"
+                              : "QUICK_REPLY",
+                      text: asText(button.text) ?? `Button ${index + 1}`,
+                      url:
+                        paramValues[`button_${index + 1}`] ||
+                        asText(button.url),
+                      phone_number: asText(button.phone_number),
+                    };
+                  }),
+                },
+              ];
             }
 
-            return component;
+            return [];
           });
         };
 
@@ -1592,87 +1534,48 @@ export function CreateCampaignModal({
                 </p>
               </div>
 
-              {uniqueFields.length > 0 ? (
+              {parameterFields.length > 0 ? (
                 <div className="space-y-4">
-                  {uniqueFields.map(
-                    field =>
-                      field &&
-                      field.key &&
-                      (field.type === "media" ? (
-                        <MediaUploadField
-                          key={field.key}
-                          fieldKey={field.key}
-                          label={field.label}
-                          mediaType={(field as any).mediaType || "IMAGE"}
-                          uploading={Boolean(mediaUploadStatus[field.key])}
-                          disabled={!accountId}
-                          onUpload={file => handleMediaUpload(field.key!, file)}
-                          onUrlChange={url =>
-                            setParamValues(prev => ({
-                              ...prev,
-                              [field.key!]: url,
-                            }))
-                          }
-                          urlValue={paramValues[field.key!] || ""}
-                        />
-                      ) : (
-                        <FieldInputWithDropdown
-                          key={field.key}
-                          fieldKey={field.key}
-                          label={field.label}
-                          type={field.type || "text"}
-                          placeholder={
-                            ("placeholder" in field ? field.placeholder : "") ||
-                            ""
-                          }
-                          value={paramValues[field.key] || ""}
-                          onChange={value => {
-                            const fieldKey = field.key;
-                            setParamValues(prev => ({
-                              ...prev,
-                              [fieldKey]: value,
-                            }));
-                          }}
-                          csvColumns={
-                            toAudience === "upload" ? csvColumns : undefined
-                          }
-                        />
-                      ))
-                  )}
-                </div>
-              ) : templateInsights.hints.length > 0 ? (
-                <Card className="p-4 bg-muted/40 border-dashed space-y-4">
-                  <div className="space-y-2">
-                    <Label>Detected placeholders</Label>
-                    <ul className="list-disc pl-5 text-sm text-muted-foreground space-y-1">
-                      {templateInsights.hints.map(hint => (
-                        <li key={hint}>{hint}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div className="space-y-3">
-                    {Object.keys(
-                      JSON.parse(templateInsights.sampleParamsText || "{}")
-                    ).map(key => (
-                      <FieldInputWithDropdown
-                        key={key}
-                        fieldKey={key}
-                        label={key
-                          .replace(/_/g, " ")
-                          .replace(/\b\w/g, c => c.toUpperCase())}
-                        type="text"
-                        placeholder={`Enter ${key}`}
-                        value={paramValues[key] || ""}
-                        onChange={value =>
-                          setParamValues(prev => ({ ...prev, [key]: value }))
+                  {parameterFields.map(field =>
+                    field.type === "media" ? (
+                      <MediaUploadField
+                        key={field.key}
+                        fieldKey={field.key}
+                        label={field.label}
+                        mediaType={field.mediaType || "IMAGE"}
+                        uploading={Boolean(mediaUploadStatus[field.key])}
+                        disabled={!accountId}
+                        onUpload={file => handleMediaUpload(field.key, file)}
+                        onUrlChange={url =>
+                          setParamValues(prev => ({
+                            ...prev,
+                            [field.key]: url,
+                          }))
                         }
+                        urlValue={paramValues[field.key] || ""}
+                      />
+                    ) : (
+                      <FieldInputWithDropdown
+                        key={field.key}
+                        fieldKey={field.key}
+                        label={field.label}
+                        type={field.type || "text"}
+                        placeholder={field.placeholder || ""}
+                        value={paramValues[field.key] || ""}
+                        onChange={value => {
+                          const fieldKey = field.key;
+                          setParamValues(prev => ({
+                            ...prev,
+                            [fieldKey]: value,
+                          }));
+                        }}
                         csvColumns={
                           toAudience === "upload" ? csvColumns : undefined
                         }
                       />
-                    ))}
-                  </div>
-                </Card>
+                    )
+                  )}
+                </div>
               ) : (
                 <Card className="p-4 bg-muted/40 border-dashed">
                   <p className="text-sm text-muted-foreground text-center">
@@ -1855,13 +1758,12 @@ export function CreateCampaignModal({
     <Dialog
       open={open}
       onOpenChange={isOpen => {
-        // Prevent closing when clicking outside
         if (!isOpen) return;
         onOpenChange(isOpen);
       }}
     >
       <DialogContent
-        className="max-w-5xl max-h-[90vh] overflow-y-auto"
+        className="max-w-5xl gap-0 overflow-hidden"
         onInteractOutside={e => {
           e.preventDefault();
         }}
@@ -1886,14 +1788,14 @@ export function CreateCampaignModal({
           </div>
         </DialogHeader>
 
-        <div className="py-4">
+        <DialogBody>
           {error && (
             <div className="text-destructive text-sm mb-4 p-2 bg-error-surface rounded">
               {error}
             </div>
           )}
           {renderStep()}
-        </div>
+        </DialogBody>
 
         <DialogFooter className="flex items-center justify-between">
           <div>
@@ -1939,87 +1841,81 @@ export function CreateCampaignModal({
   );
 }
 
-// Template insights functions (copied from page.tsx)
 type TemplateInsights = {
-  sampleParamsText: string;
-  rawJson: string;
+  sampleParams: Record<string, unknown>;
   hints: string[];
 };
 
-function buildTemplateInsights(
-  template?: MessageTemplate | any
-): TemplateInsights {
+function buildTemplateInsights(template?: MessageTemplate): TemplateInsights {
   if (!template) {
-    return { sampleParamsText: "", rawJson: "", hints: [] };
+    return { sampleParams: {}, hints: [] };
   }
 
-  const raw =
-    (template as any)?.componentsJson ?? (template as any)?.components ?? null;
+  const raw = template.components;
   const components = extractComponentsArray(raw);
-  const sample: Record<string, any> = {};
+  const sample: Record<string, unknown> = {};
   const hints: string[] = [];
 
-  components.forEach((component: any) => {
+  components.forEach(component => {
     processComponent(component, sample, hints);
   });
 
   return {
-    sampleParamsText: Object.keys(sample).length
-      ? JSON.stringify(sample, null, 2)
-      : "",
-    rawJson: safeStringify(raw ?? template),
+    sampleParams: sample,
     hints,
   };
 }
 
-function safeStringify(value: any) {
-  try {
-    return JSON.stringify(value ?? {}, null, 2);
-  } catch {
-    return "{}";
-  }
+function recordArray(value: unknown): JsonRecord[] {
+  return Array.isArray(value) ? value.filter(isRecord) : [];
 }
 
-function extractComponentsArray(raw: any): any[] {
+function extractComponentsArray(raw: unknown): JsonRecord[] {
   if (!raw) return [];
-  if (Array.isArray(raw)) return raw;
-  if (Array.isArray(raw.components)) return raw.components;
-  if (Array.isArray(raw.template?.components)) return raw.template.components;
-  if (Array.isArray(raw.payload?.template?.components))
-    return raw.payload.template.components;
+  if (Array.isArray(raw)) return recordArray(raw);
+  if (!isRecord(raw)) return [];
+
+  const direct = recordArray(raw.components);
+  if (direct.length) return direct;
+
+  if (isRecord(raw.template)) {
+    const nested = recordArray(raw.template.components);
+    if (nested.length) return nested;
+  }
+
+  if (isRecord(raw.payload) && isRecord(raw.payload.template)) {
+    return recordArray(raw.payload.template.components);
+  }
   return [];
 }
 
-// Helper to determine if a template is "text-only" for MVP purposes.
-// We allow text headers, body and footers, but exclude templates that rely on media headers,
-// locations, carousels or other rich formats.
-function isTextOnlyTemplate(template: MessageTemplate | any): boolean {
-  const components = extractComponentsArray(
-    (template as any)?.componentsJson ?? (template as any)?.components ?? null
-  );
+function isTextOnlyTemplate(template: MessageTemplate): boolean {
+  const components = extractComponentsArray(template.components);
 
   if (!components.length) {
-    // If we can't introspect components, treat as text-only to avoid hiding templates unexpectedly.
     return true;
   }
 
   for (const component of components) {
-    const type = String(
-      component?.type || component?.component_type || ""
+    const type = (
+      asText(component.type) ??
+      asText(component.component_type) ??
+      ""
     ).toUpperCase();
 
     if (type === "HEADER") {
-      const format = String(
-        component?.format || component?.format_type || ""
+      const format = (
+        asText(component.format) ??
+        asText(component.format_type) ??
+        ""
       ).toUpperCase();
-      // Anything other than TEXT in header is considered non-text for MVP (IMAGE / VIDEO / DOCUMENT / LOCATION / etc.)
+
       if (format && format !== "TEXT") {
         return false;
       }
     }
 
-    // Exclude carousel-style templates for MVP
-    if (Array.isArray((component as any)?.cards)) {
+    if (Array.isArray(component.cards)) {
       return false;
     }
   }
@@ -2028,13 +1924,14 @@ function isTextOnlyTemplate(template: MessageTemplate | any): boolean {
 }
 
 function processComponent(
-  component: any,
-  sample: Record<string, any>,
+  component: JsonRecord,
+  sample: Record<string, unknown>,
   hints: string[]
 ) {
-  if (!component || typeof component !== "object") return;
-  const type = String(
-    component.type || component.component_type || ""
+  const type = (
+    asText(component.type) ??
+    asText(component.component_type) ??
+    ""
   ).toUpperCase();
   if (!type) return;
 
@@ -2050,7 +1947,7 @@ function processComponent(
       handleButtonsComponent(component, sample, hints);
       break;
     default:
-      if (Array.isArray((component as any).cards)) {
+      if (Array.isArray(component.cards)) {
         hints.push(
           "Template contains carousel cards. Provide card_X components such as card_0_header_1."
         );
@@ -2059,12 +1956,14 @@ function processComponent(
 }
 
 function handleHeaderComponent(
-  component: any,
-  sample: Record<string, any>,
+  component: JsonRecord,
+  sample: Record<string, unknown>,
   hints: string[]
 ) {
-  const format = String(
-    component.format || component.format_type || ""
+  const format = (
+    asText(component.format) ??
+    asText(component.format_type) ??
+    ""
   ).toUpperCase();
   const headerText =
     typeof component.text === "string" ? component.text : undefined;
@@ -2099,8 +1998,8 @@ function handleHeaderComponent(
 }
 
 function handleBodyComponent(
-  component: any,
-  sample: Record<string, any>,
+  component: JsonRecord,
+  sample: Record<string, unknown>,
   hints: string[]
 ) {
   const bodyText =
@@ -2116,8 +2015,8 @@ function handleBodyComponent(
 }
 
 function handleButtonsComponent(
-  component: any,
-  sample: Record<string, any>,
+  component: JsonRecord,
+  sample: Record<string, unknown>,
   hints: string[]
 ) {
   const buttons = getButtonList(component);
@@ -2126,9 +2025,13 @@ function handleButtonsComponent(
     return;
   }
 
-  buttons.forEach((button: any, index: number) => {
+  buttons.forEach((button, index) => {
     const key = `button_${index + 1}`;
-    const type = String(button.sub_type || button.type || "").toUpperCase();
+    const type = (
+      asText(button.sub_type) ??
+      asText(button.type) ??
+      ""
+    ).toUpperCase();
     const urlValue = typeof button.url === "string" ? button.url : undefined;
     const phoneValue =
       typeof button.phone_number === "string" ? button.phone_number : undefined;
@@ -2181,7 +2084,7 @@ function handleButtonsComponent(
       case "CATALOG":
       case "ACTION":
       case "MPM": {
-        if (hasTemplatePlaceholders(button.value)) {
+        if (hasTemplatePlaceholders(asText(button.value))) {
           sample[key] = {
             type: "action",
             subtype: type === "MPM" ? "mpm" : "catalog",
@@ -2206,7 +2109,7 @@ function buildMediaExample(format: string) {
     DOCUMENT: "https://example.com/document.pdf",
   };
 
-  const base: Record<string, any> = {
+  const base: Record<string, unknown> = {
     type: format.toLowerCase(),
     value: valueMap[format] || "https://example.com/media",
   };
@@ -2219,19 +2122,13 @@ function buildMediaExample(format: string) {
 }
 
 function assignTextVariables(
-  target: Record<string, any>,
+  target: Record<string, unknown>,
   prefix: string,
   placeholders: number[],
   label: string,
   hints: string[]
 ) {
-  if (!placeholders.length) {
-    const key = `${prefix}_1`;
-    if (!target[key]) {
-      target[key] = { type: "text", value: `Sample ${label} text` };
-    }
-    return;
-  }
+  if (!placeholders.length) return;
 
   placeholders.forEach((placeholder, index) => {
     const slot = Number.isFinite(placeholder) ? placeholder : index + 1;
@@ -2246,9 +2143,12 @@ function assignTextVariables(
   );
 }
 
-function getExampleText(component: any, field: string): string | undefined {
-  const example = component?.example;
-  if (!example) return undefined;
+function getExampleText(
+  component: JsonRecord,
+  field: string
+): string | undefined {
+  const example = component.example;
+  if (!isRecord(example)) return undefined;
   const value = example[field];
   if (typeof value === "string") return value;
   if (Array.isArray(value)) {
@@ -2272,9 +2172,44 @@ function hasTemplatePlaceholders(text?: string): boolean {
   return extractPlaceholders(text).length > 0;
 }
 
-function getButtonList(component: any): any[] {
-  if (Array.isArray(component?.buttons)) return component.buttons;
-  if (Array.isArray(component?.buttonList)) return component.buttonList;
-  if (Array.isArray(component?.button)) return component.button;
+function getButtonList(component: JsonRecord): JsonRecord[] {
+  for (const key of ["buttons", "buttonList", "button"] as const) {
+    const buttons = recordArray(component[key]);
+    if (buttons.length) return buttons;
+  }
   return [];
+}
+
+function buildParameterFields(
+  sampleParams: Record<string, unknown>
+): ParameterField[] {
+  return Object.entries(sampleParams).map(([key, sample]) => {
+    const label = key
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, character => character.toUpperCase());
+    if (isRecord(sample)) {
+      const mediaType = asText(sample.type)?.toUpperCase();
+      if (
+        mediaType === "IMAGE" ||
+        mediaType === "VIDEO" ||
+        mediaType === "DOCUMENT"
+      ) {
+        return {
+          key,
+          label: `Header ${mediaType} Media`,
+          type: "media",
+          mediaType,
+        };
+      }
+      if (asText(sample.subtype)?.toLowerCase() === "url") {
+        return {
+          key,
+          label,
+          type: "url",
+          placeholder: "https://example.com/page",
+        };
+      }
+    }
+    return { key, label, type: "text", placeholder: `Enter ${label}` };
+  });
 }

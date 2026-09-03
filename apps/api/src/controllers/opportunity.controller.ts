@@ -1,15 +1,27 @@
 import { Request, Response } from "express";
 import { prisma } from "@repo/db";
-import { Prisma, OpportunityStage, UserRole } from "@prisma/client";
+import { roleHasPermission } from "@repo/db/permissions";
+import { Prisma, OpportunityStage } from "@prisma/client";
 import {
   handleError,
   handleValidationError,
   handleNotFoundError,
   validateRequiredFields,
-} from "../utils/errorHandler.js";
-import { buildFullName } from "../utils/nameHelpers.js";
+} from "../utils/error-handler.js";
+import { buildFullName } from "../utils/name-helpers.js";
 import { OpportunityType } from "@prisma/client";
 import { emailService } from "../services/email.service.js";
+import { logError } from "../utils/logger.js";
+import {
+  parseBoundedInteger,
+  parseIsoDate,
+  parseNonNegativeDecimal,
+  parsePositiveInteger,
+} from "../utils/validators.js";
+import {
+  nextDocumentNumber,
+  SEQUENCE_KEYS,
+} from "../services/supplyChain/numbering.service.js";
 
 export class OpportunityController {
   private parseId(
@@ -18,58 +30,55 @@ export class OpportunityController {
     label: string,
     operation: string
   ): number | null {
-    if (!id) {
-      handleValidationError(res, `${label} is required`, "id", operation);
-      return null;
-    }
-    const parsed = parseInt(id, 10);
-    if (isNaN(parsed)) {
+    const parsed = parsePositiveInteger(id);
+    if (parsed === null) {
       handleValidationError(res, `Invalid ${label}`, "id", operation);
       return null;
     }
     return parsed;
   }
 
-  /**
-   * Generate opportunity number: OPP-YYMM-XXXX
-   */
-  private async generateOpportunityNumber(): Promise<string> {
-    const now = new Date();
-    const yy = String(now.getFullYear()).slice(-2);
-    const mm = String(now.getMonth() + 1).padStart(2, "0");
-    const prefix = `OPP-${yy}${mm}-`;
-
-    const lastOpportunity = await prisma.opportunity.findFirst({
-      where: { opportunityNumber: { startsWith: prefix } },
-      orderBy: { opportunityNumber: "desc" },
-      select: { opportunityNumber: true },
-    });
-
-    let sequenceNum = 1;
-    if (lastOpportunity && lastOpportunity.opportunityNumber) {
-      const parts = lastOpportunity.opportunityNumber.split("-");
-      // parts: ["OPP", "YYMM", "XXXX"]
-      if (parts.length >= 3 && parts[2]) {
-        const num = parseInt(parts[2], 10);
-        if (!isNaN(num)) {
-          sequenceNum = num + 1;
-        }
-      }
+  private pagination(
+    req: Request,
+    res: Response,
+    operation: string
+  ): { page: number; limit: number; skip: number } | null {
+    const page =
+      req.query.page === undefined
+        ? 1
+        : parseBoundedInteger(req.query.page, 1, 1_000_000);
+    const limit =
+      req.query.limit === undefined
+        ? 10
+        : parseBoundedInteger(req.query.limit, 1, 100);
+    if (page === null || limit === null) {
+      handleValidationError(
+        res,
+        "page must be positive and limit must be between 1 and 100",
+        undefined,
+        operation
+      );
+      return null;
     }
-
-    return `${prefix}${String(sequenceNum).padStart(4, "0")}`;
+    return { page, limit, skip: (page - 1) * limit };
   }
 
-  /**
-   * POST /api/opportunities
-   * Create a new opportunity
-   */
+  private quoteVersionLabel(version: number): string {
+    let value = version;
+    let label = "";
+    while (value > 0) {
+      value -= 1;
+      label = String.fromCharCode(65 + (value % 26)) + label;
+      value = Math.floor(value / 26);
+    }
+    return label;
+  }
+
   async createOpportunity(req: Request, res: Response) {
     const operation = "Create opportunity";
     try {
       const userId = req.user!.id;
 
-      // Validate required fields
       if (
         !validateRequiredFields(req.body, ["name", "accountId"], res, operation)
       ) {
@@ -90,9 +99,21 @@ export class OpportunityController {
         description,
       } = req.body;
 
-      // Validate accountId is a number
-      const parsedAccountId = parseInt(accountId, 10);
-      if (isNaN(parsedAccountId)) {
+      if (
+        typeof name !== "string" ||
+        name.trim().length === 0 ||
+        name.trim().length > 255
+      ) {
+        return handleValidationError(
+          res,
+          "Name is required and cannot exceed 255 characters",
+          "name",
+          operation
+        );
+      }
+
+      const parsedAccountId = parsePositiveInteger(accountId);
+      if (parsedAccountId === null) {
         return handleValidationError(
           res,
           "Invalid accountId",
@@ -101,19 +122,18 @@ export class OpportunityController {
         );
       }
 
-      // Validate account exists
       const account = await prisma.account.findUnique({
         where: { id: parsedAccountId },
+        select: { id: true },
       });
       if (!account) {
         return handleNotFoundError(res, "Account", operation);
       }
 
-      // Validate contactId if provided
       let parsedContactId: number | null = null;
       if (contactId !== undefined && contactId !== null) {
-        parsedContactId = parseInt(contactId, 10);
-        if (isNaN(parsedContactId)) {
+        parsedContactId = parsePositiveInteger(contactId);
+        if (parsedContactId === null) {
           return handleValidationError(
             res,
             "Invalid contactId",
@@ -123,17 +143,28 @@ export class OpportunityController {
         }
         const contact = await prisma.contact.findUnique({
           where: { id: parsedContactId },
+          select: { id: true, accountId: true },
         });
         if (!contact) {
           return handleNotFoundError(res, "Contact", operation);
         }
+        if (
+          contact.accountId !== null &&
+          contact.accountId !== parsedAccountId
+        ) {
+          return handleValidationError(
+            res,
+            "Contact does not belong to the selected account",
+            "contactId",
+            operation
+          );
+        }
       }
 
-      // Validate priceBookId if provided
       let parsedPriceBookId: number | null = null;
       if (priceBookId !== undefined && priceBookId !== null) {
-        parsedPriceBookId = parseInt(priceBookId, 10);
-        if (isNaN(parsedPriceBookId)) {
+        parsedPriceBookId = parsePositiveInteger(priceBookId);
+        if (parsedPriceBookId === null) {
           return handleValidationError(
             res,
             "Invalid priceBookId",
@@ -143,13 +174,21 @@ export class OpportunityController {
         }
         const priceBook = await prisma.priceBook.findUnique({
           where: { id: parsedPriceBookId },
+          select: { id: true, isActive: true },
         });
         if (!priceBook) {
           return handleNotFoundError(res, "Price Book", operation);
         }
+        if (!priceBook.isActive) {
+          return handleValidationError(
+            res,
+            "Price Book must be active",
+            "priceBookId",
+            operation
+          );
+        }
       }
 
-      // Validate stage if provided
       const validStages = Object.values(OpportunityStage);
       if (stage && !validStages.includes(stage)) {
         return handleValidationError(
@@ -160,7 +199,6 @@ export class OpportunityController {
         );
       }
 
-      // Validate type if provided
       const validTypes = Object.values(OpportunityType);
       if (type && !validTypes.includes(type)) {
         return handleValidationError(
@@ -171,11 +209,10 @@ export class OpportunityController {
         );
       }
 
-      // Validate amount if provided
-      let parsedAmount: number | undefined;
+      let parsedAmount: string | undefined;
       if (amount !== undefined && amount !== null) {
-        parsedAmount = parseFloat(amount);
-        if (isNaN(parsedAmount) || parsedAmount < 0) {
+        parsedAmount = parseNonNegativeDecimal(amount, 13, 2) ?? undefined;
+        if (parsedAmount === undefined) {
           return handleValidationError(
             res,
             "Amount must be a non-negative number",
@@ -185,11 +222,10 @@ export class OpportunityController {
         }
       }
 
-      // Validate expectedCloseDate if provided
       let parsedExpectedCloseDate: Date | null = null;
       if (expectedCloseDate) {
-        const d = new Date(expectedCloseDate);
-        if (isNaN(d.getTime())) {
+        const d = parseIsoDate(expectedCloseDate);
+        if (!d) {
           return handleValidationError(
             res,
             "Invalid expectedCloseDate",
@@ -200,22 +236,47 @@ export class OpportunityController {
         parsedExpectedCloseDate = d;
       }
 
-      // Generate opportunity number
-      const opportunityNumber = await this.generateOpportunityNumber();
+      const optionalTextFields: Array<[string, unknown, number]> = [
+        ["description", description, 5_000],
+        ["leadSource", leadSource, 255],
+        ["nextStep", nextStep, 1_000],
+      ];
+      for (const [field, value, maximum] of optionalTextFields) {
+        if (
+          value !== undefined &&
+          value !== null &&
+          (typeof value !== "string" || value.trim().length > maximum)
+        ) {
+          return handleValidationError(
+            res,
+            `${field} must be text of at most ${maximum} characters`,
+            field,
+            operation
+          );
+        }
+      }
 
-      // Create opportunity and log activity in a transaction
       const opportunity = await prisma.$transaction(async tx => {
+        const opportunityNumber = await nextDocumentNumber(
+          tx,
+          SEQUENCE_KEYS.SALES_OPPORTUNITY
+        );
         const newOpportunity = await tx.opportunity.create({
           data: {
             opportunityNumber,
             name: name.trim(),
-            description: description || null,
+            description:
+              typeof description === "string"
+                ? description.trim() || null
+                : null,
             type: type || null,
             stage: stage || undefined,
             amount: parsedAmount !== undefined ? parsedAmount : null,
             expectedCloseDate: parsedExpectedCloseDate,
-            leadSource: leadSource || null,
-            nextStep: nextStep || null,
+            leadSource:
+              typeof leadSource === "string" ? leadSource.trim() || null : null,
+            nextStep:
+              typeof nextStep === "string" ? nextStep.trim() || null : null,
             accountId: parsedAccountId,
             contactId: parsedContactId,
             priceBookId: parsedPriceBookId,
@@ -224,7 +285,6 @@ export class OpportunityController {
           },
         });
 
-        // Log creation activity
         await tx.opportunityActivity.create({
           data: {
             opportunityId: newOpportunity.id,
@@ -238,7 +298,6 @@ export class OpportunityController {
         return newOpportunity;
       });
 
-      // Fetch full opportunity with relations
       const fullOpportunity = await prisma.opportunity.findUnique({
         where: { id: opportunity.id },
         include: {
@@ -257,21 +316,12 @@ export class OpportunityController {
     }
   }
 
-  /**
-   * GET /api/opportunities
-   * List all opportunities (paginated, filterable)
-   * Returns slim response: id, name, opportunityOwner, closeDate, stage, createdAt
-   */
   async getAllOpportunities(req: Request, res: Response) {
     const operation = "Get all opportunities";
     try {
-      const pageParam = req.query.page as string;
-      const limitParam = req.query.limit as string;
-      const page = Math.max(1, parseInt(pageParam) || 1);
-      const requestedLimit = parseInt(limitParam);
-      const limit =
-        requestedLimit >= 1 && requestedLimit <= 100 ? requestedLimit : 10;
-      const skip = (page - 1) * limit;
+      const pagination = this.pagination(req, res, operation);
+      if (!pagination) return;
+      const { page, limit, skip } = pagination;
 
       const {
         stage,
@@ -290,56 +340,180 @@ export class OpportunityController {
       const whereClause: Prisma.OpportunityWhereInput = { deletedAt: null };
 
       if (stage) {
-        const stageArray = stage.toString().split(",") as OpportunityStage[];
+        if (typeof stage !== "string") {
+          return handleValidationError(
+            res,
+            "Invalid stage",
+            "stage",
+            operation
+          );
+        }
+        const stageArray = stage.split(",");
+        if (
+          stageArray.some(
+            value =>
+              !Object.values(OpportunityStage).includes(
+                value as OpportunityStage
+              )
+          )
+        ) {
+          return handleValidationError(
+            res,
+            "Invalid stage",
+            "stage",
+            operation
+          );
+        }
         whereClause.stage =
-          stageArray.length === 1 ? stageArray[0] : { in: stageArray };
+          stageArray.length === 1
+            ? (stageArray[0] as OpportunityStage)
+            : { in: stageArray as OpportunityStage[] };
       }
       if (ownerId) {
-        const parsed = parseInt(ownerId as string);
-        if (!isNaN(parsed)) whereClause.ownerId = parsed;
+        const parsed = parsePositiveInteger(ownerId);
+        if (parsed === null) {
+          return handleValidationError(
+            res,
+            "Invalid ownerId",
+            "ownerId",
+            operation
+          );
+        }
+        whereClause.ownerId = parsed;
       }
       if (accountId) {
-        const parsed = parseInt(accountId as string);
-        if (!isNaN(parsed)) whereClause.accountId = parsed;
+        const parsed = parsePositiveInteger(accountId);
+        if (parsed === null) {
+          return handleValidationError(
+            res,
+            "Invalid accountId",
+            "accountId",
+            operation
+          );
+        }
+        whereClause.accountId = parsed;
       }
       if (createdFrom || createdTo) {
         const createdAtFilter: Prisma.DateTimeFilter = {};
         if (createdFrom) {
-          const d = new Date(createdFrom as string);
-          if (!isNaN(d.getTime())) createdAtFilter.gte = d;
+          const d = parseIsoDate(createdFrom);
+          if (!d) {
+            return handleValidationError(
+              res,
+              "Invalid createdFrom",
+              "createdFrom",
+              operation
+            );
+          }
+          createdAtFilter.gte = d;
         }
         if (createdTo) {
-          const d = new Date(createdTo as string);
-          if (!isNaN(d.getTime())) createdAtFilter.lte = d;
+          const d = parseIsoDate(createdTo);
+          if (!d) {
+            return handleValidationError(
+              res,
+              "Invalid createdTo",
+              "createdTo",
+              operation
+            );
+          }
+          createdAtFilter.lte = d;
         }
-        if (Object.keys(createdAtFilter).length > 0)
-          whereClause.createdAt = createdAtFilter;
+        if (
+          createdAtFilter.gte instanceof Date &&
+          createdAtFilter.lte instanceof Date &&
+          createdAtFilter.gte > createdAtFilter.lte
+        ) {
+          return handleValidationError(
+            res,
+            "createdFrom cannot be after createdTo",
+            "createdFrom",
+            operation
+          );
+        }
+        whereClause.createdAt = createdAtFilter;
       }
       if (expectedCloseFrom || expectedCloseTo) {
         const expectedCloseFilter: Prisma.DateTimeNullableFilter = {};
         if (expectedCloseFrom) {
-          const d = new Date(expectedCloseFrom as string);
-          if (!isNaN(d.getTime())) expectedCloseFilter.gte = d;
+          const d = parseIsoDate(expectedCloseFrom);
+          if (!d) {
+            return handleValidationError(
+              res,
+              "Invalid expectedCloseFrom",
+              "expectedCloseFrom",
+              operation
+            );
+          }
+          expectedCloseFilter.gte = d;
         }
         if (expectedCloseTo) {
-          const d = new Date(expectedCloseTo as string);
-          if (!isNaN(d.getTime())) expectedCloseFilter.lte = d;
+          const d = parseIsoDate(expectedCloseTo);
+          if (!d) {
+            return handleValidationError(
+              res,
+              "Invalid expectedCloseTo",
+              "expectedCloseTo",
+              operation
+            );
+          }
+          expectedCloseFilter.lte = d;
         }
-        if (Object.keys(expectedCloseFilter).length > 0)
-          whereClause.expectedCloseDate = expectedCloseFilter;
+        if (
+          expectedCloseFilter.gte instanceof Date &&
+          expectedCloseFilter.lte instanceof Date &&
+          expectedCloseFilter.gte > expectedCloseFilter.lte
+        ) {
+          return handleValidationError(
+            res,
+            "expectedCloseFrom cannot be after expectedCloseTo",
+            "expectedCloseFrom",
+            operation
+          );
+        }
+        whereClause.expectedCloseDate = expectedCloseFilter;
       }
       if (amountMin !== undefined || amountMax !== undefined) {
         const amountFilter: Prisma.DecimalNullableFilter = {};
+        let minimum: string | null = null;
+        let maximum: string | null = null;
         if (amountMin !== undefined) {
-          const parsed = parseFloat(amountMin as string);
-          if (!isNaN(parsed)) amountFilter.gte = parsed;
+          minimum = parseNonNegativeDecimal(amountMin, 13, 2);
+          if (minimum === null) {
+            return handleValidationError(
+              res,
+              "Invalid amountMin",
+              "amountMin",
+              operation
+            );
+          }
+          amountFilter.gte = minimum;
         }
         if (amountMax !== undefined) {
-          const parsed = parseFloat(amountMax as string);
-          if (!isNaN(parsed)) amountFilter.lte = parsed;
+          maximum = parseNonNegativeDecimal(amountMax, 13, 2);
+          if (maximum === null) {
+            return handleValidationError(
+              res,
+              "Invalid amountMax",
+              "amountMax",
+              operation
+            );
+          }
+          amountFilter.lte = maximum;
         }
-        if (Object.keys(amountFilter).length > 0)
-          whereClause.amount = amountFilter;
+        if (
+          minimum !== null &&
+          maximum !== null &&
+          new Prisma.Decimal(minimum).greaterThan(new Prisma.Decimal(maximum))
+        ) {
+          return handleValidationError(
+            res,
+            "amountMin cannot exceed amountMax",
+            "amountMin",
+            operation
+          );
+        }
+        whereClause.amount = amountFilter;
       }
 
       const allowedSortFields = [
@@ -349,9 +523,30 @@ export class OpportunityController {
         "stage",
         "amount",
       ];
-      const orderField = allowedSortFields.includes(sortBy as string)
-        ? (sortBy as string)
-        : "createdAt";
+      if (
+        sortBy !== undefined &&
+        (typeof sortBy !== "string" || !allowedSortFields.includes(sortBy))
+      ) {
+        return handleValidationError(
+          res,
+          "Invalid sortBy",
+          "sortBy",
+          operation
+        );
+      }
+      if (
+        sortOrder !== undefined &&
+        sortOrder !== "asc" &&
+        sortOrder !== "desc"
+      ) {
+        return handleValidationError(
+          res,
+          "sortOrder must be asc or desc",
+          "sortOrder",
+          operation
+        );
+      }
+      const orderField = typeof sortBy === "string" ? sortBy : "createdAt";
       const orderDirection = sortOrder === "asc" ? "asc" : "desc";
 
       const totalItems = await prisma.opportunity.count({ where: whereClause });
@@ -412,53 +607,6 @@ export class OpportunityController {
     }
   }
 
-  /**
-   * Generate a quote number: QUO-YYMM-XXXX-V
-   * V = version letter (A, B, C, ...)
-   */
-  private async generateQuoteNumber(
-    opportunityId: number
-  ): Promise<{ quoteNumber: string; version: number }> {
-    const now = new Date();
-    const yy = String(now.getFullYear()).slice(-2);
-    const mm = String(now.getMonth() + 1).padStart(2, "0");
-    const prefix = `QUO-${yy}${mm}-`;
-
-    // Find the highest existing quote number with this prefix
-    const lastQuote = await prisma.quote.findFirst({
-      where: { quoteNumber: { startsWith: prefix } },
-      orderBy: { quoteNumber: "desc" },
-      select: { quoteNumber: true },
-    });
-
-    let sequenceNum = 1;
-    if (lastQuote && lastQuote.quoteNumber) {
-      // Extract XXXX from QUO-YYMM-XXXX-V
-      const parts = lastQuote.quoteNumber.split("-");
-      // parts: ["QUO", "YYMM", "XXXX", "V"]
-      if (parts.length >= 3 && parts[2]) {
-        const num = parseInt(parts[2], 10);
-        if (!isNaN(num)) {
-          sequenceNum = num + 1;
-        }
-      }
-    }
-
-    // Determine version letter based on existing quotes for this opportunity
-    const existingQuotesCount = await prisma.quote.count({
-      where: { opportunityId },
-    });
-    const versionNumber = existingQuotesCount + 1;
-    const versionLetter = String.fromCharCode(64 + versionNumber); // 1=A, 2=B, 3=C...
-
-    const quoteNumber = `${prefix}${String(sequenceNum).padStart(4, "0")}-${versionLetter}`;
-    return { quoteNumber, version: versionNumber };
-  }
-
-  /**
-   * POST /api/opportunities/:id/generate-quote
-   * Generate a quote from an opportunity
-   */
   async generateQuote(req: Request, res: Response) {
     const operation = "Generate quote from opportunity";
     try {
@@ -474,7 +622,43 @@ export class OpportunityController {
       const { validUntil, paymentTerms, deliveryTerms, notes, internalNotes } =
         req.body;
 
-      // 1. Fetch opportunity with line items, account, and contact
+      const parsedValidUntil =
+        validUntil === undefined || validUntil === null || validUntil === ""
+          ? null
+          : parseIsoDate(validUntil);
+      if (
+        validUntil !== undefined &&
+        validUntil !== null &&
+        !parsedValidUntil
+      ) {
+        return handleValidationError(
+          res,
+          "validUntil must be a valid ISO date",
+          "validUntil",
+          operation
+        );
+      }
+      const quoteTextFields: Array<[string, unknown, number]> = [
+        ["paymentTerms", paymentTerms, 2_000],
+        ["deliveryTerms", deliveryTerms, 2_000],
+        ["notes", notes, 5_000],
+        ["internalNotes", internalNotes, 5_000],
+      ];
+      for (const [field, value, maximum] of quoteTextFields) {
+        if (
+          value !== undefined &&
+          value !== null &&
+          (typeof value !== "string" || value.trim().length > maximum)
+        ) {
+          return handleValidationError(
+            res,
+            `${field} must be text of at most ${maximum} characters`,
+            field,
+            operation
+          );
+        }
+      }
+
       const opportunity = await prisma.opportunity.findUnique({
         where: { id: opportunityId },
         include: {
@@ -491,12 +675,23 @@ export class OpportunityController {
         return handleNotFoundError(res, "Opportunity", operation);
       }
 
-      // 2. Check soft delete
       if (opportunity.deletedAt) {
         return handleNotFoundError(res, "Opportunity", operation);
       }
 
-      // 3. Validate opportunity has line items
+      if (
+        !["IN_PROGRESS", "APPROVED", "QUOTE_CREATED"].includes(
+          opportunity.status
+        )
+      ) {
+        return handleValidationError(
+          res,
+          `Opportunity must be approved or active before a quote can be generated. Current status: ${opportunity.status}`,
+          "status",
+          operation
+        );
+      }
+
       if (opportunity.lineItems.length === 0) {
         return res.status(400).json({
           error:
@@ -505,27 +700,31 @@ export class OpportunityController {
         });
       }
 
-      // 4. Generate quote number and version
-      const { quoteNumber, version } =
-        await this.generateQuoteNumber(opportunityId);
-
-      // 5. Check if this is the first quote (will be primary)
-      const existingQuoteCount = await prisma.quote.count({
-        where: { opportunityId },
-      });
-      const isPrimary = existingQuoteCount === 0;
-
-      // 6. Calculate totals from line items
       let subtotal = new Prisma.Decimal(0);
       for (const item of opportunity.lineItems) {
         subtotal = subtotal.add(item.totalPrice);
       }
 
-      const grandTotal = subtotal; // discount, tax, shipping default to 0
+      const grandTotal = subtotal;
 
-      // 7. Create quote + copy line items in a transaction
       const quote = await prisma.$transaction(async tx => {
-        // Create the quote
+        await tx.$queryRaw`
+          SELECT "id" FROM "opportunities"
+          WHERE "id" = ${opportunityId}
+          FOR UPDATE
+        `;
+        const versionAggregate = await tx.quote.aggregate({
+          where: { opportunityId },
+          _max: { version: true },
+        });
+        const version = (versionAggregate._max.version ?? 0) + 1;
+        const quoteBaseNumber = await nextDocumentNumber(
+          tx,
+          SEQUENCE_KEYS.SALES_QUOTE
+        );
+        const quoteNumber = `${quoteBaseNumber}-${this.quoteVersionLabel(version)}`;
+        const isPrimary = version === 1;
+
         const newQuote = await tx.quote.create({
           data: {
             quoteNumber,
@@ -537,11 +736,20 @@ export class OpportunityController {
             isPrimary,
             subtotal,
             grandTotal,
-            validUntil: validUntil ? new Date(validUntil) : null,
-            paymentTerms: paymentTerms || null,
-            deliveryTerms: deliveryTerms || null,
-            notes: notes || null,
-            internalNotes: internalNotes || null,
+            validUntil: parsedValidUntil,
+            paymentTerms:
+              typeof paymentTerms === "string"
+                ? paymentTerms.trim() || null
+                : null,
+            deliveryTerms:
+              typeof deliveryTerms === "string"
+                ? deliveryTerms.trim() || null
+                : null,
+            notes: typeof notes === "string" ? notes.trim() || null : null,
+            internalNotes:
+              typeof internalNotes === "string"
+                ? internalNotes.trim() || null
+                : null,
             opportunityId: opportunity.id,
             accountId: opportunity.accountId,
             contactId: opportunity.contactId,
@@ -549,7 +757,6 @@ export class OpportunityController {
           },
         });
 
-        // Copy line items from opportunity to quote
         for (const item of opportunity.lineItems) {
           await tx.quoteLineItem.create({
             data: {
@@ -567,7 +774,6 @@ export class OpportunityController {
           });
         }
 
-        // Log activity on opportunity
         await tx.opportunityActivity.create({
           data: {
             opportunityId: opportunity.id,
@@ -578,10 +784,14 @@ export class OpportunityController {
           },
         });
 
+        await tx.opportunity.update({
+          where: { id: opportunityId },
+          data: { status: "QUOTE_CREATED" },
+        });
+
         return newQuote;
       });
 
-      // 8. Fetch the complete quote with line items to return
       const fullQuote = await prisma.quote.findUnique({
         where: { id: quote.id },
         include: {
@@ -608,10 +818,6 @@ export class OpportunityController {
     }
   }
 
-  /**
-   * PATCH /api/opportunity/:opportunityId
-   * Update an opportunity (name, expectedCloseDate, nextStep, type, stage, leadSource)
-   */
   async updateOpportunity(req: Request, res: Response) {
     const operation = "Update opportunity";
     try {
@@ -625,7 +831,6 @@ export class OpportunityController {
 
       const userId = req.user!.id;
 
-      // Fetch existing opportunity
       const existing = await prisma.opportunity.findUnique({
         where: { id: opportunityId },
       });
@@ -643,7 +848,6 @@ export class OpportunityController {
         priceBookId,
       } = req.body;
 
-      // Check at least one field is provided
       if (
         name === undefined &&
         expectedCloseDate === undefined &&
@@ -669,12 +873,15 @@ export class OpportunityController {
       }[] = [];
       let deleteLineItems = false;
 
-      // Validate and set name
       if (name !== undefined) {
-        if (!name || typeof name !== "string" || name.trim().length === 0) {
+        if (
+          typeof name !== "string" ||
+          name.trim().length === 0 ||
+          name.trim().length > 255
+        ) {
           return handleValidationError(
             res,
-            "Name cannot be empty",
+            "Name cannot be empty or exceed 255 characters",
             "name",
             operation
           );
@@ -689,7 +896,6 @@ export class OpportunityController {
         }
       }
 
-      // Validate and set expectedCloseDate
       if (expectedCloseDate !== undefined) {
         if (expectedCloseDate === null) {
           if (existing.expectedCloseDate !== null) {
@@ -701,8 +907,8 @@ export class OpportunityController {
             updateData.expectedCloseDate = null;
           }
         } else {
-          const d = new Date(expectedCloseDate);
-          if (isNaN(d.getTime())) {
+          const d = parseIsoDate(expectedCloseDate);
+          if (!d) {
             return handleValidationError(
               res,
               "Invalid expectedCloseDate",
@@ -719,9 +925,20 @@ export class OpportunityController {
         }
       }
 
-      // Validate and set nextStep
       if (nextStep !== undefined) {
-        const newVal = nextStep || null;
+        if (
+          nextStep !== null &&
+          (typeof nextStep !== "string" || nextStep.trim().length > 1_000)
+        ) {
+          return handleValidationError(
+            res,
+            "nextStep must be text of at most 1000 characters",
+            "nextStep",
+            operation
+          );
+        }
+        const newVal =
+          typeof nextStep === "string" ? nextStep.trim() || null : null;
         if (newVal !== existing.nextStep) {
           activities.push({
             field: "nextStep",
@@ -732,7 +949,6 @@ export class OpportunityController {
         }
       }
 
-      // Validate and set type
       if (type !== undefined) {
         if (type === null) {
           if (existing.type !== null) {
@@ -764,7 +980,6 @@ export class OpportunityController {
         }
       }
 
-      // Validate and set stage
       if (stage !== undefined) {
         const validStages = Object.values(OpportunityStage);
         if (!validStages.includes(stage)) {
@@ -785,9 +1000,20 @@ export class OpportunityController {
         }
       }
 
-      // Validate and set leadSource
       if (leadSource !== undefined) {
-        const newVal = leadSource || null;
+        if (
+          leadSource !== null &&
+          (typeof leadSource !== "string" || leadSource.trim().length > 255)
+        ) {
+          return handleValidationError(
+            res,
+            "leadSource must be text of at most 255 characters",
+            "leadSource",
+            operation
+          );
+        }
+        const newVal =
+          typeof leadSource === "string" ? leadSource.trim() || null : null;
         if (newVal !== existing.leadSource) {
           activities.push({
             field: "leadSource",
@@ -798,7 +1024,6 @@ export class OpportunityController {
         }
       }
 
-      // Validate and set priceBookId
       if (priceBookId !== undefined) {
         if (priceBookId === null) {
           if (existing.priceBookId !== null) {
@@ -810,11 +1035,26 @@ export class OpportunityController {
             updateData.priceBook = { disconnect: true };
           }
         } else {
-          const parsedPriceBookId = parseInt(priceBookId, 10);
-          if (isNaN(parsedPriceBookId)) {
+          const parsedPriceBookId = parsePositiveInteger(priceBookId);
+          if (parsedPriceBookId === null) {
             return handleValidationError(
               res,
               "Invalid priceBookId",
+              "priceBookId",
+              operation
+            );
+          }
+          const priceBook = await prisma.priceBook.findUnique({
+            where: { id: parsedPriceBookId },
+            select: { id: true, isActive: true },
+          });
+          if (!priceBook) {
+            return handleNotFoundError(res, "Price Book", operation);
+          }
+          if (!priceBook.isActive) {
+            return handleValidationError(
+              res,
+              "Price Book must be active",
               "priceBookId",
               operation
             );
@@ -831,7 +1071,6 @@ export class OpportunityController {
         }
       }
 
-      // If nothing actually changed, return current data
       if (Object.keys(updateData).length === 0) {
         const fullOpportunity = await prisma.opportunity.findUnique({
           where: { id: opportunityId },
@@ -844,7 +1083,6 @@ export class OpportunityController {
         return res.json({ data: fullOpportunity });
       }
 
-      // Update opportunity and log activities in a transaction
       await prisma.$transaction(async tx => {
         if (deleteLineItems) {
           await tx.opportunityLineItem.deleteMany({ where: { opportunityId } });
@@ -855,7 +1093,6 @@ export class OpportunityController {
           data: updateData,
         });
 
-        // Log each field change as an activity
         for (const activity of activities) {
           await tx.opportunityActivity.create({
             data: {
@@ -870,7 +1107,6 @@ export class OpportunityController {
         }
       });
 
-      // Fetch full updated opportunity with relations
       const fullOpportunity = await prisma.opportunity.findUnique({
         where: { id: opportunityId },
         include: {
@@ -889,14 +1125,6 @@ export class OpportunityController {
     }
   }
 
-  /**
-   * POST /api/opportunities/:id/submit
-   * Submit an opportunity for approval.
-   * If the max line-item discount exceeds the OPPORTUNITY_DISCOUNT_THRESHOLD global setting,
-   * an ApprovalProcess record is created and the opportunity status is set to SUBMITTED.
-   * Otherwise the opportunity moves directly to IN_PROGRESS (no approval needed).
-   * Body: { requestedToId: number } — required when discount threshold is exceeded
-   */
   async submitOpportunityForApproval(req: Request, res: Response) {
     const operation = "Submit opportunity for approval";
     try {
@@ -911,7 +1139,6 @@ export class OpportunityController {
       const userId = req.user!.id;
       const { requestedToId } = req.body;
 
-      // Fetch opportunity with line items
       const opportunity = await prisma.opportunity.findUnique({
         where: { id: opportunityId },
         include: {
@@ -926,6 +1153,15 @@ export class OpportunityController {
         return handleNotFoundError(res, "Opportunity", operation);
       }
 
+      if (!["DRAFT", "REJECTED"].includes(opportunity.status)) {
+        return handleValidationError(
+          res,
+          `Only DRAFT or REJECTED opportunities can be submitted. Current status: ${opportunity.status}`,
+          "status",
+          operation
+        );
+      }
+
       if (opportunity.lineItems.length === 0) {
         return handleValidationError(
           res,
@@ -935,15 +1171,21 @@ export class OpportunityController {
         );
       }
 
-      // Get discount threshold from global settings (default 0 = always require approval if any discount)
       const thresholdSetting = await prisma.globalSetting.findUnique({
         where: { key: "OPPORTUNITY_DISCOUNT_THRESHOLD" },
       });
-      const threshold = thresholdSetting
-        ? parseFloat(thresholdSetting.value)
-        : 0;
+      const thresholdText = thresholdSetting?.value ?? "0";
+      const thresholdParsed = parseNonNegativeDecimal(thresholdText, 3, 4);
+      if (
+        thresholdParsed === null ||
+        new Prisma.Decimal(thresholdParsed).greaterThan(100)
+      ) {
+        throw new Error(
+          "OPPORTUNITY_DISCOUNT_THRESHOLD must be a decimal between 0 and 100"
+        );
+      }
+      const threshold = Number(thresholdParsed);
 
-      // Find the maximum discount % across all line items
       const maxDiscount = opportunity.lineItems.reduce((max, item) => {
         const d = parseFloat(item.discount.toString());
         return d > max ? d : max;
@@ -952,8 +1194,7 @@ export class OpportunityController {
       const requiresApproval = maxDiscount > threshold;
 
       if (requiresApproval) {
-        // requestedToId is mandatory when approval is needed
-        if (!requestedToId) {
+        if (requestedToId === undefined || requestedToId === null) {
           return handleValidationError(
             res,
             "requestedToId is required because the opportunity discount exceeds the approval threshold",
@@ -962,8 +1203,8 @@ export class OpportunityController {
           );
         }
 
-        const parsedRequestedToId = parseInt(requestedToId, 10);
-        if (isNaN(parsedRequestedToId)) {
+        const parsedRequestedToId = parsePositiveInteger(requestedToId);
+        if (parsedRequestedToId === null) {
           return handleValidationError(
             res,
             "Invalid requestedToId",
@@ -971,23 +1212,46 @@ export class OpportunityController {
             operation
           );
         }
-
-        const approver = await prisma.user.findUnique({
-          where: { id: parsedRequestedToId },
-        });
-        if (!approver) {
-          return handleNotFoundError(res, "Approver user", operation);
-        }
-        if (approver.role === UserRole.SALES) {
+        if (parsedRequestedToId === userId) {
           return handleValidationError(
             res,
-            "Approver must have the ADMIN role",
+            "An approval request must be assigned to a different user",
             "requestedToId",
             operation
           );
         }
 
-        // Check for existing pending approval
+        const approver = await prisma.user.findUnique({
+          where: { id: parsedRequestedToId },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            role: true,
+            permissions: true,
+            deletedAt: true,
+          },
+        });
+        if (!approver) {
+          return handleNotFoundError(res, "Approver user", operation);
+        }
+        if (
+          approver.deletedAt !== null ||
+          !roleHasPermission(
+            approver.role,
+            approver.permissions,
+            "approvals.act"
+          )
+        ) {
+          return handleValidationError(
+            res,
+            "Approver must be active and have approval permission",
+            "requestedToId",
+            operation
+          );
+        }
+
         const existing = await prisma.approvalProcess.findFirst({
           where: {
             targetObjectName: "OPP",
@@ -1003,7 +1267,6 @@ export class OpportunityController {
           });
         }
 
-        // Transactionally: create approval + set status to SUBMITTED
         const approval = await prisma.$transaction(async tx => {
           const newApproval = await tx.approvalProcess.create({
             data: {
@@ -1042,10 +1305,14 @@ export class OpportunityController {
             },
           });
 
+          await tx.opportunity.update({
+            where: { id: opportunityId },
+            data: { status: "SUBMITTED" },
+          });
+
           return newApproval;
         });
 
-        // Notify approver by email (fire-and-forget)
         const requester = await prisma.user.findUnique({
           where: { id: userId },
         });
@@ -1062,9 +1329,7 @@ export class OpportunityController {
             objectNumber: opportunity.opportunityNumber,
             approvalId: approval.id,
           })
-          .catch(err =>
-            console.error("[Opportunity] Failed to send approval email:", err)
-          );
+          .catch(err => logError("opportunity_approval_email_failed", err));
 
         const fullOpportunity = await prisma.opportunity.findUnique({
           where: { id: opportunityId },
@@ -1082,8 +1347,11 @@ export class OpportunityController {
           message: `Approval request created. Max discount ${maxDiscount}% exceeds threshold ${threshold}%.`,
         });
       } else {
-        // No approval needed — move directly to IN_PROGRESS
         await prisma.$transaction(async tx => {
+          await tx.opportunity.update({
+            where: { id: opportunityId },
+            data: { status: "IN_PROGRESS" },
+          });
           await tx.opportunityActivity.create({
             data: {
               opportunityId,
@@ -1115,10 +1383,6 @@ export class OpportunityController {
     }
   }
 
-  /**
-   * GET /api/opportunity/:opportunityId
-   * Get opportunity details by ID
-   */
   async getOpportunityById(req: Request, res: Response) {
     const operation = "Get opportunity details";
     try {
@@ -1181,10 +1445,6 @@ export class OpportunityController {
     }
   }
 
-  /**
-   * DELETE /api/opportunities/:opportunityId
-   * Delete an opportunity (soft delete — sets deletedAt).
-   */
   async deleteOpportunity(req: Request, res: Response) {
     const operation = "Delete opportunity";
     try {
@@ -1217,10 +1477,6 @@ export class OpportunityController {
     }
   }
 
-  /**
-   * GET /api/opportunities/:opportunityId/line-items
-   * Get all line items for an opportunity.
-   */
   async getOpportunityLineItems(req: Request, res: Response) {
     const operation = "Get opportunity line items";
     try {
@@ -1257,11 +1513,6 @@ export class OpportunityController {
     }
   }
 
-  /**
-   * POST /api/opportunities/:opportunityId/line-items
-   * Add a line item to an opportunity.
-   * Body: productId (required), quantity (optional, default 1), priceBookEntryId (optional), listPrice (required if no priceBookEntryId), discount (optional, default 0), description (optional).
-   */
   async addOpportunityLineItem(req: Request, res: Response) {
     const operation = "Add opportunity line item";
     try {
@@ -1275,10 +1526,18 @@ export class OpportunityController {
 
       const opportunity = await prisma.opportunity.findUnique({
         where: { id: opportunityId },
-        select: { id: true, deletedAt: true, priceBookId: true },
+        select: { id: true, deletedAt: true, priceBookId: true, status: true },
       });
       if (!opportunity || opportunity.deletedAt) {
         return handleNotFoundError(res, "Opportunity", operation);
+      }
+      if (!["DRAFT", "REJECTED"].includes(opportunity.status)) {
+        return handleValidationError(
+          res,
+          "Line items are locked after an opportunity is submitted",
+          "status",
+          operation
+        );
       }
 
       if (!validateRequiredFields(req.body, ["productId"], res, operation)) {
@@ -1294,8 +1553,8 @@ export class OpportunityController {
         description,
       } = req.body;
 
-      const parsedProductId = parseInt(productId, 10);
-      if (isNaN(parsedProductId)) {
+      const parsedProductId = parsePositiveInteger(productId);
+      if (parsedProductId === null) {
         return handleValidationError(
           res,
           "Invalid productId",
@@ -1306,17 +1565,26 @@ export class OpportunityController {
 
       const product = await prisma.product.findUnique({
         where: { id: parsedProductId },
+        select: { id: true, active: true, isSellable: true },
       });
       if (!product) {
         return handleNotFoundError(res, "Product", operation);
       }
+      if (!product.active || !product.isSellable) {
+        return handleValidationError(
+          res,
+          "Product must be active and sellable",
+          "productId",
+          operation
+        );
+      }
 
-      let listPrice: number;
+      let listPrice: Prisma.Decimal;
       let parsedPriceBookEntryId: number | null = null;
 
       if (priceBookEntryId !== undefined && priceBookEntryId !== null) {
-        parsedPriceBookEntryId = parseInt(priceBookEntryId, 10);
-        if (isNaN(parsedPriceBookEntryId)) {
+        parsedPriceBookEntryId = parsePositiveInteger(priceBookEntryId);
+        if (parsedPriceBookEntryId === null) {
           return handleValidationError(
             res,
             "Invalid priceBookEntryId",
@@ -1331,10 +1599,20 @@ export class OpportunityController {
             productId: true,
             listPrice: true,
             priceBookId: true,
+            isActive: true,
+            priceBook: { select: { isActive: true } },
           },
         });
         if (!priceBookEntry) {
           return handleNotFoundError(res, "Price book entry", operation);
+        }
+        if (!priceBookEntry.isActive || !priceBookEntry.priceBook.isActive) {
+          return handleValidationError(
+            res,
+            "Price book entry must be active",
+            "priceBookEntryId",
+            operation
+          );
         }
         if (priceBookEntry.productId !== parsedProductId) {
           return handleValidationError(
@@ -1355,8 +1633,16 @@ export class OpportunityController {
             operation
           );
         }
-        listPrice = Number(priceBookEntry.listPrice);
+        listPrice = priceBookEntry.listPrice;
       } else {
+        if (opportunity.priceBookId !== null) {
+          return handleValidationError(
+            res,
+            "priceBookEntryId is required for the opportunity price book",
+            "priceBookEntryId",
+            operation
+          );
+        }
         if (listPriceParam === undefined || listPriceParam === null) {
           return handleValidationError(
             res,
@@ -1365,8 +1651,8 @@ export class OpportunityController {
             operation
           );
         }
-        listPrice = parseFloat(listPriceParam);
-        if (isNaN(listPrice) || listPrice < 0) {
+        const parsedListPrice = parseNonNegativeDecimal(listPriceParam, 13, 2);
+        if (parsedListPrice === null) {
           return handleValidationError(
             res,
             "listPrice must be a non-negative number",
@@ -1374,13 +1660,14 @@ export class OpportunityController {
             operation
           );
         }
+        listPrice = new Prisma.Decimal(parsedListPrice);
       }
 
       const quantity =
         quantityParam !== undefined && quantityParam !== null
-          ? Math.max(1, parseInt(quantityParam, 10) || 1)
+          ? parseBoundedInteger(quantityParam, 1, 1_000_000)
           : 1;
-      if (isNaN(quantity) || quantity < 1) {
+      if (quantity === null) {
         return handleValidationError(
           res,
           "quantity must be a positive integer",
@@ -1389,11 +1676,14 @@ export class OpportunityController {
         );
       }
 
-      const discount =
+      const discountText =
         discountParam !== undefined && discountParam !== null
-          ? parseFloat(discountParam)
-          : 0;
-      if (isNaN(discount) || discount < 0 || discount > 100) {
+          ? parseNonNegativeDecimal(discountParam, 3, 2)
+          : "0";
+      if (
+        discountText === null ||
+        new Prisma.Decimal(discountText).greaterThan(100)
+      ) {
         return handleValidationError(
           res,
           "discount must be a number between 0 and 100",
@@ -1401,9 +1691,26 @@ export class OpportunityController {
           operation
         );
       }
+      const discount = new Prisma.Decimal(discountText);
 
-      const unitPrice = listPrice * (1 - discount / 100);
-      const totalPrice = quantity * unitPrice;
+      const unitPrice = listPrice
+        .mul(new Prisma.Decimal(100).minus(discount))
+        .div(100)
+        .toDecimalPlaces(2);
+      const totalPrice = unitPrice.mul(quantity).toDecimalPlaces(2);
+
+      if (
+        description !== undefined &&
+        description !== null &&
+        (typeof description !== "string" || description.trim().length > 2_000)
+      ) {
+        return handleValidationError(
+          res,
+          "description must be text of at most 2000 characters",
+          "description",
+          operation
+        );
+      }
 
       const lastItem = await prisma.opportunityLineItem.findFirst({
         where: { opportunityId },
@@ -1456,12 +1763,6 @@ export class OpportunityController {
     }
   }
 
-  /**
-   * PATCH /api/opportunities/:opportunityId/line-items/:lineItemId
-   * Update a line item.
-   * Body: quantity, listPrice, discount, description, sortOrder (all optional; at least one required).
-   * unitPrice and totalPrice are recomputed from listPrice, discount, and quantity when provided.
-   */
   async updateOpportunityLineItem(req: Request, res: Response) {
     const operation = "Update opportunity line item";
     try {
@@ -1483,10 +1784,18 @@ export class OpportunityController {
 
       const opportunity = await prisma.opportunity.findUnique({
         where: { id: opportunityId },
-        select: { id: true, deletedAt: true },
+        select: { id: true, deletedAt: true, status: true },
       });
       if (!opportunity || opportunity.deletedAt) {
         return handleNotFoundError(res, "Opportunity", operation);
+      }
+      if (!["DRAFT", "REJECTED"].includes(opportunity.status)) {
+        return handleValidationError(
+          res,
+          "Line items are locked after an opportunity is submitted",
+          "status",
+          operation
+        );
       }
 
       const existing = await prisma.opportunityLineItem.findFirst({
@@ -1522,9 +1831,9 @@ export class OpportunityController {
 
       const quantity =
         quantityParam !== undefined && quantityParam !== null
-          ? parseInt(quantityParam, 10)
+          ? parseBoundedInteger(quantityParam, 1, 1_000_000)
           : existing.quantity;
-      if (isNaN(quantity) || quantity < 1) {
+      if (quantity === null) {
         return handleValidationError(
           res,
           "quantity must be a positive integer",
@@ -1533,11 +1842,19 @@ export class OpportunityController {
         );
       }
 
-      const listPrice =
+      if (existing.priceBookEntryId !== null && listPriceParam !== undefined) {
+        return handleValidationError(
+          res,
+          "listPrice is controlled by the selected price book entry",
+          "listPrice",
+          operation
+        );
+      }
+      const parsedListPrice =
         listPriceParam !== undefined && listPriceParam !== null
-          ? parseFloat(listPriceParam)
-          : Number(existing.listPrice);
-      if (isNaN(listPrice) || listPrice < 0) {
+          ? parseNonNegativeDecimal(listPriceParam, 13, 2)
+          : existing.listPrice.toString();
+      if (parsedListPrice === null) {
         return handleValidationError(
           res,
           "listPrice must be a non-negative number",
@@ -1545,12 +1862,39 @@ export class OpportunityController {
           operation
         );
       }
+      let listPrice = new Prisma.Decimal(parsedListPrice);
+      if (existing.priceBookEntryId !== null) {
+        const currentEntry = await prisma.priceBookEntry.findUnique({
+          where: { id: existing.priceBookEntryId },
+          select: {
+            listPrice: true,
+            isActive: true,
+            priceBook: { select: { isActive: true } },
+          },
+        });
+        if (
+          !currentEntry ||
+          !currentEntry.isActive ||
+          !currentEntry.priceBook.isActive
+        ) {
+          return handleValidationError(
+            res,
+            "The selected price book entry is no longer active",
+            "priceBookEntryId",
+            operation
+          );
+        }
+        listPrice = currentEntry.listPrice;
+      }
 
-      const discount =
+      const discountText =
         discountParam !== undefined && discountParam !== null
-          ? parseFloat(discountParam)
-          : Number(existing.discount);
-      if (isNaN(discount) || discount < 0 || discount > 100) {
+          ? parseNonNegativeDecimal(discountParam, 3, 2)
+          : existing.discount.toString();
+      if (
+        discountText === null ||
+        new Prisma.Decimal(discountText).greaterThan(100)
+      ) {
         return handleValidationError(
           res,
           "discount must be a number between 0 and 100",
@@ -1558,9 +1902,13 @@ export class OpportunityController {
           operation
         );
       }
+      const discount = new Prisma.Decimal(discountText);
 
-      const unitPrice = listPrice * (1 - discount / 100);
-      const totalPrice = quantity * unitPrice;
+      const unitPrice = listPrice
+        .mul(new Prisma.Decimal(100).minus(discount))
+        .div(100)
+        .toDecimalPlaces(2);
+      const totalPrice = unitPrice.mul(quantity).toDecimalPlaces(2);
 
       const updateData: Prisma.OpportunityLineItemUpdateInput = {
         quantity,
@@ -1570,16 +1918,33 @@ export class OpportunityController {
         totalPrice,
       };
       if (description !== undefined) {
+        if (
+          description !== null &&
+          (typeof description !== "string" || description.trim().length > 2_000)
+        ) {
+          return handleValidationError(
+            res,
+            "description must be text of at most 2000 characters",
+            "description",
+            operation
+          );
+        }
         updateData.description =
           description && typeof description === "string"
             ? description.trim() || null
             : null;
       }
       if (sortOrderParam !== undefined && sortOrderParam !== null) {
-        const sortOrder = parseInt(sortOrderParam, 10);
-        if (!isNaN(sortOrder) && sortOrder >= 0) {
-          updateData.sortOrder = sortOrder;
+        const sortOrder = parseBoundedInteger(sortOrderParam, 0, 1_000_000);
+        if (sortOrder === null) {
+          return handleValidationError(
+            res,
+            "sortOrder must be a non-negative integer",
+            "sortOrder",
+            operation
+          );
         }
+        updateData.sortOrder = sortOrder;
       }
 
       const lineItem = await prisma.$transaction(async tx => {
@@ -1613,10 +1978,6 @@ export class OpportunityController {
     }
   }
 
-  /**
-   * GET /api/opportunities/:opportunityId/quotes
-   * Get all quotes for an opportunity (paginated, newest first).
-   */
   async getOpportunityQuotes(req: Request, res: Response) {
     const operation = "Get opportunity quotes";
     try {
@@ -1636,13 +1997,9 @@ export class OpportunityController {
         return handleNotFoundError(res, "Opportunity", operation);
       }
 
-      const pageParam = req.query.page as string;
-      const limitParam = req.query.limit as string;
-      const page = Math.max(1, parseInt(pageParam) || 1);
-      const requestedLimit = parseInt(limitParam);
-      const limit =
-        requestedLimit >= 1 && requestedLimit <= 100 ? requestedLimit : 10;
-      const skip = (page - 1) * limit;
+      const pagination = this.pagination(req, res, operation);
+      if (!pagination) return;
+      const { page, limit, skip } = pagination;
 
       const totalItems = await prisma.quote.count({ where: { opportunityId } });
 
@@ -1685,10 +2042,6 @@ export class OpportunityController {
     }
   }
 
-  /**
-   * DELETE /api/opportunities/:opportunityId/line-items/:lineItemId
-   * Delete a line item (hard delete). Recalculates opportunity amount after deletion.
-   */
   async deleteOpportunityLineItem(req: Request, res: Response) {
     const operation = "Delete opportunity line item";
     try {
@@ -1710,10 +2063,18 @@ export class OpportunityController {
 
       const opportunity = await prisma.opportunity.findUnique({
         where: { id: opportunityId },
-        select: { id: true, deletedAt: true },
+        select: { id: true, deletedAt: true, status: true },
       });
       if (!opportunity || opportunity.deletedAt) {
         return handleNotFoundError(res, "Opportunity", operation);
+      }
+      if (!["DRAFT", "REJECTED"].includes(opportunity.status)) {
+        return handleValidationError(
+          res,
+          "Line items are locked after an opportunity is submitted",
+          "status",
+          operation
+        );
       }
 
       const existing = await prisma.opportunityLineItem.findFirst({

@@ -1,13 +1,15 @@
 import { Router } from "express";
 import { PriceBookController } from "../controllers/pricebook.controller.js";
-import { requireAuth, requireRole } from "../middleware/auth.middleware.js";
-import { UserRole } from "@prisma/client";
+import {
+  requireAuth,
+  requirePermission,
+} from "../middleware/auth.middleware.js";
 
 const router = Router();
 const pricebookController = new PriceBookController();
 
 router.use(requireAuth);
-router.use(requireRole([UserRole.ADMIN]));
+router.use(requirePermission("pricebooks.manage"));
 
 router.get("/", pricebookController.getAllPriceBooks.bind(pricebookController));
 router.get(

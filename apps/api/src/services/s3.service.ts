@@ -1,16 +1,16 @@
 import {
   S3Client,
   PutObjectCommand,
+  GetObjectCommand,
   DeleteObjectCommand,
   type ObjectCannedACL,
 } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import dotenv from "dotenv";
+import { randomUUID } from "node:crypto";
 
-// Load environment variables (for scripts that run independently)
-// In the app, dotenv is already loaded in app.ts, but this ensures it works in scripts too
 dotenv.config({ path: "../../.env" });
 
-// Create S3 client lazily using process.env directly (memoized)
 let s3Client: S3Client | null = null;
 function getS3Client(): S3Client {
   if (s3Client) return s3Client;
@@ -50,18 +50,12 @@ function getS3Client(): S3Client {
   return s3Client;
 }
 
-/**
- * S3 Upload Result
- */
 export interface S3UploadResult {
-  url: string;
   key: string;
-  publicUrl: string;
+
+  publicUrl?: string;
 }
 
-/**
- * S3 Upload Options
- */
 export interface S3UploadOptions {
   folder?: string;
   filename?: string;
@@ -70,61 +64,73 @@ export interface S3UploadOptions {
   metadata?: Record<string, string>;
 }
 
-/**
- * Generate S3 public URL from key
- */
-export function getS3PublicUrl(key: string): string {
+function getS3PublicUrl(key: string): string {
   const bucketName = process.env.S3_BUCKET_NAME || "";
   const awsRegion = process.env.AWS_REGION || "";
   const endpointEnv = process.env.S3_ENDPOINT;
+  const publicBaseEnv = process.env.S3_PUBLIC_BASE_URL?.trim();
+
+  // Providers such as Supabase Storage and Cloudflare R2 serve public objects
+  // from a different host than the S3 API endpoint used to write them, so the
+  // public base URL has to be configured independently of S3_ENDPOINT.
+  if (publicBaseEnv) {
+    const base = publicBaseEnv
+      .replace(/{bucket}|\${bucket}/g, bucketName)
+      .replace(/\/+$/, "");
+    return `${/^https?:\/\//.test(base) ? base : `https://${base}`}/${key}`;
+  }
 
   if (endpointEnv) {
-    // Custom endpoint (e.g., DigitalOcean Spaces, MinIO)
-    // Handle different endpoint formats
+    const scheme = endpointEnv.startsWith("http://") ? "http" : "https";
     const endpoint = endpointEnv.replace(/^https?:\/\//, "").replace(/\/$/, "");
 
-    // Check if endpoint already includes bucket name pattern
     if (endpoint.includes("{bucket}") || endpoint.includes("${bucket}")) {
       return (
         endpointEnv.replace(/{bucket}|\${bucket}/g, bucketName) + "/" + key
       );
     }
 
-    // For DigitalOcean Spaces: https://{region}.digitaloceanspaces.com
-    // URL format: https://{bucket}.{region}.digitaloceanspaces.com/{key}
     if (endpoint.includes("digitaloceanspaces.com")) {
       const region = endpoint.split(".")[0];
       return `https://${bucketName}.${region}.digitaloceanspaces.com/${key}`;
     }
 
-    // For MinIO or other S3-compatible services
-    // URL format: https://{endpoint}/{bucket}/{key}
-    return `https://${endpoint}/${bucketName}/${key}`;
+    return `${scheme}://${endpoint}/${bucketName}/${key}`;
   }
-  // Standard AWS S3 URL
+
   return `https://${bucketName}.s3.${awsRegion}.amazonaws.com/${key}`;
 }
 
-/**
- * Generate S3 key (path) for file
- */
 export function generateS3Key(
   folder: string = "uploads",
   filename: string = "file",
   extension: string = "bin"
 ): string {
-  const timestamp = Date.now();
-  const sanitizedFilename = filename.replace(/[^a-zA-Z0-9-_]/g, "-");
-  return `${folder}/${sanitizedFilename}-${timestamp}.${extension}`;
+  const sanitizedFolder = folder
+    .split("/")
+    .map(segment =>
+      segment
+        .replace(/[^a-zA-Z0-9-_]/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-+|-+$/g, "")
+    )
+    .filter(Boolean)
+    .join("/");
+  if (!sanitizedFolder)
+    throw new Error("S3 folder must contain a safe segment");
+  const sanitizedFilename =
+    filename
+      .replace(/[^a-zA-Z0-9-_]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "") || "file";
+  const sanitizedExtension =
+    extension
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "")
+      .slice(0, 10) || "bin";
+  return `${sanitizedFolder}/${sanitizedFilename}-${randomUUID()}.${sanitizedExtension}`;
 }
 
-/**
- * Upload file buffer to S3 (generic - works for any file type)
- *
- * @param buffer - File buffer to upload
- * @param options - Upload options (folder, filename, contentType, etc.)
- * @returns S3 upload result with URL and key
- */
 export async function uploadToS3(
   buffer: Buffer,
   options: S3UploadOptions = {}
@@ -139,22 +145,19 @@ export async function uploadToS3(
       folder = "uploads",
       filename = "file",
       contentType = "application/octet-stream",
-      publicRead = true,
+      publicRead = false,
       metadata = {},
     } = options;
 
-    // Extract extension and base filename
     let baseFilename = filename || "file";
     let extension = "bin";
 
-    // If filename has an extension, extract it and remove from filename
     if (baseFilename.includes(".")) {
       const parts = baseFilename.split(".");
       extension = parts[parts.length - 1] || "bin";
-      // Remove extension from filename (join all parts except the last)
+
       baseFilename = parts.slice(0, -1).join(".") || "file";
     } else if (contentType) {
-      // Try to infer extension from content type
       const contentTypeMap: Record<string, string> = {
         "image/jpeg": "jpg",
         "image/jpg": "jpg",
@@ -165,10 +168,8 @@ export async function uploadToS3(
       extension = contentTypeMap[contentType] || "bin";
     }
 
-    // Generate S3 key (filename without extension, extension passed separately)
     const key = generateS3Key(folder, baseFilename, extension);
 
-    // Prepare upload parameters
     const putObjectParams: {
       Bucket: string;
       Key: string;
@@ -183,41 +184,25 @@ export async function uploadToS3(
       ContentType: contentType,
     };
 
-    // Set ACL if public read is enabled
-    // Note: Only set ACL if explicitly enabled via environment variable
-    // If Block Public Access is enabled, you can't use ACL - rely on bucket policy only
     const useAcl = process.env.S3_USE_ACL === "true" && publicRead;
     if (useAcl) {
       putObjectParams.ACL = "public-read" as ObjectCannedACL;
     }
 
-    // Add metadata if provided
     if (Object.keys(metadata).length > 0) {
       putObjectParams.Metadata = metadata;
     }
 
-    // Upload to S3
     const command = new PutObjectCommand(putObjectParams);
     await getS3Client().send(command);
 
-    // Generate public URL
-    const publicUrl = getS3PublicUrl(key);
-
-    // Log upload info (can be removed in production)
-    console.log(`[S3 Service] ✅ File uploaded successfully`);
-    console.log(`[S3 Service] 📍 URL: ${publicUrl}`);
-    console.log(`[S3 Service] 🔑 Key: ${key}`);
-    console.log(`[S3 Service] 📦 ContentType: ${contentType}`);
-    console.log(`[S3 Service] 🪣 Bucket: ${bucketName}`);
-
     return {
-      url: publicUrl,
-      key: key,
-      publicUrl: publicUrl,
+      key,
+      ...(publicRead ? { publicUrl: getS3PublicUrl(key) } : {}),
     };
-  } catch (error: any) {
-    // Provide detailed error messages for common issues
-    const errorMessage = error.message || "Unknown error";
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown storage error";
 
     if (
       errorMessage.includes("specified endpoint") ||
@@ -259,11 +244,6 @@ export async function uploadToS3(
   }
 }
 
-/**
- * Delete file from S3 by key
- *
- * @param key - S3 key (path) of the file to delete
- */
 export async function deleteFromS3(key: string): Promise<void> {
   try {
     const bucketName = process.env.S3_BUCKET_NAME;
@@ -276,114 +256,79 @@ export async function deleteFromS3(key: string): Promise<void> {
     });
 
     await getS3Client().send(command);
-    console.log(`[S3 Service] ✅ File deleted: ${key}`);
-  } catch (error: any) {
-    throw new Error(`S3 delete failed: ${error.message}`);
+  } catch (error: unknown) {
+    throw new Error(
+      `S3 delete failed: ${
+        error instanceof Error ? error.message : "Unknown storage error"
+      }`
+    );
   }
 }
 
-/**
- * Extract S3 key from URL
- *
- * @param url - S3 URL
- * @returns S3 key or null if URL is not a valid S3 URL
- */
+export async function getSignedS3DownloadUrl(
+  key: string,
+  expiresInSeconds = 3_600
+): Promise<string> {
+  if (
+    !key ||
+    key.startsWith("/") ||
+    key.includes("\\") ||
+    key.split("/").includes("..")
+  ) {
+    throw new Error("Invalid S3 object key");
+  }
+  if (
+    !Number.isSafeInteger(expiresInSeconds) ||
+    expiresInSeconds < 60 ||
+    expiresInSeconds > 604_800
+  ) {
+    throw new Error("Signed URL expiry must be between 60 and 604800 seconds");
+  }
+  const bucketName = process.env.S3_BUCKET_NAME;
+  if (!bucketName) throw new Error("Missing required env var: S3_BUCKET_NAME");
+
+  return getSignedUrl(
+    getS3Client(),
+    new GetObjectCommand({ Bucket: bucketName, Key: key }),
+    { expiresIn: expiresInSeconds }
+  );
+}
+
+function isSafeS3Key(key: string): boolean {
+  return (
+    Boolean(key) &&
+    !key.startsWith("/") &&
+    !key.includes("\\") &&
+    !key.split("/").includes("..")
+  );
+}
+
 export function extractS3KeyFromUrl(url: string): string | null {
   try {
-    // Check if it's a Cloudinary URL (for backward compatibility)
-    if (url.includes("res.cloudinary.com")) {
+    const supplied = new URL(url);
+    if (supplied.protocol !== "https:" && supplied.protocol !== "http:") {
       return null;
     }
-
-    // Parse S3 URL
-    const urlObj = new URL(url);
-    const pathname = urlObj.pathname;
-    const bucketName = process.env.S3_BUCKET_NAME || "";
-    const endpointEnv = process.env.S3_ENDPOINT;
-
-    // For standard AWS S3 URLs
-    // Format: https://{bucket}.s3.{region}.amazonaws.com/{key}
+    const marker = "__s3_key_marker__";
+    const expected = new URL(getS3PublicUrl(marker));
+    const pathPrefix = expected.pathname.slice(0, -marker.length);
     if (
-      urlObj.hostname.includes("s3") &&
-      urlObj.hostname.includes("amazonaws.com")
+      supplied.origin !== expected.origin ||
+      !supplied.pathname.startsWith(pathPrefix)
     ) {
-      // Extract key from pathname (remove leading slash)
-      const key = pathname.substring(1);
-      return key || null;
+      return null;
     }
-
-    // For custom endpoints
-    if (endpointEnv) {
-      const endpoint = endpointEnv
-        .replace(/^https?:\/\//, "")
-        .replace(/\/$/, "");
-
-      // For DigitalOcean Spaces: https://{bucket}.{region}.digitaloceanspaces.com/{key}
-      if (endpoint.includes("digitaloceanspaces.com")) {
-        const key = pathname.substring(1);
-        return key || null;
-      }
-
-      // For MinIO or other S3-compatible services
-      // Format: https://{endpoint}/{bucket}/{key}
-      // Check if hostname matches endpoint
-      const endpointFirstPart = endpoint.split("/")[0];
-      if (endpointFirstPart && urlObj.hostname.includes(endpointFirstPart)) {
-        // Remove bucket name from pathname if present
-        const pathParts = pathname.split("/").filter(p => p);
-        if (pathParts[0] === bucketName) {
-          // Bucket name is in path: /{bucket}/{key}
-          return pathParts.slice(1).join("/");
-        }
-        // Bucket name is in hostname: {bucket}.{endpoint}
-        return pathname.substring(1);
-      }
-    }
-
-    // Fallback: try to extract from pathname
-    // Remove bucket name if it's the first segment
-    if (pathname && pathname.length > 1) {
-      const pathParts = pathname.split("/").filter(p => p);
-      if (pathParts[0] === bucketName && pathParts.length > 1) {
-        return pathParts.slice(1).join("/");
-      }
-      return pathname.substring(1);
-    }
-
-    return null;
+    const key = supplied.pathname.slice(pathPrefix.length);
+    return isSafeS3Key(key) ? key : null;
   } catch {
     return null;
   }
 }
 
-/**
- * Delete file from S3 by URL
- * Extracts the key from URL and deletes the file
- *
- * @param url - S3 URL of the file to delete
- * @returns true if deleted, false if URL is invalid or not an S3 URL
- */
-export async function deleteFromS3ByUrl(url: string): Promise<boolean> {
-  const key = extractS3KeyFromUrl(url);
-  if (!key) {
-    console.warn(`[S3 Service] Cannot extract key from URL: ${url}`);
-    return false;
+export function extractS3KeyFromReference(reference: string): string | null {
+  if (reference.startsWith("s3://")) {
+    const key = reference.slice("s3://".length);
+    return isSafeS3Key(key) ? key : null;
   }
-
-  try {
-    await deleteFromS3(key);
-    return true;
-  } catch (error: any) {
-    console.warn(
-      `[S3 Service] Failed to delete file from S3: ${error?.message || error}`
-    );
-    return false;
-  }
+  return extractS3KeyFromUrl(reference);
 }
-
-// Export S3 configuration constants for external use if needed
-export const S3_CONFIG = {
-  bucketName: process.env.S3_BUCKET_NAME,
-  region: process.env.AWS_REGION,
-  endpoint: process.env.S3_ENDPOINT,
-} as const;

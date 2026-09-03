@@ -1,5 +1,6 @@
 import { prisma, Prisma } from "@repo/db";
 import { AuditCategory } from "@prisma/client";
+import { logError } from "./logger.js";
 
 interface AuditLogParams {
   action: string;
@@ -39,7 +40,7 @@ export async function recordAuditLog({
         action,
         category,
         subCategory,
-        // treat null/undefined as "omit"; otherwise pass through as JSON value
+
         oldValues:
           oldValues == null ? undefined : (oldValues as Prisma.InputJsonValue),
         newValues:
@@ -47,11 +48,10 @@ export async function recordAuditLog({
       },
     });
   } catch (error) {
-    console.error("Failed to record audit log", {
+    logError("audit_log_write_failed", error, {
       action,
       entityType,
       changedBy,
-      error: error instanceof Error ? error.message : error,
     });
   }
 }

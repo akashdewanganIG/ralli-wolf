@@ -11,9 +11,9 @@ import {
   SelectValue,
 } from "@repo/ui/components/ui/select";
 
-import { useCurrency } from "@/contexts/CurrencyContext";
-import { useAuth } from "@/contexts/AuthContext";
-import { useUpdateGlobalSetting } from "@/hooks/useSettings";
+import { useCurrency } from "@/contexts/currency-context";
+import { useAuth } from "@/contexts/auth-context";
+import { useUpdateGlobalSetting } from "@/hooks/use-settings";
 import { settingsService } from "@/lib/api/services";
 import { toast } from "@/lib/toast";
 import { Skeleton } from "@/components/skeletons";
@@ -104,8 +104,6 @@ export default function CurrencySettings() {
         </Select>
       )}
 
-      {/* Reads as a caption under the control it describes. It used to be a
-          second grid column, which is what held the select down to 22rem. */}
       <div className="flex items-start gap-2 pt-0.5 text-xs leading-5 text-muted-foreground">
         {isPending ? null : (
           <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-success" />

@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   Button,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -13,9 +14,9 @@ import {
   SearchableSelect,
 } from "@repo/ui";
 import type { SearchableSelectItem } from "@repo/ui";
-import { useAddOpportunityLineItem } from "@/hooks/useOpportunities";
-import { usePricebookEntriesByPriceBookId } from "@/hooks/usePricebookEntries";
-import { useActiveProducts } from "@/hooks/useProducts";
+import { useAddOpportunityLineItem } from "@/hooks/use-opportunities";
+import { usePricebookEntriesByPriceBookId } from "@/hooks/use-pricebook-entries";
+import { useActiveProducts } from "@/hooks/use-products";
 import { toast } from "@/lib/toast";
 
 type AddOpportunityLineItemDialogProps = {
@@ -33,7 +34,6 @@ export function AddOpportunityLineItemDialog({
 }: AddOpportunityLineItemDialogProps) {
   const addLineItem = useAddOpportunityLineItem();
 
-  // Fetch pricebook entries when a pricebook is selected, otherwise fall back to all active products
   const { data: entriesResponse, isLoading: entriesLoading } =
     usePricebookEntriesByPriceBookId({ priceBookId: priceBook?.id ?? 0 });
   const { data: allProducts = [], isLoading: productsLoading } =
@@ -47,7 +47,6 @@ export function AddOpportunityLineItemDialog({
   const [listPrice, setListPrice] = React.useState(0);
   const [discount, setDiscount] = React.useState(0);
 
-  // Reset all fields when dialog closes
   React.useEffect(() => {
     if (!open) {
       setProductId("");
@@ -57,7 +56,6 @@ export function AddOpportunityLineItemDialog({
     }
   }, [open]);
 
-  // Auto-fill list price from the selected product/entry
   React.useEffect(() => {
     if (!productId) return;
     if (priceBook) {
@@ -69,7 +67,6 @@ export function AddOpportunityLineItemDialog({
     }
   }, [productId, priceBook, entries, allProducts]);
 
-  // Build items for SearchableSelect
   const selectItems: SearchableSelectItem[] = priceBook
     ? entries.map(e => ({
         value: String(e.productId),
@@ -113,7 +110,7 @@ export function AddOpportunityLineItemDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg gap-0 overflow-hidden">
         <DialogHeader>
           <DialogTitle>Add Line Item</DialogTitle>
           {priceBook && (
@@ -126,71 +123,75 @@ export function AddOpportunityLineItemDialog({
           )}
         </DialogHeader>
 
-        <div className="grid grid-cols-2 gap-4 py-2">
-          <div className="col-span-2 space-y-1.5">
-            <Label>Product</Label>
-            <SearchableSelect
-              value={productId}
-              onValueChange={setProductId}
-              items={selectItems}
-              placeholder={
-                isLoading ? "Loading products..." : "Select a product"
-              }
-              searchPlaceholder="Search products..."
-              emptyText="No products found."
-              disabled={isLoading}
-              triggerClassName="bg-background"
-            />
-          </div>
+        <DialogBody>
+          <div className="grid grid-cols-2 gap-4 py-2">
+            <div className="col-span-2 space-y-1.5">
+              <Label>Product</Label>
+              <SearchableSelect
+                value={productId}
+                onValueChange={setProductId}
+                items={selectItems}
+                placeholder={
+                  isLoading ? "Loading products..." : "Select a product"
+                }
+                searchPlaceholder="Search products..."
+                emptyText="No products found."
+                disabled={isLoading}
+                triggerClassName="bg-background"
+              />
+            </div>
 
-          <div className="space-y-1.5">
-            <Label>Quantity</Label>
-            <Input
-              type="number"
-              min={1}
-              value={quantity}
-              onChange={e => setQuantity(Math.max(1, Number(e.target.value)))}
-              onFocus={e => e.target.select()}
-            />
-          </div>
+            <div className="space-y-1.5">
+              <Label>Quantity</Label>
+              <Input
+                type="number"
+                min={1}
+                value={quantity}
+                onChange={e => setQuantity(Math.max(1, Number(e.target.value)))}
+                onFocus={e => e.target.select()}
+              />
+            </div>
 
-          <div className="space-y-1.5">
-            <Label>List Price ($)</Label>
-            <Input
-              type="number"
-              min={0}
-              step="0.01"
-              value={listPrice}
-              onChange={e => setListPrice(Number(e.target.value))}
-              onFocus={e => e.target.select()}
-            />
-          </div>
+            <div className="space-y-1.5">
+              <Label>List Price ($)</Label>
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                value={listPrice}
+                onChange={e => setListPrice(Number(e.target.value))}
+                onFocus={e => e.target.select()}
+              />
+            </div>
 
-          <div className="space-y-1.5">
-            <Label>Discount (%)</Label>
-            <Input
-              type="number"
-              min={0}
-              max={100}
-              step="0.01"
-              value={discount}
-              onChange={e =>
-                setDiscount(Math.min(100, Math.max(0, Number(e.target.value))))
-              }
-              onFocus={e => e.target.select()}
-            />
-          </div>
+            <div className="space-y-1.5">
+              <Label>Discount (%)</Label>
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                step="0.01"
+                value={discount}
+                onChange={e =>
+                  setDiscount(
+                    Math.min(100, Math.max(0, Number(e.target.value)))
+                  )
+                }
+                onFocus={e => e.target.select()}
+              />
+            </div>
 
-          <div className="space-y-1.5">
-            <Label>Unit Price ($)</Label>
-            <Input value={unitPrice.toFixed(2)} disabled />
-          </div>
+            <div className="space-y-1.5">
+              <Label>Unit Price ($)</Label>
+              <Input value={unitPrice.toFixed(2)} disabled />
+            </div>
 
-          <div className="col-span-2 space-y-1.5">
-            <Label>Total Price ($)</Label>
-            <Input value={totalPrice.toFixed(2)} disabled />
+            <div className="col-span-2 space-y-1.5">
+              <Label>Total Price ($)</Label>
+              <Input value={totalPrice.toFixed(2)} disabled />
+            </div>
           </div>
-        </div>
+        </DialogBody>
 
         <DialogFooter>
           <Button

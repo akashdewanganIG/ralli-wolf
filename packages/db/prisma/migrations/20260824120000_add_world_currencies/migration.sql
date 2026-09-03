@@ -1,9 +1,9 @@
--- Broadens the currency reference list from the original nine to the world's
--- major trading currencies, so the workspace currency picker covers the
--- markets this business actually deals in.
---
--- Idempotent: existing rows are left exactly as they are, so a workspace that
--- has already chosen a default currency is unaffected.
+
+
+
+
+
+
 INSERT INTO "currencies" ("code", "name", "symbol", "country")
 VALUES
   ('USD', 'US Dollar', '$', 'United States'),

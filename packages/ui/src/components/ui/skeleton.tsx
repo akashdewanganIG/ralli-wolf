@@ -2,19 +2,6 @@ import * as React from "react";
 
 import { cn } from "@repo/ui/lib/utils";
 
-/**
- * A single placeholder block.
- *
- * `aria-hidden` and `role="presentation"` are not optional here: without them a
- * screen reader walks a dozen empty divs and announces nothing useful while the
- * page appears to have content. The surrounding region should carry
- * `aria-busy="true"` instead, which is what `SkeletonRegion` does.
- *
- * The pulse is a token-driven opacity fade rather than a moving highlight — a
- * shimmer sweeping across a dark surface reads as a flash. `motion-safe:`
- * scopes it, so anyone who asked their system for reduced motion gets a static
- * block instead of no content at all.
- */
 export function Skeleton({
   className,
   ...props
@@ -32,10 +19,6 @@ export function Skeleton({
   );
 }
 
-/**
- * Wraps a loading area so assistive technology is told it is busy rather than
- * being handed a pile of decorative boxes.
- */
 export function SkeletonRegion({
   label = "Loading",
   className,
@@ -57,7 +40,6 @@ export function SkeletonRegion({
   );
 }
 
-/** Text line. `w-full` by default so it fills whatever column it is in. */
 export function SkeletonText({
   className,
   lines = 1,
@@ -74,7 +56,7 @@ export function SkeletonText({
           key={index}
           className={cn(
             "h-3.5",
-            // Last line short, the way a paragraph actually ends.
+
             index === lines - 1 ? "w-2/3" : "w-full",
             className
           )}
@@ -84,13 +66,6 @@ export function SkeletonText({
   );
 }
 
-/**
- * Table body placeholder.
- *
- * Takes the real column count and the real row height so the table does not
- * change height when data arrives — the point of a skeleton is that the layout
- * is already correct before the response lands.
- */
 export function SkeletonTableRows({
   rows = 8,
   columns = 5,
@@ -109,8 +84,7 @@ export function SkeletonTableRows({
               <Skeleton
                 className={cn(
                   "h-3.5",
-                  // Vary the widths so the block does not read as a grid of
-                  // identical bars.
+
                   colIndex === 0
                     ? "w-3/4"
                     : colIndex % 3 === 0
@@ -126,7 +100,6 @@ export function SkeletonTableRows({
   );
 }
 
-/** Matches `MetricCard`: label row, value, hint. */
 export function SkeletonMetricCard({ className }: { className?: string }) {
   return (
     <div
@@ -155,7 +128,6 @@ export function SkeletonMetricRow({ count = 4 }: { count?: number }) {
   );
 }
 
-/** Fills a chart's box so the panel keeps its height while data loads. */
 export function SkeletonChart({
   height = 200,
   className,
@@ -178,7 +150,6 @@ export function SkeletonChart({
   );
 }
 
-/** Avatar plus two lines — profile blocks, user rows, dropdown entries. */
 export function SkeletonPerson({
   className,
   compact = false,
@@ -199,7 +170,6 @@ export function SkeletonPerson({
   );
 }
 
-/** Compact rows for async dropdown and menu content. */
 export function SkeletonMenuRows({ rows = 4 }: { rows?: number }) {
   return (
     <SkeletonRegion label="Loading options" className="space-y-1 p-1">
@@ -210,7 +180,6 @@ export function SkeletonMenuRows({ rows = 4 }: { rows?: number }) {
   );
 }
 
-/** Label + control pairs, sized like the real fields. */
 export function SkeletonFields({
   fields = 4,
   columns = 1,
@@ -237,7 +206,6 @@ export function SkeletonFields({
   );
 }
 
-/** List rows for panels that show records rather than a table. */
 export function SkeletonList({
   rows = 5,
   className,

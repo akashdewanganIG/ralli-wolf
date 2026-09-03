@@ -9,80 +9,67 @@ datasource db {
 }
 
 model User {
-  id                 Int       @id @default(autoincrement())
-  email              String    @unique
-  passwordHash       String    @map("password_hash")
-  /// Set when an admin creates the account with a generated password. Until the
-  /// user replaces it, requireAuth allows only the change-password endpoints.
-  mustChangePassword Boolean   @default(false) @map("must_change_password")
-  createdAt          DateTime  @default(now()) @map("created_at")
-  role               UserRole  @default(SALES)
-  /// Only read when role is CUSTOM. ADMIN and SALES resolve their permissions
-  /// from the catalogue instead, so adding a permission never needs a backfill.
-  permissions        String[]  @default([])
-  phone              String?
-  region             Region?
-  deletedAt          DateTime? @map("deleted_at")
-  deletedBy          Int?      @map("deleted_by")
-  countryCode        String?   @default("91") @map("country_code")
-  firstName          String?   @map("first_name")
-  lastName           String?   @map("last_name")
-  location           String?
+  id           Int    @id @default(autoincrement())
+  email        String @unique
+  passwordHash String @map("password_hash")
 
-  // ---- Authentication methods -------------------------------------------
-  // An account must always have at least two of these enabled and verified.
-  // `*VerifiedAt` is what counts — a method that has only been set up, but
-  // never proved by entering a code, does not.
+  mustChangePassword Boolean  @default(false) @map("must_change_password")
+  createdAt          DateTime @default(now()) @map("created_at")
+  role               UserRole @default(SALES)
 
-  /// Password is always available today. The column exists so the two-method
-  /// rule can be evaluated uniformly, and relaxed later without a migration.
-  passwordEnabled         Boolean                  @default(true) @map("password_enabled")
-  /// RFC 6238 shared secret, AES-256-GCM encrypted at rest. Written when
-  /// setup begins; only counts once `totpVerifiedAt` is set.
-  totpSecret              String?                  @map("totp_secret")
-  totpVerifiedAt          DateTime?                @map("totp_verified_at")
-  /// Set once the user has completed an emailed-code challenge.
-  ///
-  /// No default: a second factor is opt-in, added by the account holder in
-  /// Settings. An account without one signs in with its password alone, which
-  /// `/login` handles directly rather than asking for a code it never sent.
-  emailOtpVerifiedAt      DateTime?                @map("email_otp_verified_at")
-  auditLogs               AuditLog[]               @relation("AuditLogUser")
-  botSessions             BotSession[]
-  campaigns               Campaign[]               @relation("CampaignCreator")
-  resolvedEnquiries       Enquiry[]                @relation("EnquiryResolver")
-  landingPageCampaigns    LandingPageCampaign[]    @relation("LandingPageCampaignCreator")
-  assignmentRules         LeadAssignmentRule[]
-  leadRemarks             LeadRemark[]             @relation("LeadRemarkAuthor")
-  deletedLeads            Lead[]                   @relation("LeadDeletedBy")
-  leads                   Lead[]                   @relation("LeadOwner")
-  salesOrders             Order[]                  @relation("SalesUserOrders")
-  passwordResets          PasswordReset[]
-  loginOtps               LoginOtp[]
-  segmentsCreated         Segment[]                @relation("SegmentCreator")
-  segmentsUpdated         Segment[]                @relation("SegmentUpdater")
-  deletedByUser           User?                    @relation("UserDeletedBy", fields: [deletedBy], references: [id])
-  deletedUsers            User[]                   @relation("UserDeletedBy")
-  whatsappNumbersCreated  WhatsAppNumber[]         @relation("WhatsAppNumberCreator")
-  whatsappNumbersUpdated  WhatsAppNumber[]         @relation("WhatsAppNumberUpdater")
-  // Opportunity-Quote-Order relations
-  ownedOpportunities      Opportunity[]            @relation("OpportunityOwner")
-  createdOpportunities    Opportunity[]            @relation("OpportunityCreator")
-  deletedOpportunities    Opportunity[]            @relation("OpportunityDeletedBy")
-  opportunityActivities   OpportunityActivity[]    @relation("OpportunityActivityUser")
-  preparedQuotes          Quote[]                  @relation("QuotePreparedBy")
-  approvedQuotes          Quote[]                  @relation("QuoteApprovedBy")
-  deniedQuotes            Quote[]                  @relation("QuoteDeniedBy")
-  ownedSalesOrders        SalesOrder[]             @relation("SalesOrderOwner")
-  approvedSalesOrders     SalesOrder[]             @relation("SalesOrderApprovedBy")
-  // Approval process relations
+  permissions String[]  @default([])
+  phone       String?
+  region      Region?
+  deletedAt   DateTime? @map("deleted_at")
+  deletedBy   Int?      @map("deleted_by")
+
+  sessionVersion Int     @default(0) @map("session_version")
+  countryCode    String? @default("91") @map("country_code")
+  firstName      String? @map("first_name")
+  lastName       String? @map("last_name")
+  location       String?
+
+  passwordEnabled Boolean @default(true) @map("password_enabled")
+
+  totpSecret     String?   @map("totp_secret")
+  totpVerifiedAt DateTime? @map("totp_verified_at")
+
+  emailOtpVerifiedAt     DateTime?             @map("email_otp_verified_at")
+  auditLogs              AuditLog[]            @relation("AuditLogUser")
+  botSessions            BotSession[]
+  campaigns              Campaign[]            @relation("CampaignCreator")
+  resolvedEnquiries      Enquiry[]             @relation("EnquiryResolver")
+  landingPageCampaigns   LandingPageCampaign[] @relation("LandingPageCampaignCreator")
+  assignmentRules        LeadAssignmentRule[]
+  leadRemarks            LeadRemark[]          @relation("LeadRemarkAuthor")
+  deletedLeads           Lead[]                @relation("LeadDeletedBy")
+  leads                  Lead[]                @relation("LeadOwner")
+  salesOrders            Order[]               @relation("SalesUserOrders")
+  passwordResets         PasswordReset[]
+  loginOtps              LoginOtp[]
+  segmentsCreated        Segment[]             @relation("SegmentCreator")
+  segmentsUpdated        Segment[]             @relation("SegmentUpdater")
+  deletedByUser          User?                 @relation("UserDeletedBy", fields: [deletedBy], references: [id])
+  deletedUsers           User[]                @relation("UserDeletedBy")
+  whatsappNumbersCreated WhatsAppNumber[]      @relation("WhatsAppNumberCreator")
+  whatsappNumbersUpdated WhatsAppNumber[]      @relation("WhatsAppNumberUpdater")
+
+  ownedOpportunities    Opportunity[]         @relation("OpportunityOwner")
+  createdOpportunities  Opportunity[]         @relation("OpportunityCreator")
+  deletedOpportunities  Opportunity[]         @relation("OpportunityDeletedBy")
+  opportunityActivities OpportunityActivity[] @relation("OpportunityActivityUser")
+  preparedQuotes        Quote[]               @relation("QuotePreparedBy")
+  approvedQuotes        Quote[]               @relation("QuoteApprovedBy")
+  deniedQuotes          Quote[]               @relation("QuoteDeniedBy")
+  ownedSalesOrders      SalesOrder[]          @relation("SalesOrderOwner")
+  approvedSalesOrders   SalesOrder[]          @relation("SalesOrderApprovedBy")
+
   approvalRequestsTo      ApprovalProcess[]        @relation("ApprovalRequestedTo")
   approvalRequestsBy      ApprovalProcess[]        @relation("ApprovalCreatedBy")
   approvalActionsAs       ApprovalProcess[]        @relation("ApprovalLastActor")
   notifications           Notification[]
   notificationPreferences NotificationPreference[]
 
-  // ---- Supply-chain module relations ----
   stockMovements                StockMovement[]       @relation("StockMovementPerformedBy")
   stockReservations             StockReservation[]    @relation("StockReservationCreatedBy")
   acknowledgedStockAlerts       StockAlert[]          @relation("StockAlertAcknowledgedBy")
@@ -107,29 +94,32 @@ model User {
   requestedMaterialRequisitions MaterialRequisition[] @relation("MaterialRequisitionRequestedBy")
   issuedMaterialRequisitions    MaterialRequisition[] @relation("MaterialRequisitionIssuedBy")
   createdProductionOrders       ProductionOrder[]     @relation("ProductionOrderCreatedBy")
-  supplierInvoicesCreated  SupplierInvoice[] @relation("SupplierInvoiceCreatedBy")
-  supplierInvoicesApproved SupplierInvoice[] @relation("SupplierInvoiceApprovedBy")
-  customerInvoicesCreated  CustomerInvoice[] @relation("CustomerInvoiceCreatedBy")
-  paymentsRecorded         Payment[]         @relation("PaymentRecordedBy")
+  supplierInvoicesCreated       SupplierInvoice[]     @relation("SupplierInvoiceCreatedBy")
+  supplierInvoicesApproved      SupplierInvoice[]     @relation("SupplierInvoiceApprovedBy")
+  customerInvoicesCreated       CustomerInvoice[]     @relation("CustomerInvoiceCreatedBy")
+  paymentsRecorded              Payment[]             @relation("PaymentRecordedBy")
 
   @@index([region])
   @@map("users")
 }
 
 model Account {
-  id            Int              @id @default(autoincrement())
-  name          String           @unique
-  industry      String?
-  website       String?
-  createdAt     DateTime         @default(now()) @map("created_at")
-  keywords      AccountKeyword[]
-  contacts      Contact[]
-  // Opportunity-Quote-Order relations
+  id          Int              @id @default(autoincrement())
+  name        String           @unique
+  industry    String?
+  website     String?
+  phone       String?
+  description String?
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  keywords    AccountKeyword[]
+  contacts    Contact[]
+
   opportunities Opportunity[]
   quotes        Quote[]
   salesOrders   SalesOrder[]
-  invoices CustomerInvoice[]
-  payments Payment[]
+  invoices      CustomerInvoice[]
+  payments      Payment[]
 
   @@map("accounts")
 }
@@ -142,6 +132,7 @@ model Contact {
   phone           String?
   position        String?
   createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
   city            String?
   pincode         String?
   state           String?
@@ -159,10 +150,10 @@ model Contact {
   account         Account?           @relation(fields: [accountId], references: [id])
   formSubmissions FormSubmission[]
   convertedLeads  Lead[]             @relation("ConvertedLead")
-  // Opportunity-Quote-Order relations
-  opportunities   Opportunity[]
-  quotes          Quote[]
-  salesOrders     SalesOrder[]
+
+  opportunities Opportunity[]
+  quotes        Quote[]
+  salesOrders   SalesOrder[]
 
   @@map("contacts")
 }
@@ -184,15 +175,18 @@ model SalesUserOTP {
 }
 
 model PasswordReset {
-  id        Int       @id @default(autoincrement())
-  userId    Int       @map("user_id")
-  otpHash   String    @map("otp_hash")
-  expiresAt DateTime  @map("expires_at")
-  attempts  Int       @default(0)
-  usedAt    DateTime? @map("used_at")
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  otpHash   String   @map("otp_hash")
+  expiresAt DateTime @map("expires_at")
+  attempts  Int      @default(0)
+
+  usedAt DateTime? @map("used_at")
+
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("password_resets")
 }
@@ -218,6 +212,7 @@ model Lead {
   email                String
   phone                String?
   createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
   convertedToContactId Int?               @map("converted_to_contact_id")
   ownerId              Int?               @map("owner_id")
   score                Int                @default(0)
@@ -227,8 +222,8 @@ model Lead {
   missingFields        String[]           @default([]) @map("missing_fields")
   qualityScore         Int                @default(0) @map("quality_score")
   brevoContactId       String?            @map("brevo_contact_id")
-  source               LeadSource?
-  status               LeadStatus?
+  source               LeadSource         @default(MANUAL)
+  status               LeadStatus         @default(OPEN)
   city                 String?
   pincode              String?
   state                String?
@@ -324,10 +319,11 @@ model CampaignMember {
   joinedAt   DateTime           @default(now()) @map("joined_at")
   deliveries CampaignDelivery[]
   campaign   Campaign           @relation(fields: [campaignId], references: [id])
-  contact    Contact?           @relation(fields: [contactId], references: [id])
-  lead       Lead?              @relation(fields: [leadId], references: [id])
+  contact    Contact?           @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  lead       Lead?              @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
-  @@unique([campaignId, contactId, leadId])
+  @@index([campaignId, contactId])
+  @@index([campaignId, leadId])
   @@map("campaign_members")
 }
 
@@ -338,7 +334,7 @@ model CampaignChannel {
   externalId  String   @map("external_id")
   campaign    Campaign @relation(fields: [campaignId], references: [id])
 
-  @@unique([campaignId, channelType, externalId])
+  @@unique([channelType, externalId])
   @@map("campaign_channel")
 }
 
@@ -387,7 +383,7 @@ model WhatsAppNumber {
   authTag         String                   @map("auth_tag")
   maskedTail      String?                  @map("masked_tail")
   metadata        Json?
-  status          String?                  @default("ACTIVE")
+  status          String                   @default("ACTIVE")
   createdBy       Int?                     @map("created_by")
   updatedBy       Int?                     @map("updated_by")
   createdAt       DateTime                 @default(now()) @map("created_at")
@@ -428,6 +424,7 @@ model WhatsAppCampaignConfig {
   whatsappNumberId Int              @map("whatsapp_number_id")
   templateId       Int              @map("template_id")
   segmentId        Int?             @map("segment_id")
+  audience         String           @default("all")
   messageParams    Json?            @map("message_params")
   scheduledAt      DateTime?        @map("scheduled_at")
   createdAt        DateTime         @default(now()) @map("created_at")
@@ -443,35 +440,41 @@ model WhatsAppCampaignConfig {
 }
 
 model CampaignDelivery {
-  id                Int                    @id @default(autoincrement())
-  campaignId        Int                    @map("campaign_id")
-  campaignMemberId  Int?                   @map("campaign_member_id")
-  contactId         Int?                   @map("contact_id")
-  leadId            Int?                   @map("lead_id")
-  whatsappNumberId  Int?                   @map("whatsapp_number_id")
-  segmentId         Int?                   @map("segment_id")
-  channel           String
-  address           String
-  status            CampaignDeliveryStatus @default(PENDING)
-  errorCode         String?                @map("error_code")
-  errorMessage      String?                @map("error_message")
-  providerMessageId String?                @map("provider_message_id")
-  sentAt            DateTime?              @map("sent_at")
-  deliveredAt       DateTime?              @map("delivered_at")
-  readAt            DateTime?              @map("read_at")
-  failedAt          DateTime?              @map("failed_at")
-  webhookPayload    Json?                  @map("webhook_payload")
-  createdAt         DateTime               @default(now()) @map("created_at")
-  updatedAt         DateTime               @updatedAt @map("updated_at")
-  csvData           Json?                  @map("csv_data")
-  campaign          Campaign               @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  campaignMember    CampaignMember?        @relation(fields: [campaignMemberId], references: [id])
-  contact           Contact?               @relation(fields: [contactId], references: [id])
-  lead              Lead?                  @relation(fields: [leadId], references: [id])
-  segment           Segment?               @relation(fields: [segmentId], references: [id])
-  whatsappNumber    WhatsAppNumber?        @relation(fields: [whatsappNumberId], references: [id])
-  webhookEvents     WebhookEvent[]
+  id                  Int                    @id @default(autoincrement())
+  campaignId          Int                    @map("campaign_id")
+  campaignMemberId    Int?                   @map("campaign_member_id")
+  contactId           Int?                   @map("contact_id")
+  leadId              Int?                   @map("lead_id")
+  whatsappNumberId    Int?                   @map("whatsapp_number_id")
+  segmentId           Int?                   @map("segment_id")
+  channel             String
+  address             String
+  status              CampaignDeliveryStatus @default(PENDING)
+  processingStartedAt DateTime?              @map("processing_started_at")
+  attemptCount        Int                    @default(0) @map("attempt_count")
+  lastAttemptAt       DateTime?              @map("last_attempt_at")
+  errorCode           String?                @map("error_code")
+  errorMessage        String?                @map("error_message")
+  providerMessageId   String?                @map("provider_message_id")
+  sentAt              DateTime?              @map("sent_at")
+  deliveredAt         DateTime?              @map("delivered_at")
+  readAt              DateTime?              @map("read_at")
+  failedAt            DateTime?              @map("failed_at")
+  webhookPayload      Json?                  @map("webhook_payload")
+  createdAt           DateTime               @default(now()) @map("created_at")
+  updatedAt           DateTime               @updatedAt @map("updated_at")
+  csvData             Json?                  @map("csv_data")
+  campaign            Campaign               @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignMember      CampaignMember?        @relation(fields: [campaignMemberId], references: [id])
+  contact             Contact?               @relation(fields: [contactId], references: [id])
+  lead                Lead?                  @relation(fields: [leadId], references: [id])
+  segment             Segment?               @relation(fields: [segmentId], references: [id])
+  whatsappNumber      WhatsAppNumber?        @relation(fields: [whatsappNumberId], references: [id])
+  webhookEvents       WebhookEvent[]
 
+  @@unique([campaignId, channel, address])
+  @@index([campaignId, status])
+  @@index([status, processingStartedAt])
   @@map("campaign_deliveries")
 }
 
@@ -488,6 +491,28 @@ model WebhookEvent {
   campaignDelivery   CampaignDelivery? @relation(fields: [campaignDeliveryId], references: [id])
 
   @@map("webhook_events")
+}
+
+model WebhookReceipt {
+  id         Int      @id @default(autoincrement())
+  provider   String
+  bodyDigest String   @map("body_digest")
+  receivedAt DateTime @default(now()) @map("received_at")
+  expiresAt  DateTime @map("expires_at")
+
+  @@unique([provider, bodyDigest])
+  @@index([expiresAt])
+  @@map("webhook_receipts")
+}
+
+model RateLimitBucket {
+  key       String   @id
+  count     Int
+  resetAt   DateTime @map("reset_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([resetAt])
+  @@map("rate_limit_buckets")
 }
 
 model OptOut {
@@ -649,9 +674,10 @@ model Subdealer {
   verifiedAt       DateTime?      @map("verified_at")
   createdAt        DateTime       @default(now()) @map("created_at")
   updatedAt        DateTime       @updatedAt @map("updated_at")
-  jwtToken         String?        @map("jwt_token")
+  jwtTokenHash     String?        @map("jwt_token")
   tokenIssuedAt    DateTime?      @map("token_issued_at")
   invoices         Invoice[]
+  orders           Order[]
   otpRecords       SubdealerOTP[]
 
   @@map("subdealers")
@@ -703,15 +729,18 @@ model Order {
   ownerLastName  String?           @map("owner_last_name")
   pincode        String?
   salesUserId    Int?              @map("sales_user_id")
+  subdealerId    Int?              @map("subdealer_id")
   state          String?
   gst            String?
   archived       Boolean           @default(false)
   archivedAt     DateTime?         @map("archived_at")
   archivedBy     Int?              @map("archived_by")
   salesUser      User?             @relation("SalesUserOrders", fields: [salesUserId], references: [id])
+  subdealer      Subdealer?        @relation(fields: [subdealerId], references: [id])
   lineItems      ProductLineItem[]
 
   @@index([salesUserId])
+  @@index([subdealerId])
   @@index([archived])
   @@map("orders")
 }
@@ -745,6 +774,16 @@ model AppConfig {
   @@map("app_config")
 }
 
+model SchedulerLease {
+  name        String   @id
+  owner       String
+  leasedUntil DateTime @map("leased_until")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([leasedUntil])
+  @@map("scheduler_leases")
+}
+
 model Product {
   id          Int      @id @default(autoincrement())
   name        String
@@ -757,7 +796,6 @@ model Product {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  // ---- Supply-chain item master attributes (Inventory / Material / WMS / BOM / Purchasing) ----
   itemType        ItemType        @default(FINISHED_GOOD) @map("item_type")
   uomId           Int?            @map("uom_id")
   trackingType    TrackingType    @default(NONE) @map("tracking_type")
@@ -774,16 +812,15 @@ model Product {
   isManufactured  Boolean         @default(false) @map("is_manufactured")
   isStockTracked  Boolean         @default(true) @map("is_stock_tracked")
 
-  lineItems            ProductLineItem[]
-  priceBookEntries     PriceBookEntry[]
-  productOptions       ProductOption[]
-  category             ProductCategory       @relation(fields: [categoryId], references: [id])
-  // Opportunity-Quote-Order line item relations
+  lineItems        ProductLineItem[]
+  priceBookEntries PriceBookEntry[]
+  productOptions   ProductOption[]
+  category         ProductCategory   @relation(fields: [categoryId], references: [id])
+
   opportunityLineItems OpportunityLineItem[]
   quoteLineItems       QuoteLineItem[]
   salesOrderLineItems  SalesOrderLineItem[]
 
-  // ---- Supply-chain relations ----
   uom                      UnitOfMeasure?             @relation(fields: [uomId], references: [id])
   stockBalances            StockBalance[]
   stockLots                StockLot[]
@@ -805,6 +842,7 @@ model Product {
   materialRequisitionLines MaterialRequisitionLine[]
   productionOrders         ProductionOrder[]
   productionComponents     ProductionOrderComponent[]
+  images                   ProductImage[]
 
   @@index([categoryId])
   @@index([active])
@@ -813,18 +851,31 @@ model Product {
   @@map("products")
 }
 
+model ProductImage {
+  id        Int      @id @default(autoincrement())
+  productId Int      @map("product_id")
+  url       String
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, sortOrder])
+  @@map("product_images")
+}
+
 model PriceBook {
-  id               Int              @id @default(autoincrement())
-  name             String           @unique @map("price_book_name")
-  currencyCode     String           @map("currency_code")
-  isActive         Boolean          @default(true) @map("is_active")
-  description      String?
-  createdAt        DateTime         @default(now()) @map("created_at")
-  // Relations
+  id           Int      @id @default(autoincrement())
+  name         String   @unique @map("price_book_name")
+  currencyCode String   @map("currency_code")
+  isActive     Boolean  @default(true) @map("is_active")
+  description  String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
   priceBookEntries PriceBookEntry[]
   currency         Currency         @relation(fields: [currencyCode], references: [code])
-  // Opportunity relation
-  opportunities    Opportunity[]
+
+  opportunities Opportunity[]
 
   @@map("price_books")
 }
@@ -846,15 +897,14 @@ model PriceBookEntry {
   useStandardPrice Boolean  @default(true) @map("use_standard_price")
   isActive         Boolean  @default(true) @map("is_active")
   createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
-  // Foreign keys
   productId   Int @map("product_id")
   priceBookId Int @map("price_book_id")
 
-  // Relations
-  product              Product               @relation(fields: [productId], references: [id])
-  priceBook            PriceBook             @relation(fields: [priceBookId], references: [id])
-  // Opportunity-Quote line item relations
+  product   Product   @relation(fields: [productId], references: [id])
+  priceBook PriceBook @relation(fields: [priceBookId], references: [id])
+
   opportunityLineItems OpportunityLineItem[]
   quoteLineItems       QuoteLineItem[]
 
@@ -870,11 +920,9 @@ model ProductOption {
   required          Boolean @default(false)
   isActive          Boolean @default(true) @map("is_active")
 
-  // Foreign keys
   productId Int? @map("product_id")
   parentId  Int? @map("parent_id")
 
-  // Relations
   product  Product?        @relation(fields: [productId], references: [id])
   parent   ProductOption?  @relation("ProductOptionHierarchy", fields: [parentId], references: [id])
   children ProductOption[] @relation("ProductOptionHierarchy")
@@ -966,10 +1014,6 @@ model GlobalSetting {
   @@map("global_settings")
 }
 
-// ============================================
-// OPPORTUNITY-QUOTE-ORDER SALES MODULE MODELS
-// ============================================
-
 model Opportunity {
   id                Int               @id @default(autoincrement())
   opportunityNumber String            @unique @map("opportunity_number")
@@ -986,7 +1030,6 @@ model Opportunity {
   nextStep          String?           @map("next_step")
   lossReason        String?           @map("loss_reason")
 
-  // Foreign keys
   accountId   Int  @map("account_id")
   contactId   Int? @map("contact_id")
   priceBookId Int? @map("price_book_id")
@@ -994,12 +1037,10 @@ model Opportunity {
   createdBy   Int  @map("created_by")
   deletedBy   Int? @map("deleted_by")
 
-  // Timestamps
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  // Relations
   account       Account               @relation(fields: [accountId], references: [id])
   contact       Contact?              @relation(fields: [contactId], references: [id])
   priceBook     PriceBook?            @relation(fields: [priceBookId], references: [id])
@@ -1033,7 +1074,6 @@ model OpportunityLineItem {
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
-  // Relations
   opportunity    Opportunity     @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
   product        Product         @relation(fields: [productId], references: [id])
   priceBookEntry PriceBookEntry? @relation(fields: [priceBookEntryId], references: [id])
@@ -1054,7 +1094,6 @@ model OpportunityActivity {
   metadata      Json?
   createdAt     DateTime @default(now()) @map("created_at")
 
-  // Relations
   opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
   user        User        @relation("OpportunityActivityUser", fields: [userId], references: [id])
 
@@ -1074,7 +1113,6 @@ model Quote {
   version     Int         @default(1)
   isPrimary   Boolean     @default(false) @map("is_primary")
 
-  // Pricing
   subtotal        Decimal @default(0) @db.Decimal(15, 2)
   discount        Decimal @default(0) @db.Decimal(15, 2)
   discountPercent Decimal @default(0) @map("discount_percent") @db.Decimal(5, 2)
@@ -1083,14 +1121,12 @@ model Quote {
   shippingAmount  Decimal @default(0) @map("shipping_amount") @db.Decimal(15, 2)
   grandTotal      Decimal @default(0) @map("grand_total") @db.Decimal(15, 2)
 
-  // Dates
   validUntil  DateTime? @map("valid_until")
   approvedAt  DateTime? @map("approved_at")
   rejectedAt  DateTime? @map("rejected_at")
   presentedAt DateTime? @map("presented_at")
   acceptedAt  DateTime? @map("accepted_at")
 
-  // Address info (snapshot at quote creation)
   billingName        String? @map("billing_name")
   billingStreet      String? @map("billing_street")
   billingCity        String? @map("billing_city")
@@ -1104,20 +1140,14 @@ model Quote {
   shippingPostalCode String? @map("shipping_postal_code")
   shippingCountry    String? @map("shipping_country")
 
-  // Terms
   paymentTerms  String? @map("payment_terms")
   deliveryTerms String? @map("delivery_terms")
   notes         String?
   internalNotes String? @map("internal_notes")
 
-  // PDF storage (S3 URL set when quote is sent to client)
-  pdfUrl String? @map("pdf_url")
-
-  // Approval/Rejection comments
   approvalComment  String? @map("approval_comment")
   rejectionComment String? @map("rejection_comment")
 
-  // Foreign keys
   opportunityId Int  @map("opportunity_id")
   accountId     Int  @map("account_id")
   contactId     Int? @map("contact_id")
@@ -1125,11 +1155,9 @@ model Quote {
   approvedById  Int? @map("approved_by_id")
   rejectedById  Int? @map("rejected_by_id")
 
-  // Timestamps
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  // Relations
   opportunity Opportunity     @relation(fields: [opportunityId], references: [id])
   account     Account         @relation(fields: [accountId], references: [id])
   contact     Contact?        @relation(fields: [contactId], references: [id])
@@ -1139,6 +1167,7 @@ model Quote {
   lineItems   QuoteLineItem[]
   salesOrders SalesOrder[]
 
+  @@unique([opportunityId, version])
   @@index([opportunityId])
   @@index([accountId])
   @@index([status])
@@ -1161,7 +1190,6 @@ model QuoteLineItem {
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
-  // Relations
   quote          Quote           @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   product        Product         @relation(fields: [productId], references: [id])
   priceBookEntry PriceBookEntry? @relation(fields: [priceBookEntryId], references: [id])
@@ -1178,7 +1206,6 @@ model SalesOrder {
   description String?
   status      SalesOrderStatus @default(DRAFT)
 
-  // Pricing (snapshot from quote)
   subtotal        Decimal @default(0) @db.Decimal(15, 2)
   discount        Decimal @default(0) @db.Decimal(15, 2)
   discountPercent Decimal @default(0) @map("discount_percent") @db.Decimal(5, 2)
@@ -1187,7 +1214,6 @@ model SalesOrder {
   shippingAmount  Decimal @default(0) @map("shipping_amount") @db.Decimal(15, 2)
   grandTotal      Decimal @default(0) @map("grand_total") @db.Decimal(15, 2)
 
-  // Dates
   orderDate            DateTime  @default(now()) @map("order_date")
   expectedShipDate     DateTime? @map("expected_ship_date")
   actualShipDate       DateTime? @map("actual_ship_date")
@@ -1196,7 +1222,6 @@ model SalesOrder {
   approvedAt           DateTime? @map("approved_at")
   cancelledAt          DateTime? @map("cancelled_at")
 
-  // Address info (snapshot from quote)
   billingName        String? @map("billing_name")
   billingStreet      String? @map("billing_street")
   billingCity        String? @map("billing_city")
@@ -1210,34 +1235,30 @@ model SalesOrder {
   shippingPostalCode String? @map("shipping_postal_code")
   shippingCountry    String? @map("shipping_country")
 
-  // Terms
   paymentTerms       String? @map("payment_terms")
   deliveryTerms      String? @map("delivery_terms")
   notes              String?
   internalNotes      String? @map("internal_notes")
   cancellationReason String? @map("cancellation_reason")
 
-  // Foreign keys
   quoteId      Int  @map("quote_id")
   accountId    Int  @map("account_id")
   contactId    Int? @map("contact_id")
   ownerId      Int  @map("owner_id")
   approvedById Int? @map("approved_by_id")
 
-  // Timestamps
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  // Relations
-  quote      Quote                @relation(fields: [quoteId], references: [id])
-  account    Account              @relation(fields: [accountId], references: [id])
-  contact    Contact?             @relation(fields: [contactId], references: [id])
-  owner      User                 @relation("SalesOrderOwner", fields: [ownerId], references: [id])
-  approvedBy User?                @relation("SalesOrderApprovedBy", fields: [approvedById], references: [id])
-  lineItems  SalesOrderLineItem[]
+  quote            Quote                @relation(fields: [quoteId], references: [id])
+  account          Account              @relation(fields: [accountId], references: [id])
+  contact          Contact?             @relation(fields: [contactId], references: [id])
+  owner            User                 @relation("SalesOrderOwner", fields: [ownerId], references: [id])
+  approvedBy       User?                @relation("SalesOrderApprovedBy", fields: [approvedById], references: [id])
+  lineItems        SalesOrderLineItem[]
   customerInvoices CustomerInvoice[]
 
-  @@index([quoteId])
+  @@unique([quoteId])
   @@index([accountId])
   @@index([ownerId])
   @@index([status])
@@ -1258,7 +1279,6 @@ model SalesOrderLineItem {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  // Relations
   salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
   product    Product    @relation(fields: [productId], references: [id])
 
@@ -1266,10 +1286,6 @@ model SalesOrderLineItem {
   @@index([productId])
   @@map("sales_order_line_items")
 }
-
-// ============================================
-// APPROVAL PROCESS MODULE
-// ============================================
 
 model ApprovalProcess {
   id               Int                  @id @default(autoincrement())
@@ -1284,7 +1300,6 @@ model ApprovalProcess {
   createdAt        DateTime             @default(now()) @map("created_at")
   updatedAt        DateTime             @updatedAt @map("updated_at")
 
-  // Relations
   requestedTo User  @relation("ApprovalRequestedTo", fields: [requestedToId], references: [id])
   createdBy   User  @relation("ApprovalCreatedBy", fields: [createdById], references: [id])
   lastActor   User? @relation("ApprovalLastActor", fields: [lastActorId], references: [id])
@@ -1310,9 +1325,6 @@ enum ApprovalStatus {
   REJECTED
 }
 
-/// ADMIN is the top role and implicitly holds every permission. SALES holds a
-/// fixed default set. CUSTOM holds exactly what `User.permissions` lists.
-/// See packages/db/src/permissions.ts for the catalogue.
 enum UserRole {
   ADMIN
   SALES
@@ -1393,6 +1405,7 @@ enum SegmentRuleType {
 
 enum CampaignDeliveryStatus {
   PENDING
+  PROCESSING
   QUEUED
   SENT
   DELIVERED
@@ -1400,10 +1413,6 @@ enum CampaignDeliveryStatus {
   FAILED
   OPTED_OUT
 }
-
-// ============================================
-// OPPORTUNITY-QUOTE-ORDER SALES MODULE ENUMS
-// ============================================
 
 enum OpportunityStage {
   PROSPECT
@@ -1438,6 +1447,7 @@ enum QuoteStatus {
   IN_REVIEW
   APPROVED
   REJECTED
+  PRESENTING
   PRESENTED
   ACCEPTED
 }
@@ -1460,10 +1470,6 @@ enum SalesOrderStatus {
   ON_HOLD
 }
 
-// ============================================
-// NOTIFICATIONS
-// ============================================
-
 enum NotificationType {
   LEAD_ASSIGNED
   LEAD_UPDATED
@@ -1478,13 +1484,13 @@ enum NotificationType {
   GOODS_RECEIVED
   QC_FAILED
   MATERIAL_SHORTAGE
-  /// Sent to the person whose account was switched off.
+
   ACCOUNT_DEACTIVATED
-  /// Sent to the person whose permissions changed.
+
   ROLE_CHANGED
-  /// Sent to the raiser once the order actually reaches the supplier.
+
   PURCHASE_ORDER_SENT
-  /// Sent to whoever watches the ledger when an invoice passes its due date.
+
   INVOICE_OVERDUE
   GENERAL
 }
@@ -1498,6 +1504,7 @@ model Notification {
   message   String
   isRead    Boolean          @default(false) @map("is_read")
   link      String?
+  dedupeKey String?          @unique @map("dedupe_key")
   createdAt DateTime         @default(now()) @map("created_at")
   readAt    DateTime?        @map("read_at")
 
@@ -1506,45 +1513,31 @@ model Notification {
   @@map("notifications")
 }
 
-/// One row per user per notification type, written only when someone changes a
-/// default. An absent row means "both channels on" — see NOTIFICATION_DEFAULT
-/// in the API. Storing only the deviations keeps a new user's preferences
-/// correct without a backfill, and keeps the table small.
 model NotificationPreference {
-  id        Int              @id @default(autoincrement())
-  userId    Int              @map("user_id")
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type      NotificationType
-  /// Show it in the bell menu.
-  inApp     Boolean          @default(true) @map("in_app")
-  /// Also send it to the user's email address.
-  email     Boolean          @default(true)
-  createdAt DateTime         @default(now()) @map("created_at")
-  updatedAt DateTime         @updatedAt @map("updated_at")
+  id     Int              @id @default(autoincrement())
+  userId Int              @map("user_id")
+  user   User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type   NotificationType
+
+  inApp Boolean @default(true) @map("in_app")
+
+  email     Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([userId, type])
   @@index([userId])
   @@map("notification_preferences")
 }
 
-// ================================================================
-// SUPPLY CHAIN FOUNDATION
-// Shared reference data used by Inventory, Material, WMS, BOM and
-// Purchasing modules.
-// ================================================================
-
-/// Atomic document-number generator. One row per document family; the
-/// counter is bumped by a single `INSERT ... ON CONFLICT DO UPDATE ...
-/// RETURNING` in the same transaction as the document it numbers, so two
-/// concurrent requests can never be handed the same number.
 model NumberSequence {
-  id          Int      @id @default(autoincrement())
-  key         String   @unique
-  prefix      String
-  /// Highest number issued for the current period.
-  lastValue   Int      @default(0) @map("last_value")
-  padding     Int      @default(5)
-  /// NONE | YEARLY | MONTHLY — controls the period segment and counter reset.
+  id     Int    @id @default(autoincrement())
+  key    String @unique
+  prefix String
+
+  lastValue Int @default(0) @map("last_value")
+  padding   Int @default(5)
+
   resetPeriod String   @default("YEARLY") @map("reset_period")
   periodKey   String?  @map("period_key")
   createdAt   DateTime @default(now()) @map("created_at")
@@ -1554,17 +1547,17 @@ model NumberSequence {
 }
 
 model UnitOfMeasure {
-  id         Int         @id @default(autoincrement())
-  code       String      @unique
-  name       String
-  category   UomCategory
-  /// Multiplier that converts 1 of this unit into the category base unit.
-  baseFactor Decimal     @default(1) @map("base_factor") @db.Decimal(18, 6)
-  isBaseUnit Boolean     @default(false) @map("is_base_unit")
-  decimals   Int         @default(2)
-  isActive   Boolean     @default(true) @map("is_active")
-  createdAt  DateTime    @default(now()) @map("created_at")
-  updatedAt  DateTime    @updatedAt @map("updated_at")
+  id       Int         @id @default(autoincrement())
+  code     String      @unique
+  name     String
+  category UomCategory
+
+  baseFactor Decimal  @default(1) @map("base_factor") @db.Decimal(18, 6)
+  isBaseUnit Boolean  @default(false) @map("is_base_unit")
+  decimals   Int      @default(2)
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   products                 Product[]
   stockMovements           StockMovement[]
@@ -1578,10 +1571,6 @@ model UnitOfMeasure {
   @@index([category])
   @@map("units_of_measure")
 }
-
-// ================================================================
-// MODULE 3 — WAREHOUSE MANAGEMENT (locations, bins, pallets, tasks)
-// ================================================================
 
 model Warehouse {
   id                 Int           @id @default(autoincrement())
@@ -1623,7 +1612,7 @@ model Warehouse {
   goodsReceiptNotes    GoodsReceiptNote[]
   materialRequisitions MaterialRequisition[]
   productionOrders     ProductionOrder[]
-  workCenters WorkCenter[]
+  workCenters          WorkCenter[]
 
   @@index([isActive])
   @@map("warehouses")
@@ -1661,16 +1650,16 @@ model WarehouseZone {
 }
 
 model StorageBin {
-  id           Int      @id @default(autoincrement())
-  warehouseId  Int      @map("warehouse_id")
-  zoneId       Int      @map("zone_id")
-  code         String
-  aisle        String?
-  rack         String?
-  level        String?
-  position     String?
-  binType      BinType  @default(SHELF) @map("bin_type")
-  /// Traversal order used to sequence pick and putaway tasks.
+  id          Int     @id @default(autoincrement())
+  warehouseId Int     @map("warehouse_id")
+  zoneId      Int     @map("zone_id")
+  code        String
+  aisle       String?
+  rack        String?
+  level       String?
+  position    String?
+  binType     BinType @default(SHELF) @map("bin_type")
+
   pickSequence Int      @default(0) @map("pick_sequence")
   maxWeightKg  Decimal? @map("max_weight_kg") @db.Decimal(18, 4)
   maxVolumeM3  Decimal? @map("max_volume_m3") @db.Decimal(18, 6)
@@ -1721,20 +1710,11 @@ model Pallet {
   @@map("pallets")
 }
 
-// ================================================================
-// MODULE 1 & 2 — INVENTORY / MATERIAL: lots, balances, ledger
-// ================================================================
-
-/// A single receipt layer. Carries the batch/serial identity, the expiry
-/// used by FEFO and the unit cost used by FIFO/LIFO/weighted-average
-/// valuation. Every quantity in stock belongs to exactly one lot.
 model StockLot {
-  id                Int       @id @default(autoincrement())
-  lotNumber         String    @unique @map("lot_number")
-  productId         Int       @map("product_id")
-  /// Where the layer was first received. Physical location always comes from
-  /// `stock_balances`, because a lot can be split across warehouses by a
-  /// transfer without losing its cost or expiry identity.
+  id        Int    @id @default(autoincrement())
+  lotNumber String @unique @map("lot_number")
+  productId Int    @map("product_id")
+
   originWarehouseId Int       @map("origin_warehouse_id")
   batchNumber       String?   @map("batch_number")
   serialNumber      String?   @map("serial_number")
@@ -1772,8 +1752,6 @@ model StockLot {
   @@map("stock_lots")
 }
 
-/// On-hand quantity for one (product, warehouse, bin, lot, pallet) slot.
-/// `reservedQuantity` is soft-allocated stock; available = quantity - reserved.
 model StockBalance {
   id               Int         @id @default(autoincrement())
   productId        Int         @map("product_id")
@@ -1801,8 +1779,6 @@ model StockBalance {
   @@map("stock_balances")
 }
 
-/// Immutable ledger. Every change to `stock_balances` writes one row here,
-/// so on-hand can always be reconciled against the movement history.
 model StockMovement {
   id              Int               @id @default(autoincrement())
   movementNumber  String            @unique @map("movement_number")
@@ -1846,9 +1822,6 @@ model StockMovement {
   @@map("stock_movements")
 }
 
-/// Soft allocation of stock to a demand document. Reservations never move
-/// quantity; they raise `stock_balances.reserved_quantity` so the same units
-/// cannot be promised twice.
 model StockReservation {
   id               Int                      @id @default(autoincrement())
   productId        Int                      @map("product_id")
@@ -1875,19 +1848,16 @@ model StockReservation {
   @@map("stock_reservations")
 }
 
-/// Per (product, warehouse) replenishment policy. Drives reorder alerts and
-/// the safety-stock thresholds used by material planning.
 model ReorderRule {
-  id                  Int       @id @default(autoincrement())
-  productId           Int       @map("product_id")
-  warehouseId         Int       @map("warehouse_id")
-  safetyStock         Decimal   @default(0) @map("safety_stock") @db.Decimal(18, 4)
-  reorderPoint        Decimal   @default(0) @map("reorder_point") @db.Decimal(18, 4)
-  reorderQuantity     Decimal   @default(0) @map("reorder_quantity") @db.Decimal(18, 4)
-  maximumStock        Decimal?  @map("maximum_stock") @db.Decimal(18, 4)
-  leadTimeDays        Int       @default(0) @map("lead_time_days")
-  /// When true, breaching the reorder point creates a purchase requisition
-  /// automatically instead of only raising an alert.
+  id              Int      @id @default(autoincrement())
+  productId       Int      @map("product_id")
+  warehouseId     Int      @map("warehouse_id")
+  safetyStock     Decimal  @default(0) @map("safety_stock") @db.Decimal(18, 4)
+  reorderPoint    Decimal  @default(0) @map("reorder_point") @db.Decimal(18, 4)
+  reorderQuantity Decimal  @default(0) @map("reorder_quantity") @db.Decimal(18, 4)
+  maximumStock    Decimal? @map("maximum_stock") @db.Decimal(18, 4)
+  leadTimeDays    Int      @default(0) @map("lead_time_days")
+
   autoRequisition     Boolean   @default(false) @map("auto_requisition")
   preferredSupplierId Int?      @map("preferred_supplier_id")
   isActive            Boolean   @default(true) @map("is_active")
@@ -1980,10 +1950,6 @@ model StockCountLine {
   @@index([stockCountId])
   @@map("stock_count_lines")
 }
-
-// ================================================================
-// MODULE 3 — WMS OPERATIONS: putaway, picking, packing
-// ================================================================
 
 model PutawayTask {
   id            Int        @id @default(autoincrement())
@@ -2121,26 +2087,21 @@ model PackageLine {
   @@map("package_lines")
 }
 
-// ================================================================
-// MODULE 4 — BILL OF MATERIALS
-// ================================================================
-
 model BillOfMaterials {
-  id                Int       @id @default(autoincrement())
-  bomNumber         String    @unique @map("bom_number")
-  productId         Int       @map("product_id")
-  name              String
-  version           Int       @default(1)
-  revision          String    @default("A")
-  status            BomStatus @default(DRAFT)
-  isDefault         Boolean   @default(false) @map("is_default")
-  /// Quantity of the parent product produced by one run of this BOM.
-  outputQuantity    Decimal   @default(1) @map("output_quantity") @db.Decimal(18, 4)
-  uomId             Int?      @map("uom_id")
-  effectiveFrom     DateTime? @map("effective_from")
-  effectiveTo       DateTime? @map("effective_to")
-  /// Rolled-up material cost of one output unit, recomputed from the
-  /// component tree — never entered by hand.
+  id        Int       @id @default(autoincrement())
+  bomNumber String    @unique @map("bom_number")
+  productId Int       @map("product_id")
+  name      String
+  version   Int       @default(1)
+  revision  String    @default("A")
+  status    BomStatus @default(DRAFT)
+  isDefault Boolean   @default(false) @map("is_default")
+
+  outputQuantity Decimal   @default(1) @map("output_quantity") @db.Decimal(18, 4)
+  uomId          Int?      @map("uom_id")
+  effectiveFrom  DateTime? @map("effective_from")
+  effectiveTo    DateTime? @map("effective_to")
+
   rolledUpCost      Decimal?  @map("rolled_up_cost") @db.Decimal(18, 4)
   costedAt          DateTime? @map("costed_at")
   laborCost         Decimal   @default(0) @map("labor_cost") @db.Decimal(18, 4)
@@ -2162,7 +2123,7 @@ model BillOfMaterials {
   components       BomComponent[]
   changeLogs       BomChangeLog[]
   productionOrders ProductionOrder[]
-  operations BomOperation[]
+  operations       BomOperation[]
 
   @@unique([productId, version])
   @@index([status])
@@ -2171,16 +2132,16 @@ model BillOfMaterials {
 }
 
 model BomComponent {
-  id                  Int      @id @default(autoincrement())
-  bomId               Int      @map("bom_id")
-  componentProductId  Int      @map("component_product_id")
-  lineNumber          Int      @default(0) @map("line_number")
-  quantity            Decimal  @db.Decimal(18, 4)
-  uomId               Int?     @map("uom_id")
-  /// Expected process loss as a percentage; planning inflates demand by it.
-  scrapPercent        Decimal  @default(0) @map("scrap_percent") @db.Decimal(7, 4)
-  isOptional          Boolean  @default(false) @map("is_optional")
-  /// Phantom assemblies are exploded through without being stocked.
+  id                 Int     @id @default(autoincrement())
+  bomId              Int     @map("bom_id")
+  componentProductId Int     @map("component_product_id")
+  lineNumber         Int     @default(0) @map("line_number")
+  quantity           Decimal @db.Decimal(18, 4)
+  uomId              Int?    @map("uom_id")
+
+  scrapPercent Decimal @default(0) @map("scrap_percent") @db.Decimal(7, 4)
+  isOptional   Boolean @default(false) @map("is_optional")
+
   isPhantom           Boolean  @default(false) @map("is_phantom")
   operationSequence   Int?     @map("operation_sequence")
   referenceDesignator String?  @map("reference_designator")
@@ -2194,21 +2155,22 @@ model BomComponent {
   substitutes      BomComponentSubstitute[]
 
   @@unique([bomId, componentProductId])
+  @@unique([bomId, lineNumber])
   @@index([componentProductId])
   @@map("bom_components")
 }
 
 model BomComponentSubstitute {
-  id                  Int      @id @default(autoincrement())
-  bomComponentId      Int      @map("bom_component_id")
-  substituteProductId Int      @map("substitute_product_id")
-  priority            Int      @default(1)
-  /// Units of the substitute needed per unit of the original component.
-  conversionFactor    Decimal  @default(1) @map("conversion_factor") @db.Decimal(18, 6)
-  isActive            Boolean  @default(true) @map("is_active")
-  notes               String?
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @updatedAt @map("updated_at")
+  id                  Int @id @default(autoincrement())
+  bomComponentId      Int @map("bom_component_id")
+  substituteProductId Int @map("substitute_product_id")
+  priority            Int @default(1)
+
+  conversionFactor Decimal  @default(1) @map("conversion_factor") @db.Decimal(18, 6)
+  isActive         Boolean  @default(true) @map("is_active")
+  notes            String?
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   bomComponent      BomComponent @relation(fields: [bomComponentId], references: [id], onDelete: Cascade)
   substituteProduct Product      @relation("BomSubstituteProduct", fields: [substituteProductId], references: [id])
@@ -2236,10 +2198,6 @@ model BomChangeLog {
   @@map("bom_change_logs")
 }
 
-// ================================================================
-// MODULE 5 — PURCHASING & SUPPLIER MANAGEMENT
-// ================================================================
-
 model Supplier {
   id                Int            @id @default(autoincrement())
   code              String         @unique
@@ -2250,6 +2208,7 @@ model Supplier {
   phone             String?
   countryCode       String?        @default("91") @map("country_code")
   website           String?
+  logoUrl           String?        @map("logo_url")
   gstNumber         String?        @map("gst_number")
   panNumber         String?        @map("pan_number")
   addressLine1      String?        @map("address_line1")
@@ -2283,8 +2242,8 @@ model Supplier {
   performanceSnapshots SupplierPerformance[]
   reorderRules         ReorderRule[]
   stockLots            StockLot[]
-  invoices SupplierInvoice[]
-  payments Payment[]
+  invoices             SupplierInvoice[]
+  payments             Payment[]
 
   @@index([status])
   @@index([name])
@@ -2308,8 +2267,6 @@ model SupplierContact {
   @@map("supplier_contacts")
 }
 
-/// Vendor catalogue entry: what a supplier charges for an item, with the
-/// validity window used to pick the price in force on the order date.
 model SupplierProduct {
   id               Int       @id @default(autoincrement())
   supplierId       Int       @map("supplier_id")
@@ -2349,8 +2306,6 @@ model SupplierPriceTier {
   @@map("supplier_price_tiers")
 }
 
-/// Period snapshot of supplier KPIs. Every figure is derived from posted
-/// purchase orders and goods receipts by `supplierPerformance.service`.
 model SupplierPerformance {
   id                    Int      @id @default(autoincrement())
   supplierId            Int      @map("supplier_id")
@@ -2380,22 +2335,22 @@ model SupplierPerformance {
 }
 
 model PurchaseRequisition {
-  id                  Int                       @id @default(autoincrement())
-  requisitionNumber   String                    @unique @map("requisition_number")
-  warehouseId         Int                       @map("warehouse_id")
-  status              PurchaseRequisitionStatus @default(DRAFT)
-  /// MANUAL | REORDER_RULE | MATERIAL_SHORTAGE — where the demand came from.
-  origin              String                    @default("MANUAL")
-  requiredByDate      DateTime?                 @map("required_by_date")
-  suggestedSupplierId Int?                      @map("suggested_supplier_id")
-  estimatedValue      Decimal                   @default(0) @map("estimated_value") @db.Decimal(18, 2)
+  id                Int                       @id @default(autoincrement())
+  requisitionNumber String                    @unique @map("requisition_number")
+  warehouseId       Int                       @map("warehouse_id")
+  status            PurchaseRequisitionStatus @default(DRAFT)
+
+  origin              String    @default("MANUAL")
+  requiredByDate      DateTime? @map("required_by_date")
+  suggestedSupplierId Int?      @map("suggested_supplier_id")
+  estimatedValue      Decimal   @default(0) @map("estimated_value") @db.Decimal(18, 2)
   justification       String?
-  requestedById       Int                       @map("requested_by_id")
-  approvedById        Int?                      @map("approved_by_id")
-  approvedAt          DateTime?                 @map("approved_at")
-  rejectionReason     String?                   @map("rejection_reason")
-  createdAt           DateTime                  @default(now()) @map("created_at")
-  updatedAt           DateTime                  @updatedAt @map("updated_at")
+  requestedById       Int       @map("requested_by_id")
+  approvedById        Int?      @map("approved_by_id")
+  approvedAt          DateTime? @map("approved_at")
+  rejectionReason     String?   @map("rejection_reason")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
 
   warehouse         Warehouse                 @relation(fields: [warehouseId], references: [id])
   suggestedSupplier Supplier?                 @relation(fields: [suggestedSupplierId], references: [id])
@@ -2463,13 +2418,13 @@ model PurchaseOrder {
   createdAt            DateTime            @default(now()) @map("created_at")
   updatedAt            DateTime            @updatedAt @map("updated_at")
 
-  supplier    Supplier             @relation(fields: [supplierId], references: [id])
-  warehouse   Warehouse            @relation(fields: [warehouseId], references: [id])
-  requisition PurchaseRequisition? @relation(fields: [requisitionId], references: [id])
-  createdBy   User                 @relation("PurchaseOrderCreatedBy", fields: [createdById], references: [id])
-  approvedBy  User?                @relation("PurchaseOrderApprovedBy", fields: [approvedById], references: [id])
-  lines       PurchaseOrderLine[]
-  receipts    GoodsReceiptNote[]
+  supplier         Supplier             @relation(fields: [supplierId], references: [id])
+  warehouse        Warehouse            @relation(fields: [warehouseId], references: [id])
+  requisition      PurchaseRequisition? @relation(fields: [requisitionId], references: [id])
+  createdBy        User                 @relation("PurchaseOrderCreatedBy", fields: [createdById], references: [id])
+  approvedBy       User?                @relation("PurchaseOrderApprovedBy", fields: [approvedById], references: [id])
+  lines            PurchaseOrderLine[]
+  receipts         GoodsReceiptNote[]
   supplierInvoices SupplierInvoice[]
 
   @@index([supplierId, status])
@@ -2523,7 +2478,7 @@ model GoodsReceiptNote {
   supplierInvoiceDate   DateTime? @map("supplier_invoice_date")
   vehicleNumber         String?   @map("vehicle_number")
   lrNumber              String?   @map("lr_number")
-  /// True when the receipt happened on or before the PO promised date.
+
   isOnTime              Boolean?  @map("is_on_time")
   delayDays             Int?      @map("delay_days")
   totalReceivedQuantity Decimal   @default(0) @map("total_received_quantity") @db.Decimal(18, 4)
@@ -2536,13 +2491,14 @@ model GoodsReceiptNote {
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
-  purchaseOrder PurchaseOrder?     @relation(fields: [purchaseOrderId], references: [id])
-  supplier      Supplier           @relation(fields: [supplierId], references: [id])
-  warehouse     Warehouse          @relation(fields: [warehouseId], references: [id])
-  receivedBy    User               @relation("GrnReceivedBy", fields: [receivedById], references: [id])
-  lines         GoodsReceiptLine[]
-  qualityChecks QualityCheck[]
+  purchaseOrder    PurchaseOrder?      @relation(fields: [purchaseOrderId], references: [id])
+  supplier         Supplier            @relation(fields: [supplierId], references: [id])
+  warehouse        Warehouse           @relation(fields: [warehouseId], references: [id])
+  receivedBy       User                @relation("GrnReceivedBy", fields: [receivedById], references: [id])
+  lines            GoodsReceiptLine[]
+  qualityChecks    QualityCheck[]
   supplierInvoices SupplierInvoice[]
+  images           GoodsReceiptImage[]
 
   @@index([supplierId])
   @@index([purchaseOrderId])
@@ -2573,14 +2529,15 @@ model GoodsReceiptLine {
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
 
-  grn               GoodsReceiptNote   @relation(fields: [grnId], references: [id], onDelete: Cascade)
-  purchaseOrderLine PurchaseOrderLine? @relation(fields: [purchaseOrderLineId], references: [id])
-  product           Product            @relation(fields: [productId], references: [id])
-  uom               UnitOfMeasure?     @relation(fields: [uomId], references: [id])
-  lot               StockLot?          @relation(fields: [lotId], references: [id])
-  putawayBin        StorageBin?        @relation(fields: [putawayBinId], references: [id])
+  grn               GoodsReceiptNote    @relation(fields: [grnId], references: [id], onDelete: Cascade)
+  purchaseOrderLine PurchaseOrderLine?  @relation(fields: [purchaseOrderLineId], references: [id])
+  product           Product             @relation(fields: [productId], references: [id])
+  uom               UnitOfMeasure?      @relation(fields: [uomId], references: [id])
+  lot               StockLot?           @relation(fields: [lotId], references: [id])
+  putawayBin        StorageBin?         @relation(fields: [putawayBinId], references: [id])
   qualityChecks     QualityCheck[]
   putawayTasks      PutawayTask[]
+  images            GoodsReceiptImage[]
 
   @@index([grnId])
   @@index([productId])
@@ -2608,6 +2565,7 @@ model QualityCheck {
   grnLine     GoodsReceiptLine        @relation(fields: [grnLineId], references: [id], onDelete: Cascade)
   inspectedBy User                    @relation("QualityCheckInspectedBy", fields: [inspectedById], references: [id])
   parameters  QualityCheckParameter[]
+  images      QualityCheckImage[]
 
   @@index([grnId])
   @@index([result])
@@ -2631,9 +2589,34 @@ model QualityCheckParameter {
   @@map("quality_check_parameters")
 }
 
-// ================================================================
-// MODULE 2 — MATERIAL MANAGEMENT: requisitions, issues, production
-// ================================================================
+model GoodsReceiptImage {
+  id        Int               @id @default(autoincrement())
+  grnId     Int               @map("grn_id")
+  grnLineId Int?              @map("grn_line_id")
+  url       String
+  caption   String?
+  sortOrder Int               @default(0) @map("sort_order")
+  createdAt DateTime          @default(now()) @map("created_at")
+  grn       GoodsReceiptNote  @relation(fields: [grnId], references: [id], onDelete: Cascade)
+  grnLine   GoodsReceiptLine? @relation(fields: [grnLineId], references: [id], onDelete: Cascade)
+
+  @@index([grnId, sortOrder])
+  @@index([grnLineId])
+  @@map("goods_receipt_images")
+}
+
+model QualityCheckImage {
+  id             Int          @id @default(autoincrement())
+  qualityCheckId Int          @map("quality_check_id")
+  url            String
+  caption        String?
+  sortOrder      Int          @default(0) @map("sort_order")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  qualityCheck   QualityCheck @relation(fields: [qualityCheckId], references: [id], onDelete: Cascade)
+
+  @@index([qualityCheckId, sortOrder])
+  @@map("quality_check_images")
+}
 
 model MaterialRequisition {
   id                Int                       @id @default(autoincrement())
@@ -2680,27 +2663,27 @@ model MaterialRequisitionLine {
 }
 
 model ProductionOrder {
-  id                  Int                   @id @default(autoincrement())
-  orderNumber         String                @unique @map("order_number")
-  productId           Int                   @map("product_id")
-  bomId               Int                   @map("bom_id")
-  warehouseId         Int                   @map("warehouse_id")
-  status              ProductionOrderStatus @default(DRAFT)
-  plannedQuantity     Decimal               @map("planned_quantity") @db.Decimal(18, 4)
-  producedQuantity    Decimal               @default(0) @map("produced_quantity") @db.Decimal(18, 4)
-  scrappedQuantity    Decimal               @default(0) @map("scrapped_quantity") @db.Decimal(18, 4)
-  plannedStartDate    DateTime?             @map("planned_start_date")
-  plannedEndDate      DateTime?             @map("planned_end_date")
-  actualStartDate     DateTime?             @map("actual_start_date")
-  actualEndDate       DateTime?             @map("actual_end_date")
-  /// Standard material cost of the run, frozen from the BOM at release.
-  plannedMaterialCost Decimal               @default(0) @map("planned_material_cost") @db.Decimal(18, 4)
-  /// Actual cost of everything issued against the order.
-  actualMaterialCost  Decimal               @default(0) @map("actual_material_cost") @db.Decimal(18, 4)
-  notes               String?
-  createdById         Int                   @map("created_by_id")
-  createdAt           DateTime              @default(now()) @map("created_at")
-  updatedAt           DateTime              @updatedAt @map("updated_at")
+  id               Int                   @id @default(autoincrement())
+  orderNumber      String                @unique @map("order_number")
+  productId        Int                   @map("product_id")
+  bomId            Int                   @map("bom_id")
+  warehouseId      Int                   @map("warehouse_id")
+  status           ProductionOrderStatus @default(DRAFT)
+  plannedQuantity  Decimal               @map("planned_quantity") @db.Decimal(18, 4)
+  producedQuantity Decimal               @default(0) @map("produced_quantity") @db.Decimal(18, 4)
+  scrappedQuantity Decimal               @default(0) @map("scrapped_quantity") @db.Decimal(18, 4)
+  plannedStartDate DateTime?             @map("planned_start_date")
+  plannedEndDate   DateTime?             @map("planned_end_date")
+  actualStartDate  DateTime?             @map("actual_start_date")
+  actualEndDate    DateTime?             @map("actual_end_date")
+
+  plannedMaterialCost Decimal @default(0) @map("planned_material_cost") @db.Decimal(18, 4)
+
+  actualMaterialCost Decimal  @default(0) @map("actual_material_cost") @db.Decimal(18, 4)
+  notes              String?
+  createdById        Int      @map("created_by_id")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
   product              Product                      @relation(fields: [productId], references: [id])
   bom                  BillOfMaterials              @relation(fields: [bomId], references: [id])
@@ -2709,15 +2692,13 @@ model ProductionOrder {
   components           ProductionOrderComponent[]
   consumption          ProductionOrderConsumption[]
   materialRequisitions MaterialRequisition[]
-  operations ProductionOrderOperation[]
+  operations           ProductionOrderOperation[]
 
   @@index([status])
   @@index([productId])
   @@map("production_orders")
 }
 
-/// Component demand for a production order, exploded from the BOM at
-/// release time so later BOM revisions do not rewrite history.
 model ProductionOrderComponent {
   id                Int      @id @default(autoincrement())
   productionOrderId Int      @map("production_order_id")
@@ -2738,19 +2719,17 @@ model ProductionOrderComponent {
   @@map("production_order_components")
 }
 
-/// One issue or scrap event against a production order, at lot granularity,
-/// which is what makes consumption-vs-standard and wastage reporting exact.
 model ProductionOrderConsumption {
-  id                Int      @id @default(autoincrement())
-  productionOrderId Int      @map("production_order_id")
-  lotId             Int      @map("lot_id")
-  quantity          Decimal  @db.Decimal(18, 4)
-  /// CONSUMED | WASTED
-  consumptionType   String   @map("consumption_type")
-  unitCost          Decimal  @map("unit_cost") @db.Decimal(18, 4)
-  totalCost         Decimal  @map("total_cost") @db.Decimal(18, 4)
-  reasonCode        String?  @map("reason_code")
-  occurredAt        DateTime @default(now()) @map("occurred_at")
+  id                Int     @id @default(autoincrement())
+  productionOrderId Int     @map("production_order_id")
+  lotId             Int     @map("lot_id")
+  quantity          Decimal @db.Decimal(18, 4)
+
+  consumptionType String   @map("consumption_type")
+  unitCost        Decimal  @map("unit_cost") @db.Decimal(18, 4)
+  totalCost       Decimal  @map("total_cost") @db.Decimal(18, 4)
+  reasonCode      String?  @map("reason_code")
+  occurredAt      DateTime @default(now()) @map("occurred_at")
 
   productionOrder ProductionOrder @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
   lot             StockLot        @relation(fields: [lotId], references: [id])
@@ -2758,10 +2737,6 @@ model ProductionOrderConsumption {
   @@index([productionOrderId])
   @@map("production_order_consumption")
 }
-
-// ================================================================
-// SUPPLY CHAIN ENUMS
-// ================================================================
 
 enum ItemType {
   FINISHED_GOOD
@@ -3005,6 +2980,7 @@ enum PurchaseOrderStatus {
   PENDING_APPROVAL
   APPROVED
   REJECTED
+  SENDING
   SENT
   ACKNOWLEDGED
   PARTIALLY_RECEIVED
@@ -3053,21 +3029,6 @@ enum ProductionOrderStatus {
   CANCELLED
 }
 
-// ---------------------------------------------------------------------------
-// Finance management
-//
-// The application already knows what a purchase order and a sales order are
-// worth; what it could not answer was "what do we owe, what are we owed, and
-// what has actually been paid". These models settle that, and they hang off
-// the existing documents rather than duplicating them: a supplier invoice
-// points at the purchase order and goods receipt it bills for, and a customer
-// invoice points at the sales order it bills.
-//
-// Money is Decimal(18,2) throughout — never Float. Amounts are stored in the
-// document's own currency, with the code alongside, because an invoice raised
-// in EUR stays a EUR liability regardless of the display currency.
-// ---------------------------------------------------------------------------
-
 enum InvoiceStatus {
   DRAFT
   AWAITING_APPROVAL
@@ -3079,9 +3040,8 @@ enum InvoiceStatus {
 }
 
 enum PaymentDirection {
-  /// Money leaving the business — paying a supplier.
   OUTGOING
-  /// Money arriving — a customer settling an invoice.
+
   INCOMING
 }
 
@@ -3094,31 +3054,29 @@ enum PaymentMethod {
   CREDIT_NOTE
 }
 
-/// What we owe a supplier. Raised against a purchase order, and usually
-/// against a specific goods receipt so three-way matching is possible.
 model SupplierInvoice {
-  id             Int           @id @default(autoincrement())
-  invoiceNumber  String        @unique @map("invoice_number")
-  /// The supplier's own reference from their paperwork.
-  supplierRef    String?       @map("supplier_ref")
-  supplierId     Int           @map("supplier_id")
-  purchaseOrderId Int?         @map("purchase_order_id")
-  grnId          Int?          @map("grn_id")
-  status         InvoiceStatus @default(DRAFT)
-  invoiceDate    DateTime      @map("invoice_date")
-  dueDate        DateTime      @map("due_date")
-  currencyCode   String        @default("INR") @map("currency_code")
-  subtotal       Decimal       @default(0) @db.Decimal(18, 2)
-  taxAmount      Decimal       @default(0) @map("tax_amount") @db.Decimal(18, 2)
-  totalAmount    Decimal       @default(0) @map("total_amount") @db.Decimal(18, 2)
-  /// Kept in step by the payment service; never written by hand.
-  amountPaid     Decimal       @default(0) @map("amount_paid") @db.Decimal(18, 2)
-  notes          String?
-  createdById    Int           @map("created_by_id")
-  approvedById   Int?          @map("approved_by_id")
-  approvedAt     DateTime?     @map("approved_at")
-  createdAt      DateTime      @default(now()) @map("created_at")
-  updatedAt      DateTime      @updatedAt @map("updated_at")
+  id            Int    @id @default(autoincrement())
+  invoiceNumber String @unique @map("invoice_number")
+
+  supplierRef     String?       @map("supplier_ref")
+  supplierId      Int           @map("supplier_id")
+  purchaseOrderId Int?          @unique @map("purchase_order_id")
+  grnId           Int?          @unique @map("grn_id")
+  status          InvoiceStatus @default(DRAFT)
+  invoiceDate     DateTime      @map("invoice_date")
+  dueDate         DateTime      @map("due_date")
+  currencyCode    String        @default("INR") @map("currency_code")
+  subtotal        Decimal       @default(0) @db.Decimal(18, 2)
+  taxAmount       Decimal       @default(0) @map("tax_amount") @db.Decimal(18, 2)
+  totalAmount     Decimal       @default(0) @map("total_amount") @db.Decimal(18, 2)
+
+  amountPaid   Decimal   @default(0) @map("amount_paid") @db.Decimal(18, 2)
+  notes        String?
+  createdById  Int       @map("created_by_id")
+  approvedById Int?      @map("approved_by_id")
+  approvedAt   DateTime? @map("approved_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
 
   supplier      Supplier            @relation(fields: [supplierId], references: [id])
   purchaseOrder PurchaseOrder?      @relation(fields: [purchaseOrderId], references: [id])
@@ -3127,17 +3085,17 @@ model SupplierInvoice {
   approvedBy    User?               @relation("SupplierInvoiceApprovedBy", fields: [approvedById], references: [id])
   allocations   PaymentAllocation[]
 
+  @@unique([supplierId, supplierRef])
   @@index([supplierId])
   @@index([status, dueDate])
   @@map("supplier_invoices")
 }
 
-/// What a customer owes us. Raised against a sales order.
 model CustomerInvoice {
   id            Int           @id @default(autoincrement())
   invoiceNumber String        @unique @map("invoice_number")
   accountId     Int           @map("account_id")
-  salesOrderId  Int?          @map("sales_order_id")
+  salesOrderId  Int?          @unique @map("sales_order_id")
   status        InvoiceStatus @default(DRAFT)
   invoiceDate   DateTime      @map("invoice_date")
   dueDate       DateTime      @map("due_date")
@@ -3161,26 +3119,24 @@ model CustomerInvoice {
   @@map("customer_invoices")
 }
 
-/// One movement of money. A payment can settle several invoices, which is why
-/// the amounts live in PaymentAllocation rather than on a single invoice FK.
 model Payment {
   id            Int              @id @default(autoincrement())
   paymentNumber String           @unique @map("payment_number")
   direction     PaymentDirection
   method        PaymentMethod    @default(BANK_TRANSFER)
-  /// Cheque number, UTR, transaction id — whatever the bank shows.
-  reference     String?
-  paymentDate   DateTime         @map("payment_date")
-  currencyCode  String           @default("INR") @map("currency_code")
-  amount        Decimal          @db.Decimal(18, 2)
-  /// Amount not yet applied to an invoice — an advance sits here.
-  unallocated   Decimal          @default(0) @db.Decimal(18, 2)
-  supplierId    Int?             @map("supplier_id")
-  accountId     Int?             @map("account_id")
-  notes         String?
-  recordedById  Int              @map("recorded_by_id")
-  createdAt     DateTime         @default(now()) @map("created_at")
-  updatedAt     DateTime         @updatedAt @map("updated_at")
+
+  reference    String?
+  paymentDate  DateTime @map("payment_date")
+  currencyCode String   @default("INR") @map("currency_code")
+  amount       Decimal  @db.Decimal(18, 2)
+
+  unallocated  Decimal  @default(0) @db.Decimal(18, 2)
+  supplierId   Int?     @map("supplier_id")
+  accountId    Int?     @map("account_id")
+  notes        String?
+  recordedById Int      @map("recorded_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   supplier    Supplier?           @relation(fields: [supplierId], references: [id])
   account     Account?            @relation(fields: [accountId], references: [id])
@@ -3191,9 +3147,6 @@ model Payment {
   @@map("payments")
 }
 
-/// Applies part of a payment to one invoice. Splitting it this way lets a
-/// single bank transfer clear four invoices, and lets one invoice be settled
-/// by instalments, without either side losing its audit trail.
 model PaymentAllocation {
   id                Int      @id @default(autoincrement())
   paymentId         Int      @map("payment_id")
@@ -3212,24 +3165,6 @@ model PaymentAllocation {
   @@map("payment_allocations")
 }
 
-// ---------------------------------------------------------------------------
-// Production planning
-//
-// The application could already record *that* something was built. What it
-// could not answer was "can we build it, on the equipment we have, by the date
-// we promised". These three models add that:
-//
-//   WorkCenter               where work physically happens, and how much of it
-//                            fits in a day
-//   BomOperation             the routing — which work centre does what, in what
-//                            order, and how long it takes
-//   ProductionOrderOperation the scheduled instance of one routing step
-//
-// Times are minutes (Int) rather than durations: shop-floor standards are
-// quoted in minutes, and integer minutes avoid the rounding drift that decimal
-// hours introduce when multiplied across a batch.
-// ---------------------------------------------------------------------------
-
 enum WorkCenterType {
   MACHINE
   ASSEMBLY_LINE
@@ -3246,7 +3181,6 @@ enum OperationStatus {
   CANCELLED
 }
 
-/// A machine, line, or bench that work is scheduled onto.
 model WorkCenter {
   id          Int            @id @default(autoincrement())
   code        String         @unique
@@ -3254,18 +3188,17 @@ model WorkCenter {
   warehouseId Int            @map("warehouse_id")
   type        WorkCenterType @default(MACHINE)
   description String?
-  /// Minutes of productive time available per working day at 100% efficiency.
-  capacityMinutesPerDay Int  @default(480) @map("capacity_minutes_per_day")
-  /// Realistic throughput as a percentage of capacity — accounts for
-  /// changeovers, breaks and the fact that no line runs at nameplate all day.
-  efficiencyPercent     Decimal @default(85) @map("efficiency_percent") @db.Decimal(5, 2)
-  /// Used to cost an operation: minutes x rate.
-  costPerHour           Decimal @default(0) @map("cost_per_hour") @db.Decimal(18, 2)
-  /// How many jobs can run side by side here.
-  parallelCapacity      Int     @default(1) @map("parallel_capacity")
-  isActive              Boolean @default(true) @map("is_active")
-  createdAt             DateTime @default(now()) @map("created_at")
-  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  capacityMinutesPerDay Int @default(480) @map("capacity_minutes_per_day")
+
+  efficiencyPercent Decimal @default(85) @map("efficiency_percent") @db.Decimal(5, 2)
+
+  costPerHour Decimal @default(0) @map("cost_per_hour") @db.Decimal(18, 2)
+
+  parallelCapacity Int      @default(1) @map("parallel_capacity")
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   warehouse  Warehouse                  @relation(fields: [warehouseId], references: [id])
   operations BomOperation[]
@@ -3275,22 +3208,21 @@ model WorkCenter {
   @@map("work_centers")
 }
 
-/// One step of a bill of materials' routing.
 model BomOperation {
-  id           Int    @id @default(autoincrement())
-  bomId        Int    @map("bom_id")
-  workCenterId Int    @map("work_center_id")
+  id           Int     @id @default(autoincrement())
+  bomId        Int     @map("bom_id")
+  workCenterId Int     @map("work_center_id")
   sequence     Int
   name         String
   description  String?
-  /// Fixed time to prepare the work centre, regardless of batch size.
-  setupMinutes      Int     @default(0) @map("setup_minutes")
-  /// Time per unit produced. Batch time = setup + run x quantity.
+
+  setupMinutes Int @default(0) @map("setup_minutes")
+
   runMinutesPerUnit Decimal @default(0) @map("run_minutes_per_unit") @db.Decimal(10, 4)
-  /// Blocks the next operation from starting until this one finishes.
-  isBlocking        Boolean @default(true) @map("is_blocking")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  isBlocking Boolean  @default(true) @map("is_blocking")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   bom        BillOfMaterials @relation(fields: [bomId], references: [id], onDelete: Cascade)
   workCenter WorkCenter      @relation(fields: [workCenterId], references: [id])
@@ -3300,8 +3232,6 @@ model BomOperation {
   @@map("bom_operations")
 }
 
-/// A routing step scheduled against a real production order. Created when the
-/// order is scheduled, so the plan is a record rather than a recomputation.
 model ProductionOrderOperation {
   id                Int             @id @default(autoincrement())
   productionOrderId Int             @map("production_order_id")
@@ -3309,17 +3239,17 @@ model ProductionOrderOperation {
   sequence          Int
   name              String
   status            OperationStatus @default(PENDING)
-  /// Minutes this step needs for this order's quantity, frozen at scheduling.
-  plannedMinutes    Int             @default(0) @map("planned_minutes")
-  actualMinutes     Int?            @map("actual_minutes")
-  scheduledStart    DateTime?       @map("scheduled_start")
-  scheduledEnd      DateTime?       @map("scheduled_end")
-  actualStart       DateTime?       @map("actual_start")
-  actualEnd         DateTime?       @map("actual_end")
-  completedQuantity Decimal         @default(0) @map("completed_quantity") @db.Decimal(18, 4)
+
+  plannedMinutes    Int       @default(0) @map("planned_minutes")
+  actualMinutes     Int?      @map("actual_minutes")
+  scheduledStart    DateTime? @map("scheduled_start")
+  scheduledEnd      DateTime? @map("scheduled_end")
+  actualStart       DateTime? @map("actual_start")
+  actualEnd         DateTime? @map("actual_end")
+  completedQuantity Decimal   @default(0) @map("completed_quantity") @db.Decimal(18, 4)
   notes             String?
-  createdAt         DateTime        @default(now()) @map("created_at")
-  updatedAt         DateTime        @updatedAt @map("updated_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
   productionOrder ProductionOrder @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
   workCenter      WorkCenter      @relation(fields: [workCenterId], references: [id])

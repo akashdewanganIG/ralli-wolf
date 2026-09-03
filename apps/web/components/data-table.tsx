@@ -28,13 +28,6 @@ import {
   setColumnPreferences,
 } from "../lib/user-preferences";
 
-/**
- * Rows a dashboard table shows before paginating.
- *
- * Eight fits the compact row height inside a normal viewport without the page
- * needing its own inner scroll region, which is the whole point — depth goes
- * to page two rather than to a nested scrollbar.
- */
 export const DEFAULT_PAGE_SIZE = 8;
 import { cn } from "@repo/ui/lib/utils";
 
@@ -49,7 +42,7 @@ export interface TableColumn<T> {
 export interface DataTableProps<T> {
   data: T[];
   columns: TableColumn<T>[];
-  /** List name. Omit when the page heading already says it. */
+
   title?: string;
   count: number;
   actionItems?: Array<{
@@ -61,48 +54,33 @@ export interface DataTableProps<T> {
   onNameClick?: (item: T) => void;
   onRowClick?: (item: T) => void;
   getRowHref?: (item: T) => string | undefined;
-  // Pagination props
+
   currentPage?: number;
   totalPages?: number;
   itemsPerPage?: number;
   onPageChange?: (page: number) => void;
   onItemsPerPageChange?: (itemsPerPage: number) => void;
-  // Filter props
+
   showFilter?: boolean;
   customFilter?: React.ReactNode;
   filterBadges?: React.ReactNode;
-  /**
-   * Search control for this table.
-   *
-   * Belongs in the table's own toolbar rather than on a separate row above it:
-   * a standalone search row needed its own separator to relate to the table,
-   * and that separator plus the row's padding was the empty band above the
-   * column headers.
-   */
+
   search?: React.ReactNode;
-  // Checkbox props
+
   showCheckboxes?: boolean;
   selectedItems?: string[];
   onSelectionChange?: (selectedIds: string[]) => void;
-  // Search props
+
   searchQuery?: string;
   isSearchMode?: boolean;
   columnPreferenceKey?: string;
-  /** Rendered in the header row to the left of the Columns button */
+
   headerLeadingContent?: React.ReactNode;
-  /** Rendered in the header row to the right of Columns (Columns will be to the left of this) */
+
   headerTrailingContent?: React.ReactNode;
-  /** Rendered inline immediately after the title text */
+
   titleSuffix?: React.ReactNode;
-  /**
-   * Put the search and controls on their own row beneath the title instead of
-   * sharing one line with it.
-   *
-   * Opt-in rather than the default: most tables carry a search field and one
-   * control group, which sit on a single line comfortably. It earns its place
-   * once a page adds several filters, at which point the single row wraps and
-   * the title stops reading as the heading of the card.
-   */
+
   stackedToolbar?: boolean;
 }
 
@@ -140,7 +118,6 @@ export function DataTable<T extends Record<string, any>>({
   const router = useRouter();
   const hasActionsColumn = actionItems.length > 0 || Boolean(customActions);
 
-  // Column visibility state - initialize with all columns visible
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => {
     const defaultColumns = new Set(columns.map(col => String(col.key)));
     if (typeof window === "undefined" || !columnPreferenceKey) {
@@ -156,19 +133,17 @@ export function DataTable<T extends Record<string, any>>({
     return validSaved.length > 0 ? new Set(validSaved) : defaultColumns;
   });
 
-  // Update visible columns when columns prop changes
   useEffect(() => {
     const currentKeys = new Set(columns.map(col => String(col.key)));
     setVisibleColumns(prev => {
-      // Keep existing selections if columns haven't changed
       const newSet = new Set(prev);
-      // Add any new columns (default to visible)
+
       currentKeys.forEach(key => {
         if (!newSet.has(key)) {
           newSet.add(key);
         }
       });
-      // Remove columns that no longer exist
+
       newSet.forEach(key => {
         if (!currentKeys.has(key)) {
           newSet.delete(key);
@@ -212,23 +187,18 @@ export function DataTable<T extends Record<string, any>>({
     });
   }, [visibleColumns, columnPreferenceKey]);
 
-  // Filter columns based on visibility
   const visibleColumnsList = useMemo(() => {
     return columns.filter(col => visibleColumns.has(String(col.key)));
   }, [columns, visibleColumns]);
 
-  // Items per page state
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [customValue, setCustomValue] = useState("");
 
-  // Column dropdown open state
   const [columnsDropdownOpen, setColumnsDropdownOpen] = useState(false);
 
-  // Items per page dropdown open state
   const [itemsPerPageDropdownOpen, setItemsPerPageDropdownOpen] =
     useState(false);
 
-  // Handle items per page change
   const handleItemsPerPageChange = (value: number) => {
     onItemsPerPageChange?.(value);
     setShowCustomInput(false);
@@ -242,7 +212,6 @@ export function DataTable<T extends Record<string, any>>({
     }
   };
 
-  // Checkbox handlers
   const handleSelectAll = (checked: boolean) => {
     const pageIds = data.map(item => item.id?.toString() || "").filter(Boolean);
     if (checked) {
@@ -268,14 +237,12 @@ export function DataTable<T extends Record<string, any>>({
     !isAllSelected &&
     data.some(item => selectedItems.includes(item.id?.toString() || ""));
 
-  // Column toggle handlers
   const handleToggleColumn = (columnKey: string, checked: boolean) => {
     setVisibleColumns(prev => {
       const newSet = new Set(prev);
       if (checked) {
         newSet.add(columnKey);
       } else {
-        // Prevent hiding all columns - ensure at least one remains visible
         if (newSet.size > 1) {
           newSet.delete(columnKey);
         }
@@ -289,18 +256,16 @@ export function DataTable<T extends Record<string, any>>({
   };
 
   const handleDeselectAllColumns = () => {
-    // Keep only the first column visible
     if (columns.length > 0 && columns[0]) {
       setVisibleColumns(new Set([String(columns[0].key)]));
     }
   };
 
-  /** Everything on the toolbar that is not the title or the search field. */
   const toolbarControls = (
     <>
       {headerLeadingContent}
       {showFilter && customFilter}
-      {/* Column Selection Dropdown */}
+
       <DropdownMenu
         open={columnsDropdownOpen}
         onOpenChange={setColumnsDropdownOpen}
@@ -369,14 +334,8 @@ export function DataTable<T extends Record<string, any>>({
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
-      {/* Toolbar. Inside the card and separated by a full-bleed rule, rather
-          than floating above it where its edges lined up with nothing. */}
       {stackedToolbar ? (
         <div className="border-b border-border">
-          {/* Each row carries its own padding so the rule between them is
-              full-bleed, like every other rule in this card. Putting the
-              border on a gap inside one padded box would have inset it by
-              12px at each end and left it floating. */}
           <div className="flex min-w-0 flex-wrap items-baseline gap-2 border-b border-border px-3 py-2.5">
             {title || titleSuffix ? (
               <h3 className="shrink-0 text-sm font-semibold text-foreground">
@@ -390,8 +349,7 @@ export function DataTable<T extends Record<string, any>>({
               </span>
             )}
           </div>
-          {/* Search takes the slack on its own row; the controls keep their
-              natural widths at the end of it. */}
+
           <div className="flex min-w-0 flex-wrap items-center gap-2 px-3 py-2.5">
             {search ? <div className="min-w-0 flex-1">{search}</div> : null}
             {toolbarControls}
@@ -399,7 +357,6 @@ export function DataTable<T extends Record<string, any>>({
         </div>
       ) : (
         <div className="flex flex-col gap-2 border-b border-border p-3 md:flex-row md:items-center md:justify-between">
-          {/* Left: title + items-per-page */}
           <div
             className={cn(
               "flex min-w-0 flex-wrap items-center gap-3",
@@ -412,8 +369,7 @@ export function DataTable<T extends Record<string, any>>({
                 {titleSuffix}
               </h3>
             ) : null}
-            {/* The search takes the slack in the row; everything else keeps its
-                natural width. */}
+
             {search ? <div className="min-w-0 flex-1">{search}</div> : null}
             {isSearchMode && searchQuery && (
               <span className="truncate text-sm text-muted-foreground">
@@ -421,12 +377,7 @@ export function DataTable<T extends Record<string, any>>({
               </span>
             )}
           </div>
-          {/* Right: columns toggle + filter + extras.
 
-              Exactly one group takes the slack. Pages that pass their whole
-              toolbar through `customFilter` need it here; pages that use the
-              `search` slot need it on the left. Letting both grow wrapped the
-              row onto three lines. */}
           <div
             className={cn(
               "flex w-full min-w-0 flex-wrap items-center gap-2 md:justify-end",
@@ -438,11 +389,6 @@ export function DataTable<T extends Record<string, any>>({
         </div>
       )}
 
-      {/* Filter Badges */}
-      {/* `filterBadges` is a React element even when it renders nothing, so the
-          truthiness check alone always drew this row — an empty band and a
-          separator above the column headers whenever no filter was active.
-          `empty:hidden` keys off what actually reached the DOM. */}
       {filterBadges && (
         <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 empty:hidden empty:border-0 empty:p-0">
           {filterBadges}
@@ -450,12 +396,7 @@ export function DataTable<T extends Record<string, any>>({
       )}
 
       <div>
-        <div
-          // Horizontal only. A capped height turned the table into its own
-          // scroll region inside a page that already scrolls, so reaching row 9
-          // meant finding the right pane first. Pagination handles depth now.
-          className="overflow-x-auto"
-        >
+        <div className="overflow-x-auto">
           <table className="w-full min-w-[45rem] border-collapse">
             <thead>
               <tr className="border-b border-border bg-surface-subtle">
@@ -665,14 +606,7 @@ export function DataTable<T extends Record<string, any>>({
         </div>
       </div>
 
-      {/* Pagination footer */}
       {onPageChange && (
-        // Page buttons only. "Showing 1 to 25 of 340 entries" restated what the
-        // numbered pages already show, and it was the sole reason this row
-        // needed a two-column layout.
-        // Row count sits with the other footer controls rather than beside the
-        // title: it is a pagination concern, and the label it used to carry
-        // ("Show … entries") restated what the number already says.
         <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border p-3">
           {onItemsPerPageChange && (
             <div className="flex flex-wrap items-center gap-1.5">

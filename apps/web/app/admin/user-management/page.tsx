@@ -3,17 +3,16 @@
 import { config } from "@/lib/config";
 
 import {
-  Badge,
   Button,
   ConfirmationDialog,
   Input,
   Label,
   SearchInput,
-  Separator,
 } from "@repo/ui";
 import { Alert } from "@repo/ui/components/ui/alert";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -39,7 +38,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   CheckCircle2,
-  ChevronDown,
   Edit,
   FileSpreadsheet,
   Filter,
@@ -48,10 +46,10 @@ import {
   Trash2,
   Upload,
 } from "@repo/ui/icons";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DataTable, type TableColumn } from "../../../components/data-table";
-import { RoleGuard } from "../../../components/guards/RoleGuard";
-import { ProtectedRoute } from "../../../components/ProtectedRoute";
+import { RoleGuard } from "../../../components/guards/role-guard";
+import { ProtectedRoute } from "../../../components/protected-route";
 import {
   SkeletonLine,
   TableSkeleton,
@@ -59,7 +57,7 @@ import {
 } from "../../../components/skeletons";
 import { PermissionsDialog } from "../../../components/admin/permissions-dialog";
 import { UserFilterBadges } from "../../../components/user-filter-badges";
-import { useUsersWithPagination, userKeys } from "../../../hooks/useUsers";
+import { useUsersWithPagination, userKeys } from "../../../hooks/use-users";
 import { userService } from "../../../lib/api/services";
 import { toast } from "../../../lib/toast";
 import {
@@ -71,7 +69,8 @@ import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { DEFAULT_PAGE_SIZE } from "@/components/data-table";
 import { Tag } from "@repo/ui/components/ui/tag";
 import { roleTone } from "@repo/ui/components/ui/status-badge";
-import { DataTransfer } from "@/components/data-transfer/DataTransfer";
+import { DataTransfer } from "@/components/data-transfer/data-transfer";
+import { getErrorMessage } from "@/lib/api/error-handler";
 
 type User = {
   id: string;
@@ -86,7 +85,6 @@ type User = {
   createdAt: string;
 };
 
-// Helper function to format region for display
 const formatRegion = (region?: string): string => {
   if (!region) return "-";
   const regionMap: Record<string, string> = {
@@ -100,7 +98,12 @@ const formatRegion = (region?: string): string => {
   return regionMap[region] || region;
 };
 
-// Remove mock data - we'll use real API data
+function getApiErrorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== "object" || !("code" in error)) {
+    return undefined;
+  }
+  return typeof error.code === "string" ? error.code : undefined;
+}
 
 export default function UserManagementPage() {
   const queryClient = useQueryClient();
@@ -117,6 +120,7 @@ export default function UserManagementPage() {
     role: "SALES",
     region: "",
     location: "",
+    permissions: [] as Permission[],
   });
   const [editingUser, setEditingUser] = useState<{
     id: string;
@@ -130,6 +134,7 @@ export default function UserManagementPage() {
     permissions: Permission[];
   } | null>(null);
   const [isPermissionsOpen, setIsPermissionsOpen] = useState(false);
+  const [isCreatePermissionsOpen, setIsCreatePermissionsOpen] = useState(false);
   const [isSingleDeleteOpen, setIsSingleDeleteOpen] = useState(false);
   const [resending, setResending] = useState(false);
   const [deletingUser, setDeletingUser] = useState(false);
@@ -147,7 +152,6 @@ export default function UserManagementPage() {
     Set<"firstName" | "lastName" | "email" | "phone" | "region">
   >(new Set());
 
-  // Filter state
   const [selectedRole, setSelectedRole] = useState<string | undefined>(
     undefined
   );
@@ -155,11 +159,9 @@ export default function UserManagementPage() {
     undefined
   );
 
-  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_PAGE_SIZE);
 
-  // Import modal state
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
@@ -176,7 +178,6 @@ export default function UserManagementPage() {
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Proactive validation for all form fields
   const computedErrors = useMemo(() => {
     const e: Partial<
       Record<"firstName" | "lastName" | "email" | "phone" | "region", string>
@@ -196,19 +197,9 @@ export default function UserManagementPage() {
       if (!phoneValidation.isValid) e.phone = phoneValidation.error;
     }
 
-    // Region is optional for all users
-
     return e;
-  }, [
-    newUser.firstName,
-    newUser.lastName,
-    newUser.email,
-    newUser.phone,
-    newUser.region,
-    newUser.role,
-  ]);
+  }, [newUser.firstName, newUser.lastName, newUser.email, newUser.phone]);
 
-  // Proactive validation for edit form fields
   const computedEditErrors = useMemo(() => {
     if (!editingUser) return {};
     const e: Partial<
@@ -229,12 +220,9 @@ export default function UserManagementPage() {
       if (!phoneValidation.isValid) e.phone = phoneValidation.error;
     }
 
-    // Region is optional for all users
-
     return e;
   }, [editingUser]);
 
-  // Only show errors for touched fields
   const displayErrors = useMemo(() => {
     const display: Partial<
       Record<"firstName" | "lastName" | "email" | "phone" | "region", string>
@@ -253,7 +241,6 @@ export default function UserManagementPage() {
     return display;
   }, [computedErrors, touchedFields]);
 
-  // Display errors for edit form
   const displayEditErrors = useMemo(() => {
     const display: Partial<
       Record<"firstName" | "lastName" | "email" | "phone" | "region", string>
@@ -275,7 +262,6 @@ export default function UserManagementPage() {
   const hasErrors = Object.keys(computedErrors).length > 0;
   const hasEditErrors = Object.keys(computedEditErrors).length > 0;
 
-  // Fetch users with pagination
   const userFilters = useMemo(
     () => ({
       page: currentPage,
@@ -293,7 +279,6 @@ export default function UserManagementPage() {
     error: usersError,
   } = useUsersWithPagination(userFilters);
 
-  // Map API users to the table's display shape.
   const mappedUsers = useMemo(() => {
     return users.map(u => ({
       id: u.id.toString(),
@@ -303,19 +288,14 @@ export default function UserManagementPage() {
       phone: u.phone || "",
       role: String(u.role || ""),
       region: u.region || "",
-      location: (u as any).location || "",
-      createdAt:
-        typeof u.createdAt === "string"
-          ? u.createdAt
-          : new Date(u.createdAt as any).toISOString(),
+      location: u.location || "",
+      createdAt: u.createdAt || "",
     }));
   }, [users]);
 
-  // Filter users based on search query (client-side for now)
   const filtered = useMemo(() => {
     let filteredUsers = mappedUsers;
 
-    // Apply search query (client-side filtering)
     const q = query.trim().toLowerCase();
     if (q) {
       filteredUsers = filteredUsers.filter(user => {
@@ -344,7 +324,6 @@ export default function UserManagementPage() {
       });
     }
 
-    // Ensure admins stay first even after filtering
     return filteredUsers.sort((a, b) => {
       if (a.role === "ADMIN" && b.role !== "ADMIN") return -1;
       if (a.role !== "ADMIN" && b.role === "ADMIN") return 1;
@@ -352,25 +331,15 @@ export default function UserManagementPage() {
     });
   }, [query, mappedUsers]);
 
-  // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedRole, selectedRegion]);
 
-  // Derive error message from hook error
   const errorMessage = useMemo(() => {
-    if (usersError) {
-      return (
-        (usersError as any)?.message ||
-        (usersError as any)?.error ||
-        "Failed to load users"
-      );
-    }
-    return null;
+    return usersError ? getErrorMessage(usersError) : null;
   }, [usersError]);
 
   const handleCreateUser = async () => {
-    // Validate before submission
     const firstNameValidation = validateName(newUser.firstName);
     const lastNameValidation = validateName(newUser.lastName);
     const emailValidation = validateEmail(newUser.email);
@@ -388,40 +357,42 @@ export default function UserManagementPage() {
     if (!lastNameValidation.isValid) errors.lastName = lastNameValidation.error;
     if (!emailValidation.isValid) errors.email = emailValidation.error;
     if (!phoneValidation.isValid) errors.phone = phoneValidation.error;
-    // Region is optional for all users
 
     setValidationErrors(errors);
 
     if (Object.keys(errors).length > 0) {
-      return; // Don't submit if validation fails
+      return;
+    }
+
+    if (newUser.role === "CUSTOM" && newUser.permissions.length === 0) {
+      toast.error("A custom role needs at least one permission");
+      setIsCreatePermissionsOpen(true);
+      return;
     }
 
     const loadingToast = toast.loading("Creating new user...");
     try {
       setCreating(true);
-      const createdUser = await userService.createUser(newUser as any);
+      const createdUser = await userService.createUser(newUser);
       toast.dismiss(loadingToast);
 
-      if (createdUser.credentialEmailSent) {
+      if (createdUser.invitationEmailSent) {
         toast.success("User created and ready to sign in", {
-          description: `Login credentials were sent to ${createdUser.email}.`,
+          description: `A password-setup invitation was sent to ${createdUser.email}.`,
         });
       } else {
-        toast.warning("User created; credential email was not delivered", {
+        toast.warning("User created; invitation email was not delivered", {
           description:
-            "The account is active and visible. They can use Email code on the login page.",
+            "The account is active. They can use Forgot password to establish access.",
           duration: 7000,
         });
       }
 
-      // Return to the unfiltered first page so the newly-created, immediately
-      // active account is visible regardless of the previous page or filters.
       setCurrentPage(1);
       setSelectedRole(undefined);
       setSelectedRegion(undefined);
       setQuery("");
 
-      // Invalidate queries to refetch users
       await queryClient.invalidateQueries({ queryKey: userKeys.lists() });
 
       setNewUser({
@@ -432,6 +403,7 @@ export default function UserManagementPage() {
         role: "SALES",
         region: "",
         location: "",
+        permissions: [] as Permission[],
       });
       setValidationErrors({});
       setTouchedFields(new Set());
@@ -444,7 +416,7 @@ export default function UserManagementPage() {
     }
   };
 
-  const handleEditUser = (user: User) => {
+  const handleEditUser = useCallback((user: User) => {
     setEditingUser({
       id: user.id,
       firstName: user.firstName || "",
@@ -459,18 +431,13 @@ export default function UserManagementPage() {
     setValidationErrors({});
     setTouchedFields(new Set());
     setIsEditModalOpen(true);
-  };
+  }, []);
 
   const editingUserName = editingUser
     ? [editingUser.firstName, editingUser.lastName].filter(Boolean).join(" ") ||
       editingUser.email
     : "";
 
-  /**
-   * Issue fresh credentials and email them. The stored password is a hash, so
-   * the original cannot be re-sent — the server mints a new one, which is why
-   * the copy warns that the old password stops working.
-   */
   const handleResendCredentials = async () => {
     if (!editingUser) return;
     try {
@@ -481,7 +448,7 @@ export default function UserManagementPage() {
       toast.success("Verification email sent", {
         description:
           result?.message ??
-          `New credentials were sent to ${editingUser.email}.`,
+          `A password-setup invitation was sent to ${editingUser.email}.`,
       });
     } catch (err: unknown) {
       toast.error(err, "Could not send the verification email");
@@ -512,7 +479,6 @@ export default function UserManagementPage() {
   const handleUpdateUser = async () => {
     if (!editingUser) return;
 
-    // Validate before submission
     const firstNameValidation = validateName(editingUser.firstName);
     const lastNameValidation = validateName(editingUser.lastName);
     const emailValidation = validateEmail(editingUser.email);
@@ -530,12 +496,11 @@ export default function UserManagementPage() {
     if (!lastNameValidation.isValid) errors.lastName = lastNameValidation.error;
     if (!emailValidation.isValid) errors.email = emailValidation.error;
     if (!phoneValidation.isValid) errors.phone = phoneValidation.error;
-    // Region is optional for all users
 
     setValidationErrors(errors);
 
     if (Object.keys(errors).length > 0) {
-      return; // Don't submit if validation fails
+      return;
     }
 
     if (editingUser.role === "CUSTOM" && editingUser.permissions.length === 0) {
@@ -547,20 +512,15 @@ export default function UserManagementPage() {
     try {
       setUpdating(true);
       const { id, ...userData } = editingUser;
-      const op = userService.updateUser(parseInt(id), userData as any);
+      const op = userService.updateUser(parseInt(id), userData);
       toast.promise(op, {
         loading: "Updating user...",
         success: "User updated successfully!",
-        error: (error: any) => {
-          const title = error?.response?.data?.error || "Failed to update user";
-          const details = error?.response?.data?.details || error?.message;
-          return details && details !== title ? `${title}: ${details}` : title;
-        },
+        error: error => getErrorMessage(error),
       });
 
       await op;
 
-      // Invalidate queries to refetch users
       queryClient.invalidateQueries({ queryKey: userKeys.lists() });
 
       setEditingUser(null);
@@ -568,7 +528,7 @@ export default function UserManagementPage() {
       setTouchedFields(new Set());
       setIsEditModalOpen(false);
     } catch (_err) {
-      // Error toast handled by toast.promise above
+      return;
     } finally {
       setUpdating(false);
     }
@@ -576,7 +536,6 @@ export default function UserManagementPage() {
 
   const handleBulkDelete = async () => {
     try {
-      // Never bulk-delete the account performing the deletion
       const usersToDelete = selectedUsers.filter(userId => {
         const user = mappedUsers.find(u => u.id === userId);
         return user && user.role !== "ADMIN";
@@ -597,49 +556,21 @@ export default function UserManagementPage() {
       toast.promise(op, {
         loading: `Deleting ${count} user${count > 1 ? "s" : ""}...`,
         success: `Successfully deleted ${count} user${count > 1 ? "s" : ""}`,
-        error: (error: any) => {
-          const raw = error?.response?.data;
-          const title = raw?.error || "Failed to delete selected users";
-          const details = raw?.details || error?.message || raw?.field;
-
-          // Friendly mapping for common FK cases
-          const code = raw?.code;
-          const field = String(raw?.field || "").toLowerCase();
-          const message = String(details || "").toLowerCase();
-
-          if (code === "FOREIGN_KEY_CONSTRAINT") {
-            // Specific reported case from logs
-            if (
-              details &&
-              String(details).includes(
-                "lead_assignment_rules_assigned_user_id_fkey"
-              )
-            ) {
-              return "Cannot delete user: they are the assignee for existing leads. Please reassign those leads first.";
-            }
-            if (
-              field.includes("lead_assignment_rules") ||
-              message.includes("lead assignment")
-            ) {
-              return "Cannot delete user: they are the assignee for existing leads. Please reassign those leads first.";
-            }
-            if (field.includes("owner") || message.includes("owner")) {
-              return "Cannot delete user: they are the assignee for existing leads. Please reassign those leads first.";
-            }
+        error: error => {
+          if (getApiErrorCode(error) === "FOREIGN_KEY_CONSTRAINT") {
+            return "Cannot delete user: reassign their owned records first.";
           }
-
-          return details && details !== title ? `${title}: ${details}` : title;
+          return getErrorMessage(error);
         },
       });
 
       await op;
 
-      // Invalidate queries to refetch users
       queryClient.invalidateQueries({ queryKey: userKeys.lists() });
       setSelectedUsers([]);
       setIsDeleteModalOpen(false);
     } catch (_err) {
-      // Error toast handled by toast.promise
+      return;
     }
   };
 
@@ -647,7 +578,6 @@ export default function UserManagementPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     const validTypes = [".csv", ".xlsx"];
     const ext = file.name.toLowerCase().slice(file.name.lastIndexOf("."));
     if (!validTypes.includes(ext)) {
@@ -676,15 +606,15 @@ export default function UserManagementPage() {
 
       if (result.success.length > 0) {
         toast.success(`Successfully imported ${result.success.length} user(s)`);
-        // Invalidate queries to refetch users
+
         queryClient.invalidateQueries({ queryKey: userKeys.lists() });
       }
 
       if (result.errors.length > 0) {
         toast.error(`${result.errors.length} row(s) failed to import`);
       }
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to import users");
+    } catch (err: unknown) {
+      toast.error(err, "Failed to import users");
     } finally {
       setImporting(false);
     }
@@ -711,21 +641,13 @@ export default function UserManagementPage() {
 
   const handleDownloadTemplate = async (format: "xlsx" | "csv") => {
     try {
-      // Get auth token for the download
-      const token = document.cookie
-        .split("; ")
-        .find(row => row.startsWith("auth_token="))
-        ?.split("=")[1];
-
       const endpoint =
         format === "csv"
           ? "/api/users/import/template/download/csv"
           : "/api/users/import/template/download";
 
       const response = await fetch(`${config.apiUrl}${endpoint}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: "include",
       });
 
       if (!response.ok) throw new Error("Failed to download template");
@@ -780,12 +702,7 @@ export default function UserManagementPage() {
       {
         key: "role",
         label: "Role",
-        render: (_v, item) => (
-          // The previous version tested `=== "ADMIN"` in both branches of the
-          // ternary, so its middle case was unreachable and every non-admin
-          // fell through to the same tone regardless of role.
-          <Tag tone={roleTone(item.role)}>{item.role}</Tag>
-        ),
+        render: (_v, item) => <Tag tone={roleTone(item.role)}>{item.role}</Tag>,
       },
       {
         key: "region",
@@ -853,7 +770,6 @@ export default function UserManagementPage() {
     </PageShell>
   );
 
-  // Loader handling in return
   if (loading) {
     return (
       <ProtectedRoute fallback={skeletonView}>
@@ -866,7 +782,6 @@ export default function UserManagementPage() {
     <ProtectedRoute fallback={skeletonView}>
       <RoleGuard allowedRoles={["ADMIN"]}>
         <PageShell>
-          {/* Error Message */}
           {errorMessage && (
             <Alert tone="error" title="Unable to load users">
               {errorMessage}
@@ -905,9 +820,7 @@ export default function UserManagementPage() {
                 <Button onClick={() => setIsCreateModalOpen(true)}>
                   Create user
                 </Button>
-                {/* Users already have a bespoke importer above, so this
-                    contributes the export half only — the shared component
-                    hides Import for datasets the registry does not accept. */}
+
                 <DataTransfer entity="users" size="default" />
               </>
             }
@@ -948,8 +861,6 @@ export default function UserManagementPage() {
               data={filtered}
               columns={columns}
               title="Users"
-              // Two role/region filters plus search and the columns toggle is
-              // more than one line holds; the title gets its own row.
               stackedToolbar
               count={pagination?.totalItems || 0}
               currentPage={currentPage}
@@ -960,7 +871,6 @@ export default function UserManagementPage() {
               showCheckboxes={true}
               selectedItems={selectedUsers}
               onSelectionChange={ids => {
-                // Selection excludes rows that cannot be deleted
                 const validIds = ids.filter(id => {
                   const user = filtered.find(u => u.id === id);
                   return user && user.role !== "ADMIN";
@@ -992,7 +902,6 @@ export default function UserManagementPage() {
               showFilter={true}
               customFilter={
                 <div className="flex items-center gap-2">
-                  {/* Role Filter */}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
@@ -1044,7 +953,6 @@ export default function UserManagementPage() {
                     </DropdownMenuContent>
                   </DropdownMenu>
 
-                  {/* Region Filter */}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
@@ -1138,7 +1046,6 @@ export default function UserManagementPage() {
             />
           )}
 
-          {/* Create User Modal */}
           <Dialog
             open={isCreateModalOpen}
             onOpenChange={open => {
@@ -1152,6 +1059,7 @@ export default function UserManagementPage() {
                   role: "SALES",
                   region: "",
                   location: "",
+                  permissions: [] as Permission[],
                 });
                 setError(null);
                 setValidationErrors({});
@@ -1159,7 +1067,7 @@ export default function UserManagementPage() {
               }
             }}
           >
-            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-md gap-0 overflow-hidden">
               <DialogHeader>
                 <DialogTitle>Create User</DialogTitle>
                 <DialogDescription>
@@ -1167,274 +1075,311 @@ export default function UserManagementPage() {
                 </DialogDescription>
               </DialogHeader>
 
-              {error && (
-                <div className="bg-error-surface border border-error-border text-error-foreground px-4 py-3 rounded-lg text-sm">
-                  {error}
-                </div>
-              )}
+              <DialogBody className="space-y-3">
+                {error && (
+                  <div className="bg-error-surface border border-error-border text-error-foreground px-4 py-3 rounded-lg text-sm">
+                    {error}
+                  </div>
+                )}
 
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="firstName">First Name *</Label>
+                      <Input
+                        id="firstName"
+                        value={newUser.firstName}
+                        onChange={e => {
+                          setNewUser(prev => ({
+                            ...prev,
+                            firstName: e.target.value,
+                          }));
+                          if (validationErrors.firstName) {
+                            const validation = validateName(e.target.value);
+                            setValidationErrors(prev => ({
+                              ...prev,
+                              firstName: validation.isValid
+                                ? undefined
+                                : validation.error,
+                            }));
+                          }
+                        }}
+                        onBlur={() =>
+                          setTouchedFields(prev =>
+                            new Set(prev).add("firstName")
+                          )
+                        }
+                        placeholder="First name"
+                        disabled={creating}
+                        aria-invalid={!!displayErrors.firstName}
+                        aria-describedby={
+                          displayErrors.firstName
+                            ? "firstName-error"
+                            : undefined
+                        }
+                      />
+                      {displayErrors.firstName && (
+                        <p
+                          id="firstName-error"
+                          className="text-xs text-destructive mt-1"
+                        >
+                          {displayErrors.firstName}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="lastName">Last Name *</Label>
+                      <Input
+                        id="lastName"
+                        value={newUser.lastName}
+                        onChange={e => {
+                          setNewUser(prev => ({
+                            ...prev,
+                            lastName: e.target.value,
+                          }));
+                          if (validationErrors.lastName) {
+                            const validation = validateName(e.target.value);
+                            setValidationErrors(prev => ({
+                              ...prev,
+                              lastName: validation.isValid
+                                ? undefined
+                                : validation.error,
+                            }));
+                          }
+                        }}
+                        onBlur={() =>
+                          setTouchedFields(prev =>
+                            new Set(prev).add("lastName")
+                          )
+                        }
+                        placeholder="Last name"
+                        disabled={creating}
+                        aria-invalid={!!displayErrors.lastName}
+                        aria-describedby={
+                          displayErrors.lastName ? "lastName-error" : undefined
+                        }
+                      />
+                      {displayErrors.lastName && (
+                        <p
+                          id="lastName-error"
+                          className="text-xs text-destructive mt-1"
+                        >
+                          {displayErrors.lastName}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
                   <div className="space-y-2">
-                    <Label htmlFor="firstName">First Name *</Label>
+                    <Label htmlFor="email">Email *</Label>
                     <Input
-                      id="firstName"
-                      value={newUser.firstName}
+                      id="email"
+                      type="email"
+                      value={newUser.email}
                       onChange={e => {
                         setNewUser(prev => ({
                           ...prev,
-                          firstName: e.target.value,
+                          email: e.target.value,
                         }));
-                        if (validationErrors.firstName) {
-                          const validation = validateName(e.target.value);
+                        if (validationErrors.email) {
+                          const validation = validateEmail(e.target.value);
                           setValidationErrors(prev => ({
                             ...prev,
-                            firstName: validation.isValid
+                            email: validation.isValid
                               ? undefined
                               : validation.error,
                           }));
                         }
                       }}
                       onBlur={() =>
-                        setTouchedFields(prev => new Set(prev).add("firstName"))
+                        setTouchedFields(prev => new Set(prev).add("email"))
                       }
-                      placeholder="First name"
+                      placeholder="Enter user email"
                       disabled={creating}
-                      aria-invalid={!!displayErrors.firstName}
+                      aria-invalid={!!displayErrors.email}
                       aria-describedby={
-                        displayErrors.firstName ? "firstName-error" : undefined
+                        displayErrors.email ? "email-error" : undefined
                       }
                     />
-                    {displayErrors.firstName && (
+                    {displayErrors.email && (
                       <p
-                        id="firstName-error"
+                        id="email-error"
                         className="text-xs text-destructive mt-1"
                       >
-                        {displayErrors.firstName}
+                        {displayErrors.email}
                       </p>
                     )}
                   </div>
+
                   <div className="space-y-2">
-                    <Label htmlFor="lastName">Last Name *</Label>
+                    <Label htmlFor="phone">Phone Number</Label>
                     <Input
-                      id="lastName"
-                      value={newUser.lastName}
+                      id="phone"
+                      type="tel"
+                      value={newUser.phone}
                       onChange={e => {
                         setNewUser(prev => ({
                           ...prev,
-                          lastName: e.target.value,
+                          phone: e.target.value,
                         }));
-                        if (validationErrors.lastName) {
-                          const validation = validateName(e.target.value);
+                        if (validationErrors.phone) {
+                          const validation = validatePhoneOptional(
+                            e.target.value
+                          );
                           setValidationErrors(prev => ({
                             ...prev,
-                            lastName: validation.isValid
+                            phone: validation.isValid
                               ? undefined
                               : validation.error,
                           }));
                         }
                       }}
                       onBlur={() =>
-                        setTouchedFields(prev => new Set(prev).add("lastName"))
+                        setTouchedFields(prev => new Set(prev).add("phone"))
                       }
-                      placeholder="Last name"
+                      placeholder="Enter phone number"
                       disabled={creating}
-                      aria-invalid={!!displayErrors.lastName}
+                      aria-invalid={!!displayErrors.phone}
                       aria-describedby={
-                        displayErrors.lastName ? "lastName-error" : undefined
+                        displayErrors.phone ? "phone-error" : undefined
                       }
                     />
-                    {displayErrors.lastName && (
+                    {displayErrors.phone && (
                       <p
-                        id="lastName-error"
+                        id="phone-error"
                         className="text-xs text-destructive mt-1"
                       >
-                        {displayErrors.lastName}
+                        {displayErrors.phone}
                       </p>
                     )}
                   </div>
-                </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email *</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={newUser.email}
-                    onChange={e => {
-                      setNewUser(prev => ({ ...prev, email: e.target.value }));
-                      if (validationErrors.email) {
-                        const validation = validateEmail(e.target.value);
-                        setValidationErrors(prev => ({
+                  <div className="space-y-2">
+                    <Label htmlFor="location">Location</Label>
+                    <Input
+                      id="location"
+                      type="text"
+                      value={newUser.location}
+                      onChange={e => {
+                        setNewUser(prev => ({
                           ...prev,
-                          email: validation.isValid
-                            ? undefined
-                            : validation.error,
+                          location: e.target.value,
                         }));
-                      }
-                    }}
-                    onBlur={() =>
-                      setTouchedFields(prev => new Set(prev).add("email"))
-                    }
-                    placeholder="Enter user email"
-                    disabled={creating}
-                    aria-invalid={!!displayErrors.email}
-                    aria-describedby={
-                      displayErrors.email ? "email-error" : undefined
-                    }
-                  />
-                  {displayErrors.email && (
-                    <p
-                      id="email-error"
-                      className="text-xs text-destructive mt-1"
-                    >
-                      {displayErrors.email}
-                    </p>
-                  )}
-                </div>
+                      }}
+                      placeholder="Enter location (optional)"
+                      disabled={creating}
+                    />
+                  </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone Number</Label>
-                  <Input
-                    id="phone"
-                    type="tel"
-                    value={newUser.phone}
-                    onChange={e => {
-                      setNewUser(prev => ({ ...prev, phone: e.target.value }));
-                      if (validationErrors.phone) {
-                        const validation = validatePhoneOptional(
-                          e.target.value
-                        );
-                        setValidationErrors(prev => ({
+                  <div className="space-y-2">
+                    <Label htmlFor="region">Region</Label>
+                    <Select
+                      value={newUser.region || "none"}
+                      onValueChange={v => {
+                        setNewUser(prev => ({
                           ...prev,
-                          phone: validation.isValid
-                            ? undefined
-                            : validation.error,
+                          region: v === "none" ? "" : v,
                         }));
-                      }
-                    }}
-                    onBlur={() =>
-                      setTouchedFields(prev => new Set(prev).add("phone"))
-                    }
-                    placeholder="Enter phone number"
-                    disabled={creating}
-                    aria-invalid={!!displayErrors.phone}
-                    aria-describedby={
-                      displayErrors.phone ? "phone-error" : undefined
-                    }
-                  />
-                  {displayErrors.phone && (
-                    <p
-                      id="phone-error"
-                      className="text-xs text-destructive mt-1"
+                        setTouchedFields(prev => new Set(prev).add("region"));
+                        if (validationErrors.region) {
+                          setValidationErrors(prev => ({
+                            ...prev,
+                            region: undefined,
+                          }));
+                        }
+                      }}
+                      disabled={creating}
                     >
-                      {displayErrors.phone}
+                      <SelectTrigger
+                        id="region"
+                        aria-invalid={!!displayErrors.region}
+                        aria-describedby={
+                          displayErrors.region ? "region-error" : undefined
+                        }
+                      >
+                        <SelectValue placeholder="Select Region (Optional)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">
+                          No Region (Optional)
+                        </SelectItem>
+                        <SelectItem value="SOUTH">South</SelectItem>
+                        <SelectItem value="NORTH">North</SelectItem>
+                        <SelectItem value="EAST">East</SelectItem>
+                        <SelectItem value="WEST_1">West 1</SelectItem>
+                        <SelectItem value="WEST_2">West 2</SelectItem>
+                        <SelectItem value="APTOC">APTOC</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {displayErrors.region && (
+                      <p
+                        id="region-error"
+                        className="text-xs text-destructive mt-1"
+                      >
+                        {displayErrors.region}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="role">Role *</Label>
+                    <Select
+                      value={newUser.role}
+                      onValueChange={v => {
+                        setNewUser(prev => ({ ...prev, role: v }));
+
+                        if (v === "CUSTOM") setIsCreatePermissionsOpen(true);
+                      }}
+                      disabled={creating}
+                    >
+                      <SelectTrigger id="role">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="SALES">Sales</SelectItem>
+                        <SelectItem value="ADMIN">Admin</SelectItem>
+                        <SelectItem value="CUSTOM">Custom</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {newUser.role === "CUSTOM" ? (
+                      <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-subtle px-3 py-2">
+                        <p className="text-xs text-muted-foreground">
+                          <span className="font-semibold tabular-nums text-foreground">
+                            {newUser.permissions.length}
+                          </span>{" "}
+                          permission
+                          {newUser.permissions.length === 1 ? "" : "s"} granted
+                        </p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={creating}
+                          onClick={() => setIsCreatePermissionsOpen(true)}
+                        >
+                          <ShieldCheck className="size-4" />
+                          Edit permissions
+                        </Button>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        {newUser.role === "ADMIN"
+                          ? "Admins hold every permission, including user management."
+                          : "Sales holds the standard pipeline permissions."}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="rounded-lg border border-primary/20 bg-primary/[0.04] px-4 py-3 text-sm text-foreground">
+                    <p className="font-semibold">Sign-in access</p>
+                    <p>
+                      Accounts are active as soon as they are created and appear
+                      in the user list without approval. Every user receives an
+                      invitation to prove control of their mailbox and set a
+                      private password; no password is sent by email.
                     </p>
-                  )}
+                  </div>
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="location">Location</Label>
-                  <Input
-                    id="location"
-                    type="text"
-                    value={newUser.location}
-                    onChange={e => {
-                      setNewUser(prev => ({
-                        ...prev,
-                        location: e.target.value,
-                      }));
-                    }}
-                    placeholder="Enter location (optional)"
-                    disabled={creating}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="region">Region</Label>
-                  <Select
-                    value={newUser.region || "none"}
-                    onValueChange={v => {
-                      setNewUser(prev => ({
-                        ...prev,
-                        region: v === "none" ? "" : v,
-                      }));
-                      setTouchedFields(prev => new Set(prev).add("region"));
-                      if (validationErrors.region) {
-                        setValidationErrors(prev => ({
-                          ...prev,
-                          region: undefined,
-                        }));
-                      }
-                    }}
-                    disabled={creating}
-                  >
-                    <SelectTrigger
-                      id="region"
-                      aria-invalid={!!displayErrors.region}
-                      aria-describedby={
-                        displayErrors.region ? "region-error" : undefined
-                      }
-                    >
-                      <SelectValue placeholder="Select Region (Optional)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No Region (Optional)</SelectItem>
-                      <SelectItem value="SOUTH">South</SelectItem>
-                      <SelectItem value="NORTH">North</SelectItem>
-                      <SelectItem value="EAST">East</SelectItem>
-                      <SelectItem value="WEST_1">West 1</SelectItem>
-                      <SelectItem value="WEST_2">West 2</SelectItem>
-                      <SelectItem value="APTOC">APTOC</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {displayErrors.region && (
-                    <p
-                      id="region-error"
-                      className="text-xs text-destructive mt-1"
-                    >
-                      {displayErrors.region}
-                    </p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="role">Role *</Label>
-                  <Select
-                    value={newUser.role}
-                    onValueChange={v =>
-                      setNewUser(prev => ({ ...prev, role: v }))
-                    }
-                    disabled={creating}
-                  >
-                    <SelectTrigger id="role">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="SALES">Sales</SelectItem>
-                      <SelectItem value="ADMIN">Admin</SelectItem>
-                      <SelectItem value="CUSTOM">Custom</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    {newUser.role === "ADMIN"
-                      ? "Admins hold every permission, including user management."
-                      : newUser.role === "CUSTOM"
-                        ? "Pick the exact permissions after creating the account, from the user's Edit dialog."
-                        : "Sales holds the standard pipeline permissions."}
-                  </p>
-                </div>
-
-                <div className="rounded-lg border border-primary/20 bg-primary/[0.04] px-4 py-3 text-sm text-foreground">
-                  <p className="font-semibold">Sign-in access</p>
-                  <p>
-                    Accounts are active as soon as they are created and appear
-                    in the user list without approval. Admin and Sales users
-                    receive a temporary password by email and can also use an
-                    email sign-in code.
-                  </p>
-                </div>
-              </div>
+              </DialogBody>
 
               <DialogFooter>
                 <Button
@@ -1449,6 +1394,7 @@ export default function UserManagementPage() {
                       role: "SALES",
                       region: "",
                       location: "",
+                      permissions: [] as Permission[],
                     });
                     setError(null);
                     setValidationErrors({});
@@ -1468,7 +1414,6 @@ export default function UserManagementPage() {
             </DialogContent>
           </Dialog>
 
-          {/* Edit User Modal */}
           <Dialog
             open={isEditModalOpen}
             onOpenChange={open => {
@@ -1481,344 +1426,354 @@ export default function UserManagementPage() {
               }
             }}
           >
-            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-md gap-0 overflow-hidden">
               <DialogHeader>
                 <DialogTitle>Edit User</DialogTitle>
                 <DialogDescription>Update user information</DialogDescription>
               </DialogHeader>
 
-              {error && (
-                <div className="bg-error-surface border border-error-border text-error-foreground px-4 py-3 rounded-lg text-sm">
-                  {error}
-                </div>
-              )}
+              <DialogBody className="space-y-3">
+                {error && (
+                  <div className="bg-error-surface border border-error-border text-error-foreground px-4 py-3 rounded-lg text-sm">
+                    {error}
+                  </div>
+                )}
 
-              {editingUser && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                {editingUser && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-firstName">First Name *</Label>
+                        <Input
+                          id="edit-firstName"
+                          value={editingUser.firstName}
+                          onChange={e => {
+                            setEditingUser(prev =>
+                              prev
+                                ? { ...prev, firstName: e.target.value }
+                                : null
+                            );
+                            if (validationErrors.firstName) {
+                              const validation = validateName(e.target.value);
+                              setValidationErrors(prev => ({
+                                ...prev,
+                                firstName: validation.isValid
+                                  ? undefined
+                                  : validation.error,
+                              }));
+                            }
+                          }}
+                          onBlur={() =>
+                            setTouchedFields(prev =>
+                              new Set(prev).add("firstName")
+                            )
+                          }
+                          placeholder="First name"
+                          disabled={updating}
+                          aria-invalid={!!displayEditErrors.firstName}
+                          aria-describedby={
+                            displayEditErrors.firstName
+                              ? "edit-firstName-error"
+                              : undefined
+                          }
+                        />
+                        {displayEditErrors.firstName && (
+                          <p
+                            id="edit-firstName-error"
+                            className="text-xs text-destructive mt-1"
+                          >
+                            {displayEditErrors.firstName}
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-lastName">Last Name *</Label>
+                        <Input
+                          id="edit-lastName"
+                          value={editingUser.lastName}
+                          onChange={e => {
+                            setEditingUser(prev =>
+                              prev
+                                ? { ...prev, lastName: e.target.value }
+                                : null
+                            );
+                            if (validationErrors.lastName) {
+                              const validation = validateName(e.target.value);
+                              setValidationErrors(prev => ({
+                                ...prev,
+                                lastName: validation.isValid
+                                  ? undefined
+                                  : validation.error,
+                              }));
+                            }
+                          }}
+                          onBlur={() =>
+                            setTouchedFields(prev =>
+                              new Set(prev).add("lastName")
+                            )
+                          }
+                          placeholder="Last name"
+                          disabled={updating}
+                          aria-invalid={!!displayEditErrors.lastName}
+                          aria-describedby={
+                            displayEditErrors.lastName
+                              ? "edit-lastName-error"
+                              : undefined
+                          }
+                        />
+                        {displayEditErrors.lastName && (
+                          <p
+                            id="edit-lastName-error"
+                            className="text-xs text-destructive mt-1"
+                          >
+                            {displayEditErrors.lastName}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
                     <div className="space-y-2">
-                      <Label htmlFor="edit-firstName">First Name *</Label>
+                      <Label htmlFor="edit-email">Email *</Label>
                       <Input
-                        id="edit-firstName"
-                        value={editingUser.firstName}
+                        id="edit-email"
+                        type="email"
+                        value={editingUser.email}
                         onChange={e => {
                           setEditingUser(prev =>
-                            prev ? { ...prev, firstName: e.target.value } : null
+                            prev ? { ...prev, email: e.target.value } : null
                           );
-                          if (validationErrors.firstName) {
-                            const validation = validateName(e.target.value);
+                          if (validationErrors.email) {
+                            const validation = validateEmail(e.target.value);
                             setValidationErrors(prev => ({
                               ...prev,
-                              firstName: validation.isValid
+                              email: validation.isValid
                                 ? undefined
                                 : validation.error,
                             }));
                           }
                         }}
                         onBlur={() =>
-                          setTouchedFields(prev =>
-                            new Set(prev).add("firstName")
-                          )
+                          setTouchedFields(prev => new Set(prev).add("email"))
                         }
-                        placeholder="First name"
+                        placeholder="Enter user email"
                         disabled={updating}
-                        aria-invalid={!!displayEditErrors.firstName}
+                        aria-invalid={!!displayEditErrors.email}
                         aria-describedby={
-                          displayEditErrors.firstName
-                            ? "edit-firstName-error"
+                          displayEditErrors.email
+                            ? "edit-email-error"
                             : undefined
                         }
                       />
-                      {displayEditErrors.firstName && (
+                      {displayEditErrors.email && (
                         <p
-                          id="edit-firstName-error"
+                          id="edit-email-error"
                           className="text-xs text-destructive mt-1"
                         >
-                          {displayEditErrors.firstName}
+                          {displayEditErrors.email}
                         </p>
                       )}
                     </div>
+
                     <div className="space-y-2">
-                      <Label htmlFor="edit-lastName">Last Name *</Label>
+                      <Label htmlFor="edit-phone">Phone Number</Label>
                       <Input
-                        id="edit-lastName"
-                        value={editingUser.lastName}
+                        id="edit-phone"
+                        type="tel"
+                        value={editingUser.phone}
                         onChange={e => {
                           setEditingUser(prev =>
-                            prev ? { ...prev, lastName: e.target.value } : null
+                            prev ? { ...prev, phone: e.target.value } : null
                           );
-                          if (validationErrors.lastName) {
-                            const validation = validateName(e.target.value);
+                          if (validationErrors.phone) {
+                            const validation = validatePhoneOptional(
+                              e.target.value
+                            );
                             setValidationErrors(prev => ({
                               ...prev,
-                              lastName: validation.isValid
+                              phone: validation.isValid
                                 ? undefined
                                 : validation.error,
                             }));
                           }
                         }}
                         onBlur={() =>
-                          setTouchedFields(prev =>
-                            new Set(prev).add("lastName")
-                          )
+                          setTouchedFields(prev => new Set(prev).add("phone"))
                         }
-                        placeholder="Last name"
+                        placeholder="Enter phone number"
                         disabled={updating}
-                        aria-invalid={!!displayEditErrors.lastName}
+                        aria-invalid={!!displayEditErrors.phone}
                         aria-describedby={
-                          displayEditErrors.lastName
-                            ? "edit-lastName-error"
+                          displayEditErrors.phone
+                            ? "edit-phone-error"
                             : undefined
                         }
                       />
-                      {displayEditErrors.lastName && (
+                      {displayEditErrors.phone && (
                         <p
-                          id="edit-lastName-error"
+                          id="edit-phone-error"
                           className="text-xs text-destructive mt-1"
                         >
-                          {displayEditErrors.lastName}
+                          {displayEditErrors.phone}
                         </p>
                       )}
                     </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-email">Email *</Label>
-                    <Input
-                      id="edit-email"
-                      type="email"
-                      value={editingUser.email}
-                      onChange={e => {
-                        setEditingUser(prev =>
-                          prev ? { ...prev, email: e.target.value } : null
-                        );
-                        if (validationErrors.email) {
-                          const validation = validateEmail(e.target.value);
-                          setValidationErrors(prev => ({
-                            ...prev,
-                            email: validation.isValid
-                              ? undefined
-                              : validation.error,
-                          }));
-                        }
-                      }}
-                      onBlur={() =>
-                        setTouchedFields(prev => new Set(prev).add("email"))
-                      }
-                      placeholder="Enter user email"
-                      disabled={updating}
-                      aria-invalid={!!displayEditErrors.email}
-                      aria-describedby={
-                        displayEditErrors.email ? "edit-email-error" : undefined
-                      }
-                    />
-                    {displayEditErrors.email && (
-                      <p
-                        id="edit-email-error"
-                        className="text-xs text-destructive mt-1"
-                      >
-                        {displayEditErrors.email}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-phone">Phone Number</Label>
-                    <Input
-                      id="edit-phone"
-                      type="tel"
-                      value={editingUser.phone}
-                      onChange={e => {
-                        setEditingUser(prev =>
-                          prev ? { ...prev, phone: e.target.value } : null
-                        );
-                        if (validationErrors.phone) {
-                          const validation = validatePhoneOptional(
-                            e.target.value
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-location">Location</Label>
+                      <Input
+                        id="edit-location"
+                        type="text"
+                        value={editingUser.location}
+                        onChange={e => {
+                          setEditingUser(prev =>
+                            prev ? { ...prev, location: e.target.value } : null
                           );
-                          setValidationErrors(prev => ({
-                            ...prev,
-                            phone: validation.isValid
-                              ? undefined
-                              : validation.error,
-                          }));
-                        }
-                      }}
-                      onBlur={() =>
-                        setTouchedFields(prev => new Set(prev).add("phone"))
-                      }
-                      placeholder="Enter phone number"
-                      disabled={updating}
-                      aria-invalid={!!displayEditErrors.phone}
-                      aria-describedby={
-                        displayEditErrors.phone ? "edit-phone-error" : undefined
-                      }
-                    />
-                    {displayEditErrors.phone && (
-                      <p
-                        id="edit-phone-error"
-                        className="text-xs text-destructive mt-1"
-                      >
-                        {displayEditErrors.phone}
-                      </p>
-                    )}
-                  </div>
+                        }}
+                        placeholder="Enter location (optional)"
+                        disabled={updating}
+                      />
+                    </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-location">Location</Label>
-                    <Input
-                      id="edit-location"
-                      type="text"
-                      value={editingUser.location}
-                      onChange={e => {
-                        setEditingUser(prev =>
-                          prev ? { ...prev, location: e.target.value } : null
-                        );
-                      }}
-                      placeholder="Enter location (optional)"
-                      disabled={updating}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-region">Region</Label>
-                    <Select
-                      value={editingUser.region || "none"}
-                      onValueChange={v => {
-                        setEditingUser(prev =>
-                          prev
-                            ? { ...prev, region: v === "none" ? "" : v }
-                            : null
-                        );
-                        setTouchedFields(prev => new Set(prev).add("region"));
-                        if (validationErrors.region) {
-                          setValidationErrors(prev => ({
-                            ...prev,
-                            region: undefined,
-                          }));
-                        }
-                      }}
-                      disabled={updating}
-                    >
-                      <SelectTrigger
-                        id="edit-region"
-                        aria-invalid={!!displayEditErrors.region}
-                        aria-describedby={
-                          displayEditErrors.region
-                            ? "edit-region-error"
-                            : undefined
-                        }
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-region">Region</Label>
+                      <Select
+                        value={editingUser.region || "none"}
+                        onValueChange={v => {
+                          setEditingUser(prev =>
+                            prev
+                              ? { ...prev, region: v === "none" ? "" : v }
+                              : null
+                          );
+                          setTouchedFields(prev => new Set(prev).add("region"));
+                          if (validationErrors.region) {
+                            setValidationErrors(prev => ({
+                              ...prev,
+                              region: undefined,
+                            }));
+                          }
+                        }}
+                        disabled={updating}
                       >
-                        <SelectValue placeholder="Select Region (Optional)" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">
-                          No Region (Optional)
-                        </SelectItem>
-                        <SelectItem value="SOUTH">South</SelectItem>
-                        <SelectItem value="NORTH">North</SelectItem>
-                        <SelectItem value="EAST">East</SelectItem>
-                        <SelectItem value="WEST_1">West 1</SelectItem>
-                        <SelectItem value="WEST_2">West 2</SelectItem>
-                        <SelectItem value="APTOC">APTOC</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {displayEditErrors.region && (
-                      <p
-                        id="edit-region-error"
-                        className="text-xs text-destructive mt-1"
-                      >
-                        {displayEditErrors.region}
-                      </p>
-                    )}
-                  </div>
+                        <SelectTrigger
+                          id="edit-region"
+                          aria-invalid={!!displayEditErrors.region}
+                          aria-describedby={
+                            displayEditErrors.region
+                              ? "edit-region-error"
+                              : undefined
+                          }
+                        >
+                          <SelectValue placeholder="Select Region (Optional)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">
+                            No Region (Optional)
+                          </SelectItem>
+                          <SelectItem value="SOUTH">South</SelectItem>
+                          <SelectItem value="NORTH">North</SelectItem>
+                          <SelectItem value="EAST">East</SelectItem>
+                          <SelectItem value="WEST_1">West 1</SelectItem>
+                          <SelectItem value="WEST_2">West 2</SelectItem>
+                          <SelectItem value="APTOC">APTOC</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {displayEditErrors.region && (
+                        <p
+                          id="edit-region-error"
+                          className="text-xs text-destructive mt-1"
+                        >
+                          {displayEditErrors.region}
+                        </p>
+                      )}
+                    </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-role">Role *</Label>
-                    <Select
-                      value={editingUser.role}
-                      onValueChange={v => {
-                        setEditingUser(prev =>
-                          prev ? { ...prev, role: v } : null
-                        );
-                        // Picking Custom is only half the decision, so go
-                        // straight to the permissions it needs.
-                        if (v === "CUSTOM") setIsPermissionsOpen(true);
-                      }}
-                    >
-                      <SelectTrigger id="edit-role">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="SALES">Sales</SelectItem>
-                        <SelectItem value="ADMIN">Admin</SelectItem>
-                        <SelectItem value="CUSTOM">Custom</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {editingUser.role === "CUSTOM" ? (
-                      <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-subtle px-3 py-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-role">Role *</Label>
+                      <Select
+                        value={editingUser.role}
+                        onValueChange={v => {
+                          setEditingUser(prev =>
+                            prev ? { ...prev, role: v } : null
+                          );
+
+                          if (v === "CUSTOM") setIsPermissionsOpen(true);
+                        }}
+                      >
+                        <SelectTrigger id="edit-role">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="SALES">Sales</SelectItem>
+                          <SelectItem value="ADMIN">Admin</SelectItem>
+                          <SelectItem value="CUSTOM">Custom</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {editingUser.role === "CUSTOM" ? (
+                        <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-subtle px-3 py-2">
+                          <p className="text-xs text-muted-foreground">
+                            <span className="font-semibold tabular-nums text-foreground">
+                              {editingUser.permissions.length}
+                            </span>{" "}
+                            permission
+                            {editingUser.permissions.length === 1
+                              ? ""
+                              : "s"}{" "}
+                            granted
+                          </p>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setIsPermissionsOpen(true)}
+                          >
+                            <ShieldCheck className="size-4" />
+                            Edit permissions
+                          </Button>
+                        </div>
+                      ) : (
                         <p className="text-xs text-muted-foreground">
-                          <span className="font-semibold tabular-nums text-foreground">
-                            {editingUser.permissions.length}
-                          </span>{" "}
-                          permission
-                          {editingUser.permissions.length === 1 ? "" : "s"}{" "}
-                          granted
+                          {editingUser.role === "ADMIN"
+                            ? "Admins hold every permission, including user management."
+                            : "Sales holds the standard pipeline permissions."}
                         </p>
+                      )}
+                    </div>
+
+                    <div className="space-y-2 border-t pt-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Account actions
+                      </p>
+                      <div className="flex flex-wrap gap-2">
                         <Button
                           type="button"
                           variant="outline"
-                          onClick={() => setIsPermissionsOpen(true)}
+                          disabled={resending || updating}
+                          onClick={handleResendCredentials}
                         >
-                          <ShieldCheck className="size-4" />
-                          Edit permissions
+                          <Mail
+                            className={`size-4 ${resending ? "animate-pulse" : ""}`}
+                          />
+                          {resending ? "Sending…" : "Resend verification email"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="text-error-foreground hover:bg-error-surface"
+                          disabled={updating || deletingUser}
+                          onClick={() => setIsSingleDeleteOpen(true)}
+                        >
+                          <Trash2 className="size-4" />
+                          Delete user
                         </Button>
                       </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        {editingUser.role === "ADMIN"
-                          ? "Admins hold every permission, including user management."
-                          : "Sales holds the standard pipeline permissions."}
+                      <p className="text-xs leading-4 text-muted-foreground">
+                        Resending revokes the current password and sessions,
+                        then sends password-setup instructions. No password is
+                        emailed.
                       </p>
-                    )}
-                  </div>
-
-                  {/* Account actions live below the fields so they read as
-                      separate from "save my edits". */}
-                  <div className="space-y-2 border-t pt-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Account actions
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={resending || updating}
-                        onClick={handleResendCredentials}
-                      >
-                        <Mail
-                          className={`size-4 ${resending ? "animate-pulse" : ""}`}
-                        />
-                        {resending ? "Sending…" : "Resend verification email"}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="text-error-foreground hover:bg-error-surface"
-                        disabled={updating || deletingUser}
-                        onClick={() => setIsSingleDeleteOpen(true)}
-                      >
-                        <Trash2 className="size-4" />
-                        Delete user
-                      </Button>
                     </div>
-                    <p className="text-xs leading-4 text-muted-foreground">
-                      Resending issues a new password and emails it. The old one
-                      stops working immediately.
-                    </p>
                   </div>
-                </div>
-              )}
+                )}
+              </DialogBody>
 
               <DialogFooter>
                 <Button
@@ -1844,7 +1799,18 @@ export default function UserManagementPage() {
             </DialogContent>
           </Dialog>
 
-          {/* Custom-role permission picker, shared by the edit flow. */}
+          <PermissionsDialog
+            open={isCreatePermissionsOpen}
+            onOpenChange={setIsCreatePermissionsOpen}
+            subjectName={
+              `${newUser.firstName} ${newUser.lastName}`.trim() || "New user"
+            }
+            value={newUser.permissions}
+            onSave={permissions =>
+              setNewUser(prev => ({ ...prev, permissions }))
+            }
+          />
+
           <PermissionsDialog
             open={isPermissionsOpen}
             onOpenChange={setIsPermissionsOpen}
@@ -1855,7 +1821,6 @@ export default function UserManagementPage() {
             }
           />
 
-          {/* Single-user delete, confirmed before it runs. */}
           <ConfirmationDialog
             open={isSingleDeleteOpen}
             onOpenChange={setIsSingleDeleteOpen}
@@ -1866,7 +1831,6 @@ export default function UserManagementPage() {
             variant="destructive"
           />
 
-          {/* Bulk Delete Confirmation Modal */}
           <ConfirmationDialog
             open={isDeleteModalOpen}
             onOpenChange={setIsDeleteModalOpen}
@@ -1877,7 +1841,6 @@ export default function UserManagementPage() {
             variant="destructive"
           />
 
-          {/* Import Users Modal */}
           <Dialog
             open={isImportModalOpen}
             onOpenChange={open => {
@@ -1887,7 +1850,7 @@ export default function UserManagementPage() {
               }
             }}
           >
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-2xl gap-0 overflow-hidden">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <FileSpreadsheet className="w-5 h-5" />
@@ -1900,124 +1863,124 @@ export default function UserManagementPage() {
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="space-y-4">
-                {/* Download Template Buttons */}
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => handleDownloadTemplate("xlsx")}
-                    className="text-success-foreground border-success-border hover:bg-success-surface"
-                  >
-                    <FileSpreadsheet className="w-4 h-4" />
-                    Excel Template
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => handleDownloadTemplate("csv")}
-                    className="text-info-foreground border-info-border hover:bg-info-surface"
-                  >
-                    <FileSpreadsheet className="w-4 h-4" />
-                    CSV Template
-                  </Button>
-                </div>
-
-                {/* File Upload */}
-                <div className="border-2 border-dashed border-border rounded-lg p-4 text-center hover:border-input transition-colors">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".csv,.xlsx"
-                    onChange={handleFileChange}
-                    className="hidden"
-                    id="file-upload"
-                    disabled={importing}
-                  />
-                  <label
-                    htmlFor="file-upload"
-                    className="cursor-pointer flex flex-col items-center gap-2"
-                  >
-                    <Upload className="w-8 h-8 text-muted-foreground" />
-                    <span className="text-sm text-text-secondary">
-                      {importFile ? (
-                        <span className="text-success-foreground font-medium">
-                          {importFile.name}
-                        </span>
-                      ) : (
-                        "Click to upload file"
-                      )}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      Supported formats: .csv, .xlsx
-                    </span>
-                  </label>
-                </div>
-
-                {/* Template Info */}
-                <div className="bg-info-surface border border-info-border rounded-lg p-4 text-sm">
-                  <p className="font-semibold text-info-foreground mb-2">
-                    File Format:
-                  </p>
-                  <code className="text-xs text-info-foreground block bg-info-surface p-2 rounded">
-                    First Name, Last Name, Email, Phone, Role, Region
-                  </code>
-                  <p className="text-info-foreground mt-2 text-xs">
-                    • Role options: SALES, ADMIN (default: SALES)
-                    <br />
-                    • Region options: SOUTH, NORTH, EAST, WEST_1, WEST_2, APTOC
-                    <br />• Download the template for a pre-formatted file with
-                    dropdown lists
-                  </p>
-                </div>
-
-                {/* Import Result */}
-                {importResult && (
-                  <div className="space-y-3">
-                    {importResult.success > 0 && (
-                      <div className="flex items-center gap-2 text-success-foreground bg-success-surface p-3 rounded-lg">
-                        <CheckCircle2 className="w-5 h-5" />
-                        <span>
-                          {importResult.success} user(s) imported successfully
-                        </span>
-                      </div>
-                    )}
-                    {importResult.errors.length > 0 && (
-                      <div className="bg-error-surface border border-error-border rounded-lg p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2 text-error-foreground">
-                            <AlertCircle className="w-5 h-5" />
-                            <span className="font-medium">
-                              {importResult.errors.length} error(s)
-                            </span>
-                          </div>
-                          {importResult.report && (
-                            <Button
-                              variant="outline"
-                              onClick={handleDownloadErrorReport}
-                              className="text-destructive border-error-border hover:bg-error-surface"
-                            >
-                              <FileSpreadsheet className="w-4 h-4 mr-1" />
-                              Download Error Report
-                            </Button>
-                          )}
-                        </div>
-                        <div className="max-h-32 overflow-auto text-sm">
-                          {importResult.errors.slice(0, 5).map((err, idx) => (
-                            <p key={idx} className="text-destructive">
-                              Row {err.row} ({err.email || "N/A"}): {err.error}
-                            </p>
-                          ))}
-                          {importResult.errors.length > 5 && (
-                            <p className="text-destructive mt-1 italic">
-                              ... and {importResult.errors.length - 5} more
-                              errors. Download the report for full details.
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    )}
+              <DialogBody>
+                <div className="space-y-4">
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => handleDownloadTemplate("xlsx")}
+                      className="text-success-foreground border-success-border hover:bg-success-surface"
+                    >
+                      <FileSpreadsheet className="w-4 h-4" />
+                      Excel Template
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => handleDownloadTemplate("csv")}
+                      className="text-info-foreground border-info-border hover:bg-info-surface"
+                    >
+                      <FileSpreadsheet className="w-4 h-4" />
+                      CSV Template
+                    </Button>
                   </div>
-                )}
-              </div>
+
+                  <div className="border-2 border-dashed border-border rounded-lg p-4 text-center hover:border-input transition-colors">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".csv,.xlsx"
+                      onChange={handleFileChange}
+                      className="hidden"
+                      id="file-upload"
+                      disabled={importing}
+                    />
+                    <label
+                      htmlFor="file-upload"
+                      className="cursor-pointer flex flex-col items-center gap-2"
+                    >
+                      <Upload className="w-8 h-8 text-muted-foreground" />
+                      <span className="text-sm text-text-secondary">
+                        {importFile ? (
+                          <span className="text-success-foreground font-medium">
+                            {importFile.name}
+                          </span>
+                        ) : (
+                          "Click to upload file"
+                        )}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        Supported formats: .csv, .xlsx
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="bg-info-surface border border-info-border rounded-lg p-4 text-sm">
+                    <p className="font-semibold text-info-foreground mb-2">
+                      File Format:
+                    </p>
+                    <code className="text-xs text-info-foreground block bg-info-surface p-2 rounded">
+                      First Name, Last Name, Email, Phone, Role, Region
+                    </code>
+                    <p className="text-info-foreground mt-2 text-xs">
+                      • Role options: SALES, ADMIN (default: SALES)
+                      <br />
+                      • Region options: SOUTH, NORTH, EAST, WEST_1, WEST_2,
+                      APTOC
+                      <br />• Download the template for a pre-formatted file
+                      with dropdown lists
+                    </p>
+                  </div>
+
+                  {importResult && (
+                    <div className="space-y-3">
+                      {importResult.success > 0 && (
+                        <div className="flex items-center gap-2 text-success-foreground bg-success-surface p-3 rounded-lg">
+                          <CheckCircle2 className="w-5 h-5" />
+                          <span>
+                            {importResult.success} user(s) imported successfully
+                          </span>
+                        </div>
+                      )}
+                      {importResult.errors.length > 0 && (
+                        <div className="bg-error-surface border border-error-border rounded-lg p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2 text-error-foreground">
+                              <AlertCircle className="w-5 h-5" />
+                              <span className="font-medium">
+                                {importResult.errors.length} error(s)
+                              </span>
+                            </div>
+                            {importResult.report && (
+                              <Button
+                                variant="outline"
+                                onClick={handleDownloadErrorReport}
+                                className="text-destructive border-error-border hover:bg-error-surface"
+                              >
+                                <FileSpreadsheet className="w-4 h-4 mr-1" />
+                                Download Error Report
+                              </Button>
+                            )}
+                          </div>
+                          <div className="max-h-32 overflow-auto text-sm">
+                            {importResult.errors.slice(0, 5).map((err, idx) => (
+                              <p key={idx} className="text-destructive">
+                                Row {err.row} ({err.email || "N/A"}):{" "}
+                                {err.error}
+                              </p>
+                            ))}
+                            {importResult.errors.length > 5 && (
+                              <p className="text-destructive mt-1 italic">
+                                ... and {importResult.errors.length - 5} more
+                                errors. Download the report for full details.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </DialogBody>
 
               <DialogFooter>
                 <Button

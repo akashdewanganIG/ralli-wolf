@@ -1,5 +1,5 @@
--- Currency is a required workspace preference, so its reference data must be
--- available after migrations alone (without running the destructive demo seed).
+
+
 INSERT INTO "currencies" ("code", "name", "symbol", "country")
 VALUES
   ('USD', 'US Dollar', '$', 'United States'),

@@ -6,37 +6,22 @@ import {
 } from "@prisma/client";
 import { prisma } from "@repo/db";
 
-import { ZERO, roundMoney, toDecimal } from "../supplyChain/decimal.js";
+import {
+  ZERO,
+  requirePositive,
+  roundMoney,
+  toDecimal,
+} from "../supplyChain/decimal.js";
 import { DomainError, NotFoundError } from "../supplyChain/errors.js";
 import {
   SEQUENCE_KEYS,
   nextDocumentNumber,
 } from "../supplyChain/numbering.service.js";
 
-/**
- * Money movement for the finance module.
- *
- * Two rules hold everywhere in here:
- *
- * 1. `amountPaid` on an invoice is never written directly. It is recomputed
- *    from that invoice's allocations inside the same transaction that changes
- *    them, so the balance can never drift from the payments that justify it.
- * 2. Status follows the numbers. An invoice is PAID when nothing is
- *    outstanding and PARTIALLY_PAID when something has been applied — the
- *    caller does not get to assert a status that contradicts the ledger.
- */
-
-/** Statuses that mean the invoice is settled or abandoned. */
 const CLOSED: InvoiceStatus[] = ["PAID", "CANCELLED", "WRITTEN_OFF"];
 
 export type InvoiceSide = "SUPPLIER" | "CUSTOMER";
 
-/**
- * Supplier and customer invoices are separate tables with separate Prisma
- * delegates, but every operation in here touches only the columns the two have
- * in common. This is the shape of that overlap, so the two delegates can be
- * used through one variable without discarding type-checking altogether.
- */
 type InvoiceDelegate = {
   findUnique(args: {
     where: { id: number };
@@ -48,18 +33,6 @@ type InvoiceDelegate = {
   }): Promise<unknown>;
 };
 
-/**
- * Serialise every payment that touches one invoice.
- *
- * Checking the outstanding balance and then writing an allocation is a
- * read-modify-write, and it is not safe on its own: two payments can both read
- * 10,000 outstanding, both decide they fit, and both commit — paying a
- * supplier twice. A transaction-scoped advisory lock makes the second wait for
- * the first to commit, and Postgres releases it on commit or rollback.
- *
- * The first key separates the two invoice tables so that supplier invoice 7
- * and customer invoice 7 do not contend with each other.
- */
 const LOCK_NAMESPACE: Record<InvoiceSide, number> = {
   SUPPLIER: 0x5f10,
   CUSTOMER: 0x5f20,
@@ -73,7 +46,6 @@ async function lockInvoice(
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE[side]}::int, ${invoiceId}::int)`;
 }
 
-/** Both delegates satisfy {@link InvoiceDelegate}; TypeScript cannot see it. */
 function invoiceDelegate(
   tx: Prisma.TransactionClient,
   side: InvoiceSide
@@ -83,10 +55,6 @@ function invoiceDelegate(
     : tx.customerInvoice) as unknown as InvoiceDelegate;
 }
 
-/**
- * Recomputes an invoice's paid amount and status from its allocations.
- * Runs inside the caller's transaction so the two can never disagree.
- */
 async function refreshInvoice(
   tx: Prisma.TransactionClient,
   side: InvoiceSide,
@@ -111,9 +79,7 @@ async function refreshInvoice(
   if (!invoice) throw new NotFoundError("Invoice");
 
   const total = toDecimal(invoice.totalAmount, "totalAmount");
-  // A cancelled or written-off invoice keeps that status even if money was
-  // applied before it was closed; reopening is a deliberate act, not a
-  // side effect of recalculation.
+
   let status: InvoiceStatus = invoice.status;
   if (invoice.status !== "CANCELLED" && invoice.status !== "WRITTEN_OFF") {
     if (paid.greaterThanOrEqualTo(total) && total.greaterThan(0)) {
@@ -124,8 +90,6 @@ async function refreshInvoice(
       invoice.status === "PAID" ||
       invoice.status === "PARTIALLY_PAID"
     ) {
-      // Allocations were removed — fall back to approved rather than draft,
-      // because an invoice that was being paid had already been approved.
       status = "APPROVED";
     }
   }
@@ -138,7 +102,6 @@ async function refreshInvoice(
   return { paid, total, outstanding: roundMoney(total.minus(paid)), status };
 }
 
-/** Outstanding balance on one invoice. */
 export function outstandingOf(invoice: {
   totalAmount: Prisma.Decimal | number | string;
   amountPaid: Prisma.Decimal | number | string;
@@ -157,13 +120,51 @@ export type AllocationInput = {
   amount: Prisma.Decimal | number | string;
 };
 
-/**
- * Records a payment and applies it to invoices.
- *
- * Validates before writing anything: over-allocating a payment, or applying
- * more to an invoice than it still owes, fails the whole call rather than
- * leaving a half-applied payment behind.
- */
+export type NormalizedPaymentAllocation = {
+  side: InvoiceSide;
+  invoiceId: number;
+  amount: Prisma.Decimal;
+};
+
+export function normalizePaymentAllocations(
+  input: readonly AllocationInput[]
+): NormalizedPaymentAllocation[] {
+  const grouped = new Map<string, NormalizedPaymentAllocation>();
+
+  input.forEach((line, index) => {
+    const hasSupplier = line.supplierInvoiceId !== undefined;
+    const hasCustomer = line.customerInvoiceId !== undefined;
+    if (hasSupplier === hasCustomer) {
+      throw new DomainError(
+        `Allocation ${index + 1} must name exactly one supplier or customer invoice.`
+      );
+    }
+
+    const side: InvoiceSide = hasSupplier ? "SUPPLIER" : "CUSTOMER";
+    const invoiceId = hasSupplier
+      ? line.supplierInvoiceId
+      : line.customerInvoiceId;
+    if (!Number.isSafeInteger(invoiceId) || (invoiceId as number) <= 0) {
+      throw new DomainError(
+        `Allocation ${index + 1} has an invalid invoice id.`
+      );
+    }
+
+    const lineAmount = roundMoney(
+      requirePositive(line.amount, `allocations[${index}].amount`)
+    );
+    const key = `${side}:${invoiceId}`;
+    const existing = grouped.get(key);
+    grouped.set(key, {
+      side,
+      invoiceId: invoiceId as number,
+      amount: existing ? existing.amount.plus(lineAmount) : lineAmount,
+    });
+  });
+
+  return [...grouped.values()];
+}
+
 export async function recordPayment(input: {
   direction: PaymentDirection;
   method: PaymentMethod;
@@ -177,26 +178,31 @@ export async function recordPayment(input: {
   recordedById: number;
   allocations: AllocationInput[];
 }) {
-  const amount = roundMoney(toDecimal(input.amount, "amount"));
-  if (amount.lessThanOrEqualTo(0)) {
-    throw new DomainError("A payment must be for a positive amount.");
+  const amount = roundMoney(requirePositive(input.amount, "amount"));
+  if (input.supplierId && input.accountId) {
+    throw new DomainError(
+      "A payment cannot belong to both a supplier and a customer account."
+    );
   }
+  if (input.direction === "OUTGOING" && input.accountId) {
+    throw new DomainError(
+      "An outgoing payment cannot name a customer account."
+    );
+  }
+  if (input.direction === "INCOMING" && input.supplierId) {
+    throw new DomainError("An incoming payment cannot name a supplier.");
+  }
+
+  const allocations = normalizePaymentAllocations(input.allocations);
 
   return prisma.$transaction(
     async tx => {
       let allocated = ZERO;
+      let supplierId = input.supplierId ?? null;
+      let accountId = input.accountId ?? null;
 
-      // Lock every invoice this payment touches before reading any balance, in
-      // a fixed order so two multi-invoice payments cannot deadlock on each
-      // other. Nothing below this point can be read stale.
-      const targets = input.allocations
-        .map(line => ({
-          side: (line.supplierInvoiceId
-            ? "SUPPLIER"
-            : "CUSTOMER") as InvoiceSide,
-          id: line.supplierInvoiceId ?? line.customerInvoiceId,
-        }))
-        .filter((t): t is { side: InvoiceSide; id: number } => Boolean(t.id))
+      const targets = allocations
+        .map(line => ({ side: line.side, id: line.invoiceId }))
         .sort((a, b) =>
           a.side === b.side ? a.id - b.id : a.side.localeCompare(b.side)
         );
@@ -204,24 +210,9 @@ export async function recordPayment(input: {
         await lockInvoice(tx, t.side, t.id);
       }
 
-      for (const line of input.allocations) {
-        const lineAmount = roundMoney(
-          toDecimal(line.amount, "allocation amount")
-        );
-        if (lineAmount.lessThanOrEqualTo(0)) {
-          throw new DomainError("Each allocation must be a positive amount.");
-        }
-        const side: InvoiceSide = line.supplierInvoiceId
-          ? "SUPPLIER"
-          : "CUSTOMER";
-        const invoiceId = line.supplierInvoiceId ?? line.customerInvoiceId;
-        if (!invoiceId) {
-          throw new DomainError(
-            "Each allocation must name a supplier or customer invoice."
-          );
-        }
-        // Direction and invoice side must agree, or the ledger says money left
-        // the business to settle something a customer owed us.
+      for (const line of allocations) {
+        const { side, invoiceId, amount: lineAmount } = line;
+
         if (side === "SUPPLIER" && input.direction !== "OUTGOING") {
           throw new DomainError(
             "A supplier invoice can only be settled by an outgoing payment."
@@ -242,6 +233,9 @@ export async function recordPayment(input: {
             amountPaid: true,
             status: true,
             currencyCode: true,
+            ...(side === "SUPPLIER"
+              ? { supplierId: true }
+              : { accountId: true }),
           },
         })) as {
           id: number;
@@ -250,6 +244,8 @@ export async function recordPayment(input: {
           amountPaid: Prisma.Decimal;
           status: InvoiceStatus;
           currencyCode: string;
+          supplierId?: number;
+          accountId?: number;
         } | null;
         if (!invoice) throw new NotFoundError("Invoice");
         if (
@@ -264,6 +260,31 @@ export async function recordPayment(input: {
           throw new DomainError(
             `${invoice.invoiceNumber} is in ${invoice.currencyCode}; this payment is in ${input.currencyCode}. Settle it in its own currency.`
           );
+        }
+        if (side === "SUPPLIER") {
+          if (!invoice.supplierId) {
+            throw new DomainError(
+              `${invoice.invoiceNumber} has no supplier association.`
+            );
+          }
+          if (supplierId !== null && supplierId !== invoice.supplierId) {
+            throw new DomainError(
+              `${invoice.invoiceNumber} belongs to a different supplier.`
+            );
+          }
+          supplierId = invoice.supplierId;
+        } else {
+          if (!invoice.accountId) {
+            throw new DomainError(
+              `${invoice.invoiceNumber} has no customer account association.`
+            );
+          }
+          if (accountId !== null && accountId !== invoice.accountId) {
+            throw new DomainError(
+              `${invoice.invoiceNumber} belongs to a different customer account.`
+            );
+          }
+          accountId = invoice.accountId;
         }
         const left = outstandingOf(invoice);
         if (lineAmount.greaterThan(left)) {
@@ -280,9 +301,17 @@ export async function recordPayment(input: {
           `Allocations total ${allocated.toFixed(2)}, which is more than the payment of ${amount.toFixed(2)}.`
         );
       }
+      if (input.direction === "OUTGOING" && supplierId === null) {
+        throw new DomainError(
+          "An outgoing payment must identify the supplier receiving it."
+        );
+      }
+      if (input.direction === "INCOMING" && accountId === null) {
+        throw new DomainError(
+          "An incoming payment must identify the customer account paying it."
+        );
+      }
 
-      // Drawn inside this transaction so a rejected payment does not consume a
-      // payment number.
       const paymentNumber = await nextDocumentNumber(tx, SEQUENCE_KEYS.PAYMENT);
 
       const payment = await tx.payment.create({
@@ -295,26 +324,23 @@ export async function recordPayment(input: {
           currencyCode: input.currencyCode,
           amount,
           unallocated: roundMoney(amount.minus(allocated)),
-          supplierId: input.supplierId ?? null,
-          accountId: input.accountId ?? null,
+          supplierId,
+          accountId,
           notes: input.notes ?? null,
           recordedById: input.recordedById,
         },
       });
 
-      for (const line of input.allocations) {
+      for (const line of allocations) {
         await tx.paymentAllocation.create({
           data: {
             paymentId: payment.id,
-            supplierInvoiceId: line.supplierInvoiceId ?? null,
-            customerInvoiceId: line.customerInvoiceId ?? null,
-            amount: roundMoney(toDecimal(line.amount, "allocation amount")),
+            supplierInvoiceId: line.side === "SUPPLIER" ? line.invoiceId : null,
+            customerInvoiceId: line.side === "CUSTOMER" ? line.invoiceId : null,
+            amount: line.amount,
           },
         });
-        if (line.supplierInvoiceId)
-          await refreshInvoice(tx, "SUPPLIER", line.supplierInvoiceId);
-        if (line.customerInvoiceId)
-          await refreshInvoice(tx, "CUSTOMER", line.customerInvoiceId);
+        await refreshInvoice(tx, line.side, line.invoiceId);
       }
 
       return tx.payment.findUnique({
@@ -331,14 +357,11 @@ export async function recordPayment(input: {
         },
       });
     },
-    // Payments on the same invoice queue behind one another on the advisory
-    // lock. The default 5s window is not enough for a queue of them, and a
-    // legitimate payment timing out is as bad as one being lost.
+
     { timeout: 60_000, maxWait: 10_000 }
   );
 }
 
-/** Ageing buckets, in days overdue. */
 export const AGEING_BUCKETS = [
   { key: "current", label: "Not due", from: -Infinity, to: 0 },
   { key: "d1_30", label: "1–30 days", from: 1, to: 30 },

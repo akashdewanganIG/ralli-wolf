@@ -1,24 +1,17 @@
 import { PrismaClient } from "@prisma/client";
 import { seedSupplyChainReference } from "./seed-supply-chain.js";
+import bcrypt from "bcryptjs";
+import { requireDemoSeedPassword } from "./seed-safety.js";
 
-/**
- * Non-destructive, repeatable demo data for every user-facing application
- * module. All natural identifiers use the DEMO prefix so this data remains
- * distinguishable from customer records and can be safely refreshed.
- */
 const prisma = new PrismaClient({
   datasources: {
     db: { url: process.env.DIRECT_URL || process.env.DATABASE_URL },
   },
 });
 
-// The delegates share the same CRUD shape but Prisma intentionally generates
-// a different generic type for each model. Keeping that plumbing dynamic makes
-// this seed readable while all field names remain checked at runtime by Prisma.
 const db = prisma as any;
 const DEMO = "[DEMO]";
-const PASSWORD_HASH =
-  "$2a$10$zkwJCafrQjcLn2.Z1bJA.OKYuQ/RVFL6w2pKEFWY5387H/ET4zmOu"; // admin123
+let passwordHash = "";
 
 const now = new Date();
 const daysFromNow = (days: number) =>
@@ -39,12 +32,23 @@ async function ensure(
 async function seedUsersAndCrm() {
   const admin = await db.user.upsert({
     where: { email: "demo.admin@ralliwolf.example" },
-    update: { deletedAt: null },
+    update: {
+      firstName: "Demo",
+      lastName: "Administrator",
+      passwordHash,
+      role: "ADMIN",
+      phone: "9000000101",
+      countryCode: "91",
+      location: "Mumbai",
+      deletedAt: null,
+      deletedBy: null,
+      sessionVersion: { increment: 1 },
+    },
     create: {
       email: "demo.admin@ralliwolf.example",
       firstName: "Demo",
       lastName: "Administrator",
-      passwordHash: PASSWORD_HASH,
+      passwordHash,
       role: "ADMIN",
       phone: "9000000101",
       countryCode: "91",
@@ -53,12 +57,24 @@ async function seedUsersAndCrm() {
   });
   const sales = await db.user.upsert({
     where: { email: "demo.sales@ralliwolf.example" },
-    update: { deletedAt: null },
+    update: {
+      firstName: "Aarav",
+      lastName: "Sharma",
+      passwordHash,
+      role: "SALES",
+      phone: "9000000102",
+      countryCode: "91",
+      region: "WEST_1",
+      location: "Mumbai",
+      deletedAt: null,
+      deletedBy: null,
+      sessionVersion: { increment: 1 },
+    },
     create: {
       email: "demo.sales@ralliwolf.example",
       firstName: "Aarav",
       lastName: "Sharma",
-      passwordHash: PASSWORD_HASH,
+      passwordHash,
       role: "SALES",
       phone: "9000000102",
       countryCode: "91",
@@ -476,13 +492,12 @@ async function seedCampaigns(context: any) {
   );
   await db.campaignChannel.upsert({
     where: {
-      campaignId_channelType_externalId: {
-        campaignId: emailCampaign.id,
+      channelType_externalId: {
         channelType: "EMAIL",
         externalId: "DEMO-EMAIL-LAUNCH-2026",
       },
     },
-    update: {},
+    update: { campaignId: emailCampaign.id },
     create: {
       campaignId: emailCampaign.id,
       channelType: "EMAIL",
@@ -507,13 +522,12 @@ async function seedCampaigns(context: any) {
   );
   await db.campaignChannel.upsert({
     where: {
-      campaignId_channelType_externalId: {
-        campaignId: whatsAppCampaign.id,
+      channelType_externalId: {
         channelType: "WHATSAPP",
         externalId: "DEMO-WA-FOLLOWUP-2026",
       },
     },
-    update: {},
+    update: { campaignId: whatsAppCampaign.id },
     create: {
       campaignId: whatsAppCampaign.id,
       channelType: "WHATSAPP",
@@ -2249,6 +2263,7 @@ async function printCoverage() {
 }
 
 async function main() {
+  passwordHash = await bcrypt.hash(requireDemoSeedPassword(), 12);
   console.log(
     "🌱 Seeding non-destructive demo data for all application sections..."
   );
@@ -2265,8 +2280,9 @@ async function main() {
   console.log(
     "✅ Real demo records are present across every user-facing module."
   );
-  console.log("   Demo login: demo.admin@ralliwolf.example / admin123");
-  console.log("   Sales login: demo.sales@ralliwolf.example / admin123");
+  console.log("   Demo login: demo.admin@ralliwolf.example");
+  console.log("   Sales login: demo.sales@ralliwolf.example");
+  console.log("   Password: configured through DEMO_SEED_PASSWORD");
 }
 
 main()

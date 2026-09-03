@@ -21,7 +21,6 @@ export const OPPORTUNITY_TYPES = [
 
 export type OpportunityType = (typeof OPPORTUNITY_TYPES)[number];
 
-// Lead Source is a string? in the doc, but you asked for an enum-like dropdown.
 export const LEAD_SOURCES = [
   "WEBSITE",
   "REFERRAL",

@@ -7,15 +7,6 @@ import type { IconComponent } from "@repo/ui/icons";
 import { InfoHint } from "@repo/ui/components/ui/info-hint";
 import { cn } from "@repo/ui/lib/utils";
 
-/**
- * Semantic weight of a metric.
- *
- * This picks the hatch colour and nothing else — the card surface, border,
- * radius, and type are identical across every tone. That is deliberate: the
- * previous cards tinted their whole background per tone, so a dashboard with
- * one healthy, one warning, and one critical figure read as three unrelated
- * components rather than one row of comparable numbers.
- */
 export type MetricTone =
   | "neutral"
   | "positive"
@@ -23,20 +14,20 @@ export type MetricTone =
   | "warning"
   | "info";
 
-const TONE_HATCH: Record<MetricTone, string> = {
-  neutral: "metric-hatch-neutral",
-  positive: "metric-hatch-positive",
-  critical: "metric-hatch-critical",
-  warning: "metric-hatch-warning",
-  info: "metric-hatch-info",
+/** Ordinary cards stay plain; only a card carrying a state gets the wash. */
+const TONE_TINT: Record<MetricTone, string> = {
+  neutral: "",
+  positive: "metric-tint metric-tint-positive",
+  critical: "metric-tint metric-tint-critical",
+  warning: "metric-tint metric-tint-warning",
+  info: "metric-tint metric-tint-info",
 };
 
-/** Only the icon chip and the hint pick up the tone; the value stays neutral. */
 const TONE_ICON: Record<MetricTone, string> = {
   neutral: "bg-secondary text-muted-foreground",
   positive: "bg-success-surface text-success-foreground",
   critical: "bg-error-surface text-error-foreground",
-  warning: "bg-warning-surface text-warning-foreground",
+  warning: "bg-error-surface text-error-foreground",
   info: "bg-info-surface text-info-foreground",
 };
 
@@ -44,16 +35,16 @@ const TONE_HINT: Record<MetricTone, string> = {
   neutral: "text-muted-foreground",
   positive: "text-success-foreground",
   critical: "text-error-foreground",
-  warning: "text-warning-foreground",
+  warning: "text-error-foreground",
   info: "text-info-foreground",
 };
 
 export interface MetricCardProps {
   label: string;
   value: React.ReactNode;
-  /** Short qualifier under the value, e.g. "3 overdue orders". */
+
   hint?: React.ReactNode;
-  /** Longer explanation, shown through the shared info tooltip. */
+
   description?: React.ReactNode;
   tone?: MetricTone;
   icon?: IconComponent;
@@ -61,13 +52,6 @@ export interface MetricCardProps {
   className?: string;
 }
 
-/**
- * One number, its label, and an optional qualifier.
- *
- * The tone shows as a diagonal hatch drawn into the top-right of the card and
- * masked out before it reaches the text, so the figure always sits on the plain
- * neutral surface at full contrast while the corner still carries the signal.
- */
 export function MetricCard({
   label,
   value,
@@ -126,8 +110,7 @@ export function MetricCard({
   );
 
   const shell = cn(
-    "metric-hatch",
-    TONE_HATCH[tone],
+    TONE_TINT[tone],
     "flex min-w-0 flex-col rounded-xl border border-border bg-card p-3.5 shadow-sm shadow-foreground/[0.02]",
     "transition-[background-color,border-color,box-shadow] duration-150",
     interactive &&

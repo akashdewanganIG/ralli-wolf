@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   ErrorBanner,
   PageHeader,
@@ -11,13 +11,13 @@ import {
   SimpleTable,
   StatCard,
 } from "@/components/supply-chain/shared";
-import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
-import { useInventoryValuation } from "@/hooks/useSupplyChain";
+import { WarehouseFilter } from "@/components/supply-chain/warehouse-filter";
+import { useInventoryValuation } from "@/hooks/use-supply-chain";
 import { formatMoney, formatQuantity, humanizeEnum } from "@/lib/utils/decimal";
-import type { ItemType } from "@/lib/api/types/supplyChain";
+import type { ItemType } from "@/lib/api/types/supply-chain";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { Tag } from "@repo/ui/components/ui/tag";
-import { DataTransfer } from "@/components/data-transfer/DataTransfer";
+import { DataTransfer } from "@/components/data-transfer/data-transfer";
 
 const ITEM_TYPES: ItemType[] = [
   "FINISHED_GOOD",

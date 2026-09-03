@@ -1,0 +1,136 @@
+"use client";
+
+import { useEffect, useRef } from "react";
+
+export default function ParticleNetwork({
+  className = "",
+  opacity = 0.4,
+}: {
+  className?: string;
+  opacity?: number;
+}) {
+  const ref = useCanvasNetwork();
+  return (
+    <canvas
+      ref={ref}
+      aria-hidden="true"
+      className={`pointer-events-none absolute inset-0 h-full w-full ${className}`}
+      style={{ opacity }}
+    />
+  );
+}
+
+function useCanvasNetwork() {
+  const ref = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return undefined;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return undefined;
+    const prefersReducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)"
+    ).matches;
+
+    let width = 0;
+    let height = 0;
+    let particles: {
+      x: number;
+      y: number;
+      vx: number;
+      vy: number;
+      r: number;
+    }[] = [];
+    let rafId: number | null = null;
+
+    const DENSITY = 9000;
+    const LINK_DIST = 130;
+    const SPEED = 0.18;
+
+    function resize() {
+      if (!canvas || !ctx) return;
+      const parent = canvas.parentElement;
+      if (!parent) return;
+      const rect = parent.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      width = rect.width;
+      height = rect.height;
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      const count = Math.max(
+        18,
+        Math.min(90, Math.floor((width * height) / DENSITY))
+      );
+      particles = Array.from({ length: count }, () => ({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        vx: (Math.random() - 0.5) * SPEED,
+        vy: (Math.random() - 0.5) * SPEED,
+        r: Math.random() < 0.25 ? 2.2 : 1.3,
+      }));
+    }
+
+    function step() {
+      if (!ctx) return;
+      ctx.clearRect(0, 0, width, height);
+
+      for (const p of particles) {
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.x < 0 || p.x > width) p.vx *= -1;
+        if (p.y < 0 || p.y > height) p.vy *= -1;
+      }
+
+      for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+          const a = particles[i];
+          const b = particles[j];
+          if (!a || !b) continue;
+          const dx = a.x - b.x;
+          const dy = a.y - b.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < LINK_DIST) {
+            ctx.strokeStyle = `rgba(166, 232, 214, ${0.22 * (1 - dist / LINK_DIST)})`;
+            ctx.lineWidth = 0.6;
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+          }
+        }
+      }
+
+      for (const p of particles) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = "#26C6BB";
+        ctx.fill();
+      }
+
+      rafId = requestAnimationFrame(step);
+    }
+
+    resize();
+    if (prefersReducedMotion) {
+      step();
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = null;
+    } else {
+      rafId = requestAnimationFrame(step);
+    }
+
+    const onResize = () => resize();
+    window.addEventListener("resize", onResize);
+
+    return () => {
+      window.removeEventListener("resize", onResize);
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, []);
+
+  return ref;
+}

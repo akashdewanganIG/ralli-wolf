@@ -15,6 +15,7 @@ import { Card, CardContent } from "@repo/ui/components/ui/card";
 import { Checkbox } from "@repo/ui/components/ui/checkbox";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -49,9 +50,10 @@ import { ProductFilterBadges } from "./product-filter-badges";
 import { TablePageSkeleton } from "./skeletons";
 
 import { useRouter } from "next/navigation";
-import { ViewCategoriesModal } from "./ViewCategoriesModal";
+import { ViewCategoriesModal } from "./view-categories-modal";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
-import { DataTransfer } from "@/components/data-transfer/DataTransfer";
+import { DataTransfer } from "@/components/data-transfer/data-transfer";
+import { ProductImageGallery } from "@/components/supply-chain/product-image-gallery";
 
 export function ProductManagement() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -70,7 +72,6 @@ export function ProductManagement() {
   const categoryDropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
-  // Filter and search state
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [filters, setFilters] = useState<ProductFilterValues>({
     categoryId: undefined,
@@ -135,19 +136,17 @@ export function ProductManagement() {
     fetchCategories();
   }, [fetchCategories]);
 
-  // Debounce search query to avoid too many API calls
   useEffect(() => {
     const timeoutId = setTimeout(
       () => {
         fetchData();
       },
       searchQuery ? 500 : 0
-    ); // 500ms delay for search, immediate for filters
+    );
 
     return () => clearTimeout(timeoutId);
   }, [fetchData]);
 
-  // Close category dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -214,7 +213,7 @@ export function ProductManagement() {
       return;
     }
 
-    const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB (matches backend limit)
+    const MAX_FILE_SIZE = 5 * 1024 * 1024;
     if (file.size > MAX_FILE_SIZE) {
       toast.error("Product images must be 5MB or smaller.");
       e.target.value = "";
@@ -337,7 +336,6 @@ export function ProductManagement() {
         }
       />
 
-      {/* Products Table */}
       {products.length === 0 && !hasActiveProductFilters(filters) ? (
         <Card>
           <CardContent className="text-center py-12 text-muted-foreground">
@@ -397,17 +395,7 @@ export function ProductManagement() {
                 </div>
               ),
             },
-            // {
-            //   key: "price",
-            //   label: "Price",
-            //   render: (value, product) => (
-            //     <span className="text-muted-foreground py-4">
-            //       {product.price != null
-            //         ? `₹${typeof product.price === 'string' ? parseFloat(product.price).toFixed(2) : product.price.toFixed(2)}`
-            //         : <span className="text-muted-foreground">N/A</span>}
-            //     </span>
-            //   ),
-            // },
+
             {
               key: "component",
               label: "Type",
@@ -485,7 +473,6 @@ export function ProductManagement() {
         />
       )}
 
-      {/* Product Modal */}
       <Dialog
         open={isProductModalOpen}
         onOpenChange={open => {
@@ -495,7 +482,7 @@ export function ProductManagement() {
           }
         }}
       >
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl gap-0 overflow-hidden">
           <DialogHeader>
             <DialogTitle>
               {editingProduct ? "Edit Product" : "Create Product"}
@@ -507,225 +494,234 @@ export function ProductManagement() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            {/* Image Upload */}
-            <div className="space-y-2">
-              <Label>Product Image</Label>
-              <div className="flex items-center gap-4">
-                {imagePreview ? (
-                  <div className="relative">
-                    <img
-                      src={imagePreview}
-                      alt="Preview"
-                      className="w-32 h-32 object-cover rounded border"
-                    />
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      className="absolute -top-2 -right-2"
-                      onClick={handleRemoveImage}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="w-32 h-32 border-2 border-dashed rounded flex items-center justify-center">
-                    <ImageIcon className="h-8 w-8 text-muted-foreground" />
-                  </div>
-                )}
-                <div>
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    className="w-full sm:w-48"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    JPG, PNG, WebP (max 5MB)
+          <DialogBody>
+            <div className="space-y-4">
+              {editingProduct ? (
+                <div className="space-y-2">
+                  <Label>Product Images</Label>
+                  <ProductImageGallery productId={editingProduct.id} />
+                  <p className="text-xs text-muted-foreground">
+                    The first image is used wherever a single product image is
+                    shown.
                   </p>
                 </div>
-              </div>
-            </div>
-
-            {/* Name */}
-            <div className="space-y-2">
-              <Label htmlFor="name">
-                Product Name <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="name"
-                value={productForm.name}
-                onChange={e =>
-                  setProductForm({ ...productForm, name: e.target.value })
-                }
-                placeholder="Enter product name"
-              />
-            </div>
-
-            {/* Code */}
-            <div className="space-y-2">
-              <Label htmlFor="code">
-                Product Code <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="code"
-                value={productForm.code}
-                onChange={e =>
-                  setProductForm({ ...productForm, code: e.target.value })
-                }
-                placeholder="Enter product code"
-              />
-            </div>
-
-            {/* Category - Searchable */}
-            <div className="space-y-2">
-              <Label htmlFor="category">
-                Category <span className="text-destructive">*</span>
-              </Label>
-              <div className="relative" ref={categoryDropdownRef}>
-                <Button
-                  type="button"
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={isCategoryDropdownOpen}
-                  className="w-full justify-between"
-                  onClick={() =>
-                    setIsCategoryDropdownOpen(!isCategoryDropdownOpen)
-                  }
-                >
-                  {productForm.categoryId
-                    ? categories.find(c => c.id === productForm.categoryId)
-                        ?.name || "Select category..."
-                    : "Select category..."}
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-                {isCategoryDropdownOpen && (
-                  <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md">
-                    <div className="p-2 border-b">
-                      <div className="relative">
-                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          placeholder="Search categories..."
-                          value={categorySearchQuery}
-                          onChange={e => setCategorySearchQuery(e.target.value)}
-                          className="pl-8"
-                          onClick={e => e.stopPropagation()}
-                        />
-                      </div>
+              ) : (
+              <div className="space-y-2">
+                <Label>Product Image</Label>
+                <div className="flex items-center gap-4">
+                  {imagePreview ? (
+                    <div className="relative">
+                      <img
+                        src={imagePreview}
+                        alt="Preview"
+                        className="w-32 h-32 object-cover rounded border"
+                      />
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        className="absolute -top-2 -right-2"
+                        onClick={handleRemoveImage}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
                     </div>
-                    <div className="max-h-[12.5rem] overflow-y-auto p-1">
-                      {categories
-                        .filter(category =>
+                  ) : (
+                    <div className="w-32 h-32 border-2 border-dashed rounded flex items-center justify-center">
+                      <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div>
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      className="w-full sm:w-48"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      JPG, PNG, WebP (max 5MB)
+                    </p>
+                  </div>
+                </div>
+              </div>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="name">
+                  Product Name <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="name"
+                  value={productForm.name}
+                  onChange={e =>
+                    setProductForm({ ...productForm, name: e.target.value })
+                  }
+                  placeholder="Enter product name"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="code">
+                  Product Code <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="code"
+                  value={productForm.code}
+                  onChange={e =>
+                    setProductForm({ ...productForm, code: e.target.value })
+                  }
+                  placeholder="Enter product code"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="category">
+                  Category <span className="text-destructive">*</span>
+                </Label>
+                <div className="relative" ref={categoryDropdownRef}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={isCategoryDropdownOpen}
+                    className="w-full justify-between"
+                    onClick={() =>
+                      setIsCategoryDropdownOpen(!isCategoryDropdownOpen)
+                    }
+                  >
+                    {productForm.categoryId
+                      ? categories.find(c => c.id === productForm.categoryId)
+                          ?.name || "Select category..."
+                      : "Select category..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                  {isCategoryDropdownOpen && (
+                    <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md">
+                      <div className="p-2 border-b">
+                        <div className="relative">
+                          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            placeholder="Search categories..."
+                            value={categorySearchQuery}
+                            onChange={e =>
+                              setCategorySearchQuery(e.target.value)
+                            }
+                            className="pl-8"
+                            onClick={e => e.stopPropagation()}
+                          />
+                        </div>
+                      </div>
+                      <div className="max-h-[12.5rem] overflow-y-auto p-1">
+                        {categories
+                          .filter(category =>
+                            category.name
+                              .toLowerCase()
+                              .includes(categorySearchQuery.toLowerCase())
+                          )
+                          .map(category => (
+                            <button
+                              type="button"
+                              key={category.id}
+                              className={`relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring/30 ${
+                                productForm.categoryId === category.id
+                                  ? "bg-accent text-accent-foreground"
+                                  : ""
+                              }`}
+                              onClick={() => {
+                                setProductForm({
+                                  ...productForm,
+                                  categoryId: category.id,
+                                });
+                                setIsCategoryDropdownOpen(false);
+                                setCategorySearchQuery("");
+                              }}
+                              aria-pressed={
+                                productForm.categoryId === category.id
+                              }
+                            >
+                              <Check
+                                className={`mr-2 h-4 w-4 ${
+                                  productForm.categoryId === category.id
+                                    ? "opacity-100"
+                                    : "opacity-0"
+                                }`}
+                              />
+                              {category.name}
+                            </button>
+                          ))}
+                        {categories.filter(category =>
                           category.name
                             .toLowerCase()
                             .includes(categorySearchQuery.toLowerCase())
-                        )
-                        .map(category => (
-                          <button
-                            type="button"
-                            key={category.id}
-                            className={`relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring/30 ${
-                              productForm.categoryId === category.id
-                                ? "bg-accent text-accent-foreground"
-                                : ""
-                            }`}
-                            onClick={() => {
-                              setProductForm({
-                                ...productForm,
-                                categoryId: category.id,
-                              });
-                              setIsCategoryDropdownOpen(false);
-                              setCategorySearchQuery("");
-                            }}
-                            aria-pressed={
-                              productForm.categoryId === category.id
-                            }
-                          >
-                            <Check
-                              className={`mr-2 h-4 w-4 ${
-                                productForm.categoryId === category.id
-                                  ? "opacity-100"
-                                  : "opacity-0"
-                              }`}
-                            />
-                            {category.name}
-                          </button>
-                        ))}
-                      {categories.filter(category =>
-                        category.name
-                          .toLowerCase()
-                          .includes(categorySearchQuery.toLowerCase())
-                      ).length === 0 && (
-                        <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                          No categories found.
-                        </div>
-                      )}
+                        ).length === 0 && (
+                          <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                            No categories found.
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
 
-            {/* Description */}
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={productForm.description}
-                onChange={e =>
-                  setProductForm({
-                    ...productForm,
-                    description: e.target.value,
-                  })
-                }
-                placeholder="Enter product description"
-                rows={4}
-              />
-            </div>
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  value={productForm.description}
+                  onChange={e =>
+                    setProductForm({
+                      ...productForm,
+                      description: e.target.value,
+                    })
+                  }
+                  placeholder="Enter product description"
+                  rows={4}
+                />
+              </div>
 
-            {/* Active Status */}
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="active"
-                checked={productForm.active}
-                onCheckedChange={checked =>
-                  setProductForm({ ...productForm, active: checked === true })
-                }
-              />
-              <div className="grid gap-1.5 leading-none">
-                <Label
-                  htmlFor="active"
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                >
-                  Active
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Product will be visible in Subdealers only when active
-                </p>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="active"
+                  checked={productForm.active}
+                  onCheckedChange={checked =>
+                    setProductForm({ ...productForm, active: checked === true })
+                  }
+                />
+                <div className="grid gap-1.5 leading-none">
+                  <Label
+                    htmlFor="active"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Active
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Product will be visible in Subdealers only when active
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="component"
+                  checked={productForm.component}
+                  onCheckedChange={checked =>
+                    setProductForm({
+                      ...productForm,
+                      component: checked === true,
+                    })
+                  }
+                />
+                <div className="grid gap-1.5 leading-none">
+                  <Label
+                    htmlFor="Component"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Component
+                  </Label>
+                </div>
               </div>
             </div>
-            {/* Active Status */}
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="component"
-                checked={productForm.component}
-                onCheckedChange={checked =>
-                  setProductForm({
-                    ...productForm,
-                    component: checked === true,
-                  })
-                }
-              />
-              <div className="grid gap-1.5 leading-none">
-                <Label
-                  htmlFor="Component"
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                >
-                  Component
-                </Label>
-              </div>
-            </div>
-          </div>
+          </DialogBody>
 
           <DialogFooter>
             <Button
@@ -749,45 +745,46 @@ export function ProductManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* Category Modal */}
       <Dialog open={isCategoryModalOpen} onOpenChange={setIsCategoryModalOpen}>
-        <DialogContent>
+        <DialogContent className="gap-0 overflow-hidden">
           <DialogHeader>
             <DialogTitle>Create Category</DialogTitle>
             <DialogDescription>Add a new product category</DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="categoryName">
-                Category Name <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="categoryName"
-                value={categoryForm.name}
-                onChange={e =>
-                  setCategoryForm({ ...categoryForm, name: e.target.value })
-                }
-                placeholder="Enter category name"
-              />
-            </div>
+          <DialogBody>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="categoryName">
+                  Category Name <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="categoryName"
+                  value={categoryForm.name}
+                  onChange={e =>
+                    setCategoryForm({ ...categoryForm, name: e.target.value })
+                  }
+                  placeholder="Enter category name"
+                />
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="categoryDescription">Description</Label>
-              <Textarea
-                id="categoryDescription"
-                value={categoryForm.description}
-                onChange={e =>
-                  setCategoryForm({
-                    ...categoryForm,
-                    description: e.target.value,
-                  })
-                }
-                placeholder="Enter category description"
-                rows={3}
-              />
+              <div className="space-y-2">
+                <Label htmlFor="categoryDescription">Description</Label>
+                <Textarea
+                  id="categoryDescription"
+                  value={categoryForm.description}
+                  onChange={e =>
+                    setCategoryForm({
+                      ...categoryForm,
+                      description: e.target.value,
+                    })
+                  }
+                  placeholder="Enter category description"
+                  rows={3}
+                />
+              </div>
             </div>
-          </div>
+          </DialogBody>
 
           <DialogFooter>
             <Button

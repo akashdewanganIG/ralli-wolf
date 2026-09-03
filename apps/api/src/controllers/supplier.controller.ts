@@ -7,14 +7,17 @@ import {
   rankSuppliers,
   snapshotSupplierPerformance,
   SCORE_WEIGHTS,
-} from "../services/supplyChain/supplierPerformance.service.js";
+} from "../services/supplyChain/supplier-performance.service.js";
 import { resolveSupplierPrice } from "../services/supplyChain/procurement.service.js";
 import {
   nextDocumentNumber,
   SEQUENCE_KEYS,
 } from "../services/supplyChain/numbering.service.js";
 import { DomainError, NotFoundError } from "../services/supplyChain/errors.js";
-import { toDecimal } from "../services/supplyChain/decimal.js";
+import {
+  requireNonNegative,
+  requirePositive,
+} from "../services/supplyChain/decimal.js";
 import {
   handleSupplyChainError,
   optionalString,
@@ -24,14 +27,15 @@ import {
   parseDateRange,
   parseEnum,
   parseId,
+  parseInteger,
   parseOptionalId,
+  parseOptionalInteger,
   parsePagination,
   requireString,
   requireUserId,
-} from "../utils/supplyChainHttp.js";
+} from "../utils/supply-chain-http.js";
 
 export class SupplierController {
-  /** GET /api/suppliers */
   async list(req: Request, res: Response) {
     const operation = "List suppliers";
     try {
@@ -82,7 +86,6 @@ export class SupplierController {
     }
   }
 
-  /** GET /api/suppliers/:id */
   async getById(req: Request, res: Response) {
     const operation = "Get supplier";
     try {
@@ -125,7 +128,6 @@ export class SupplierController {
     }
   }
 
-  /** POST /api/suppliers */
   async create(req: Request, res: Response) {
     const operation = "Create supplier";
     try {
@@ -158,12 +160,27 @@ export class SupplierController {
             country: optionalString(req.body.country) ?? "India",
             currencyCode: optionalString(req.body.currencyCode) ?? "INR",
             paymentTerms: optionalString(req.body.paymentTerms),
-            creditDays: Number(req.body.creditDays) || 0,
+            creditDays:
+              parseOptionalInteger(
+                req.body.creditDays,
+                "creditDays",
+                0,
+                3_650
+              ) ?? 0,
             incoterms: optionalString(req.body.incoterms),
-            leadTimeDays: Number(req.body.leadTimeDays) || 0,
-            minOrderValue: req.body.minOrderValue
-              ? toDecimal(req.body.minOrderValue, "minOrderValue")
-              : null,
+            leadTimeDays:
+              parseOptionalInteger(
+                req.body.leadTimeDays,
+                "leadTimeDays",
+                0,
+                3_650
+              ) ?? 0,
+            minOrderValue:
+              req.body.minOrderValue === undefined ||
+              req.body.minOrderValue === null ||
+              req.body.minOrderValue === ""
+                ? null
+                : requireNonNegative(req.body.minOrderValue, "minOrderValue"),
             bankName: optionalString(req.body.bankName),
             bankAccountNumber: optionalString(req.body.bankAccountNumber),
             bankIfsc: optionalString(req.body.bankIfsc),
@@ -195,7 +212,6 @@ export class SupplierController {
     }
   }
 
-  /** PUT /api/suppliers/:id */
   async update(req: Request, res: Response) {
     const operation = "Update supplier";
     try {
@@ -207,8 +223,6 @@ export class SupplierController {
 
       const status = parseEnum(SupplierStatus, req.body.status, "status");
 
-      // Blocking a supplier with live orders would leave buyers unable to
-      // receive goods they are contractually owed.
       if (
         status === SupplierStatus.BLACKLISTED ||
         status === SupplierStatus.INACTIVE
@@ -285,19 +299,38 @@ export class SupplierController {
             ? { paymentTerms: optionalString(req.body.paymentTerms) }
             : {}),
           ...(req.body.creditDays !== undefined
-            ? { creditDays: Number(req.body.creditDays) || 0 }
+            ? {
+                creditDays: parseInteger(
+                  req.body.creditDays,
+                  "creditDays",
+                  0,
+                  3_650
+                ),
+              }
             : {}),
           ...(req.body.incoterms !== undefined
             ? { incoterms: optionalString(req.body.incoterms) }
             : {}),
           ...(req.body.leadTimeDays !== undefined
-            ? { leadTimeDays: Number(req.body.leadTimeDays) || 0 }
+            ? {
+                leadTimeDays: parseInteger(
+                  req.body.leadTimeDays,
+                  "leadTimeDays",
+                  0,
+                  3_650
+                ),
+              }
             : {}),
           ...(req.body.minOrderValue !== undefined
             ? {
-                minOrderValue: req.body.minOrderValue
-                  ? toDecimal(req.body.minOrderValue, "minOrderValue")
-                  : null,
+                minOrderValue:
+                  req.body.minOrderValue === null ||
+                  req.body.minOrderValue === ""
+                    ? null
+                    : requireNonNegative(
+                        req.body.minOrderValue,
+                        "minOrderValue"
+                      ),
               }
             : {}),
           ...(req.body.bankName !== undefined
@@ -340,7 +373,6 @@ export class SupplierController {
     }
   }
 
-  /** POST /api/suppliers/:id/contacts */
   async addContact(req: Request, res: Response) {
     const operation = "Add supplier contact";
     try {
@@ -372,7 +404,6 @@ export class SupplierController {
     }
   }
 
-  /** DELETE /api/suppliers/contacts/:contactId */
   async removeContact(req: Request, res: Response) {
     const operation = "Remove supplier contact";
     try {
@@ -384,9 +415,6 @@ export class SupplierController {
     }
   }
 
-  // -------------------------------------------------------- vendor pricing
-
-  /** GET /api/suppliers/:id/catalogue */
   async listCatalogue(req: Request, res: Response) {
     const operation = "List supplier catalogue";
     try {
@@ -430,12 +458,6 @@ export class SupplierController {
     }
   }
 
-  /**
-   * POST /api/suppliers/:id/catalogue
-   * Add or supersede a price. A new price for an item the supplier already
-   * quotes closes the previous entry on the day the new one starts, so the
-   * history of what was agreed when stays intact.
-   */
   async upsertCatalogueEntry(req: Request, res: Response) {
     const operation = "Save supplier price";
     try {
@@ -443,6 +465,65 @@ export class SupplierController {
       const productId = parseId(String(req.body.productId), "productId");
       const validFrom =
         parseDate(req.body.validFrom, "validFrom") ?? new Date();
+      const validTo = parseDate(req.body.validTo, "validTo");
+      if (validTo && validTo < validFrom) {
+        throw new DomainError("validTo cannot be earlier than validFrom", {
+          code: "VALIDATION_ERROR",
+        });
+      }
+
+      const unitPrice = requireNonNegative(req.body.unitPrice, "unitPrice");
+      const minOrderQuantity = requirePositive(
+        req.body.minOrderQuantity ?? 1,
+        "minOrderQuantity"
+      );
+      const packSize = requirePositive(req.body.packSize ?? 1, "packSize");
+      const leadTimeDays =
+        parseOptionalInteger(req.body.leadTimeDays, "leadTimeDays", 0, 3_650) ??
+        0;
+
+      const tiersProvided = req.body.priceTiers !== undefined;
+      if (
+        tiersProvided &&
+        (!Array.isArray(req.body.priceTiers) ||
+          req.body.priceTiers.length > 100)
+      ) {
+        throw new DomainError(
+          "priceTiers must be an array of at most 100 rows",
+          {
+            code: "VALIDATION_ERROR",
+          }
+        );
+      }
+      const tierInput: unknown[] = Array.isArray(req.body.priceTiers)
+        ? req.body.priceTiers
+        : [];
+      const tiers = tierInput.map((tier, index) => {
+        if (!tier || typeof tier !== "object" || Array.isArray(tier)) {
+          throw new DomainError(`priceTiers[${index}] must be an object`, {
+            code: "VALIDATION_ERROR",
+          });
+        }
+        const row = tier as Record<string, unknown>;
+        return {
+          minQuantity: requirePositive(
+            row.minQuantity,
+            `priceTiers[${index}].minQuantity`
+          ),
+          unitPrice: requireNonNegative(
+            row.unitPrice,
+            `priceTiers[${index}].unitPrice`
+          ),
+        };
+      });
+      const tierBreaks = new Set(
+        tiers.map(tier => tier.minQuantity.toString())
+      );
+      if (tierBreaks.size !== tiers.length) {
+        throw new DomainError("priceTiers cannot repeat a minimum quantity", {
+          code: "VALIDATION_ERROR",
+        });
+      }
 
       const product = await prisma.product.findUnique({
         where: { id: productId },
@@ -455,12 +536,7 @@ export class SupplierController {
       }
 
       const isPreferred = parseBoolean(req.body.isPreferred) ?? false;
-      const tiers = Array.isArray(req.body.priceTiers)
-        ? req.body.priceTiers
-        : [];
-
       const entry = await prisma.$transaction(async tx => {
-        // Close any open price for the same item that this one supersedes.
         await tx.supplierProduct.updateMany({
           where: {
             supplierId,
@@ -491,30 +567,24 @@ export class SupplierController {
             supplierId,
             productId,
             supplierSku: optionalString(req.body.supplierSku),
-            unitPrice: toDecimal(req.body.unitPrice, "unitPrice"),
+            unitPrice,
             currencyCode: optionalString(req.body.currencyCode) ?? "INR",
-            minOrderQuantity: toDecimal(
-              req.body.minOrderQuantity ?? 1,
-              "minOrderQuantity"
-            ),
-            packSize: toDecimal(req.body.packSize ?? 1, "packSize"),
-            leadTimeDays: Number(req.body.leadTimeDays) || 0,
+            minOrderQuantity,
+            packSize,
+            leadTimeDays,
             validFrom,
-            validTo: parseDate(req.body.validTo, "validTo"),
+            validTo,
             isPreferred,
             isActive: parseBoolean(req.body.isActive) ?? true,
           },
           update: {
             supplierSku: optionalString(req.body.supplierSku),
-            unitPrice: toDecimal(req.body.unitPrice, "unitPrice"),
+            unitPrice,
             currencyCode: optionalString(req.body.currencyCode) ?? "INR",
-            minOrderQuantity: toDecimal(
-              req.body.minOrderQuantity ?? 1,
-              "minOrderQuantity"
-            ),
-            packSize: toDecimal(req.body.packSize ?? 1, "packSize"),
-            leadTimeDays: Number(req.body.leadTimeDays) || 0,
-            validTo: parseDate(req.body.validTo, "validTo"),
+            minOrderQuantity,
+            packSize,
+            leadTimeDays,
+            validTo,
             isPreferred,
             ...(parseBoolean(req.body.isActive) !== undefined
               ? { isActive: parseBoolean(req.body.isActive) }
@@ -522,7 +592,7 @@ export class SupplierController {
           },
         });
 
-        if (tiers.length > 0) {
+        if (tiersProvided) {
           await tx.supplierPriceTier.deleteMany({
             where: { supplierProductId: created.id },
           });
@@ -530,11 +600,8 @@ export class SupplierController {
             await tx.supplierPriceTier.create({
               data: {
                 supplierProductId: created.id,
-                minQuantity: toDecimal(
-                  tier.minQuantity,
-                  "priceTiers.minQuantity"
-                ),
-                unitPrice: toDecimal(tier.unitPrice, "priceTiers.unitPrice"),
+                minQuantity: tier.minQuantity,
+                unitPrice: tier.unitPrice,
               },
             });
           }
@@ -555,7 +622,6 @@ export class SupplierController {
     }
   }
 
-  /** DELETE /api/suppliers/catalogue/:entryId */
   async removeCatalogueEntry(req: Request, res: Response) {
     const operation = "Remove supplier price";
     try {
@@ -570,16 +636,14 @@ export class SupplierController {
     }
   }
 
-  /**
-   * GET /api/suppliers/price-comparison/:productId
-   * Every supplier who quotes this item today, cheapest first, so a buyer can
-   * see the alternatives before committing.
-   */
   async priceComparison(req: Request, res: Response) {
     const operation = "Compare supplier prices";
     try {
       const productId = parseId(req.params.productId, "Product id");
-      const quantity = toDecimal(String(req.query.quantity ?? "1"), "quantity");
+      const quantity = requirePositive(
+        String(req.query.quantity ?? "1"),
+        "quantity"
+      );
       const now = new Date();
 
       const entries = await prisma.supplierProduct.findMany({
@@ -643,9 +707,6 @@ export class SupplierController {
     }
   }
 
-  // ---------------------------------------------------------- performance
-
-  /** GET /api/suppliers/:id/performance */
   async performance(req: Request, res: Response) {
     const operation = "Supplier performance";
     try {
@@ -667,7 +728,6 @@ export class SupplierController {
     }
   }
 
-  /** POST /api/suppliers/:id/performance/snapshot */
   async snapshotPerformance(req: Request, res: Response) {
     const operation = "Snapshot supplier performance";
     try {
@@ -680,7 +740,6 @@ export class SupplierController {
     }
   }
 
-  /** GET /api/suppliers/scorecards */
   async scorecards(req: Request, res: Response) {
     const operation = "Supplier scorecards";
     try {
@@ -699,7 +758,6 @@ export class SupplierController {
     }
   }
 
-  /** GET /api/suppliers/delivery-watchlist */
   async deliveryWatchlist(req: Request, res: Response) {
     const operation = "Delivery watchlist";
     try {

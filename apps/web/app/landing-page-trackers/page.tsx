@@ -1,17 +1,17 @@
 "use client";
 
 import { DataTable, TableColumn } from "@/components/data-table";
-import { RoleGuard } from "@/components/guards/RoleGuard";
+import { RoleGuard } from "@/components/guards/role-guard";
 import { TablePageSkeleton } from "@/components/skeletons";
-import { useAuth } from "@/contexts/AuthContext";
 import { landingPageCampaignService } from "@/lib/api/services";
 import { LandingPageCampaign } from "@/lib/api/types";
 import { toast } from "@/lib/toast";
-import { Button, Input, Label } from "@repo/ui";
+import { Button, DeleteConfirmationDialog, Input, Label } from "@repo/ui";
 import { Alert } from "@repo/ui/components/ui/alert";
 import { Card, CardContent } from "@repo/ui/components/ui/card";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -40,7 +40,6 @@ import { Tag } from "@repo/ui/components/ui/tag";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 
 export default function LandingPageTrackersPage() {
-  const { user } = useAuth();
   const [trackers, setTrackers] = useState<LandingPageCampaign[]>([]);
   const [stats, setStats] = useState<{
     activeTrackers: number;
@@ -49,7 +48,6 @@ export default function LandingPageTrackersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Pagination and filters
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -57,13 +55,12 @@ export default function LandingPageTrackersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
-  // Modal states
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedTracker, setSelectedTracker] =
     useState<LandingPageCampaign | null>(null);
 
-  // Form states
   const [formData, setFormData] = useState<{
     name: string;
     description: string;
@@ -74,6 +71,7 @@ export default function LandingPageTrackersPage() {
     status: "ACTIVE",
   });
   const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -111,17 +109,14 @@ export default function LandingPageTrackersPage() {
         totalTrackers: response.totalCampaigns,
       });
     } catch (err) {
-      console.error("Failed to fetch stats", err);
+      toast.error(err, "Failed to load tracker statistics");
     }
   };
 
   const handleCreate = async () => {
     try {
       setSubmitting(true);
-      await landingPageCampaignService.createCampaign({
-        ...formData,
-        createdBy: user?.id,
-      });
+      await landingPageCampaignService.createCampaign(formData);
       setIsCreateModalOpen(false);
       setFormData({ name: "", description: "", status: "ACTIVE" });
       fetchTrackers();
@@ -130,6 +125,23 @@ export default function LandingPageTrackersPage() {
       setError(err.message || "Failed to create tracker");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!selectedTracker) return;
+    try {
+      setDeleting(true);
+      await landingPageCampaignService.deleteCampaign(selectedTracker.id);
+      setIsDeleteDialogOpen(false);
+      setIsEditModalOpen(false);
+      setSelectedTracker(null);
+      await Promise.all([fetchTrackers(), fetchStats()]);
+      toast.success("Tracker deleted successfully");
+    } catch (err) {
+      toast.error(err, "Failed to delete tracker");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -298,7 +310,6 @@ export default function LandingPageTrackersPage() {
           }
         />
 
-        {/* Error Message */}
         {error && (
           <Alert
             tone="error"
@@ -313,7 +324,6 @@ export default function LandingPageTrackersPage() {
           </Alert>
         )}
 
-        {/* Stats Cards */}
         {stats && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <Card>
@@ -361,7 +371,6 @@ export default function LandingPageTrackersPage() {
           </div>
         )}
 
-        {/* Filters */}
         <SearchFilterToolbar
           search={
             <Input
@@ -397,7 +406,6 @@ export default function LandingPageTrackersPage() {
           }
         />
 
-        {/* Data Table */}
         <DataTable
           data={trackers}
           columns={columns}
@@ -415,16 +423,15 @@ export default function LandingPageTrackersPage() {
           columnPreferenceKey="landing-page-trackers-table"
         />
 
-        {/* Create Tracker Modal */}
         <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-          <DialogContent>
+          <DialogContent className="gap-0 overflow-hidden">
             <DialogHeader>
               <DialogTitle>Create Landing Page Tracker</DialogTitle>
               <DialogDescription>
                 Create a new tracker to track leads from your landing pages.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-4">
+            <DialogBody className="space-y-3">
               <div>
                 <Label htmlFor="name">Tracker Name *</Label>
                 <Input
@@ -466,7 +473,7 @@ export default function LandingPageTrackersPage() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
+            </DialogBody>
             <DialogFooter>
               <Button
                 variant="outline"
@@ -485,83 +492,95 @@ export default function LandingPageTrackersPage() {
           </DialogContent>
         </Dialog>
 
-        {/* Edit Tracker Modal */}
         <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-          <DialogContent>
+          <DialogContent className="gap-0 overflow-hidden">
             <DialogHeader>
               <DialogTitle>Edit Landing Page Tracker</DialogTitle>
               <DialogDescription>
                 Update tracker details. The Unique ID cannot be changed.
               </DialogDescription>
             </DialogHeader>
-            {selectedTracker && (
-              <div className="space-y-4 py-4">
-                <div>
-                  <Label>Unique ID</Label>
-                  <div className="flex items-center gap-2 mt-1">
-                    <code className="flex-1 text-sm bg-surface-secondary px-3 py-2 rounded">
-                      {selectedTracker.uniqueId}
-                    </code>
-                    <Button
-                      variant="outline"
-                      onClick={() =>
-                        handleCopyUniqueId(selectedTracker.uniqueId)
+            <DialogBody>
+              {selectedTracker && (
+                <div className="space-y-3">
+                  <div>
+                    <Label>Unique ID</Label>
+                    <div className="flex items-center gap-2 mt-1">
+                      <code className="flex-1 text-sm bg-surface-secondary px-3 py-2 rounded">
+                        {selectedTracker.uniqueId}
+                      </code>
+                      <Button
+                        variant="outline"
+                        onClick={() =>
+                          handleCopyUniqueId(selectedTracker.uniqueId)
+                        }
+                      >
+                        {copiedId === selectedTracker.uniqueId ? (
+                          <Check className="h-4 w-4" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Use this ID in your landing page forms as a hidden field
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-name">Tracker Name *</Label>
+                    <Input
+                      id="edit-name"
+                      value={formData.name}
+                      onChange={e =>
+                        setFormData({ ...formData, name: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-description">Description</Label>
+                    <Input
+                      id="edit-description"
+                      value={formData.description}
+                      onChange={e =>
+                        setFormData({
+                          ...formData,
+                          description: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-status">Status</Label>
+                    <Select
+                      value={formData.status}
+                      onValueChange={(value: any) =>
+                        setFormData({ ...formData, status: value })
                       }
                     >
-                      {copiedId === selectedTracker.uniqueId ? (
-                        <Check className="h-4 w-4" />
-                      ) : (
-                        <Copy className="h-4 w-4" />
-                      )}
-                    </Button>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ACTIVE">Active</SelectItem>
+                        <SelectItem value="PAUSED">Paused</SelectItem>
+                        <SelectItem value="SCHEDULED">Scheduled</SelectItem>
+                        <SelectItem value="CLOSED">Closed</SelectItem>
+                        <SelectItem value="ARCHIVED">Archived</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Use this ID in your landing page forms as a hidden field
-                  </p>
                 </div>
-                <div>
-                  <Label htmlFor="edit-name">Tracker Name *</Label>
-                  <Input
-                    id="edit-name"
-                    value={formData.name}
-                    onChange={e =>
-                      setFormData({ ...formData, name: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="edit-description">Description</Label>
-                  <Input
-                    id="edit-description"
-                    value={formData.description}
-                    onChange={e =>
-                      setFormData({ ...formData, description: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="edit-status">Status</Label>
-                  <Select
-                    value={formData.status}
-                    onValueChange={(value: any) =>
-                      setFormData({ ...formData, status: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ACTIVE">Active</SelectItem>
-                      <SelectItem value="PAUSED">Paused</SelectItem>
-                      <SelectItem value="SCHEDULED">Scheduled</SelectItem>
-                      <SelectItem value="CLOSED">Closed</SelectItem>
-                      <SelectItem value="ARCHIVED">Archived</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            )}
+              )}
+            </DialogBody>
             <DialogFooter>
+              <Button
+                variant="destructive"
+                className="mr-auto"
+                onClick={() => setIsDeleteDialogOpen(true)}
+                disabled={submitting || deleting}
+              >
+                Delete
+              </Button>
               <Button
                 variant="outline"
                 onClick={() => setIsEditModalOpen(false)}
@@ -579,8 +598,15 @@ export default function LandingPageTrackersPage() {
           </DialogContent>
         </Dialog>
 
-        {/* Delete Confirmation Modal */}
-        {/* TODO: Add delete confirmation modal */}
+        <DeleteConfirmationDialog
+          open={isDeleteDialogOpen && !!selectedTracker}
+          onOpenChange={setIsDeleteDialogOpen}
+          onConfirm={handleDelete}
+          itemName={selectedTracker?.name || "this tracker"}
+          itemType="campaign"
+          isLoading={deleting}
+          disabled={deleting}
+        />
       </PageShell>
     </RoleGuard>
   );

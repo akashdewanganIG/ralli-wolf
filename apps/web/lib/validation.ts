@@ -1,12 +1,3 @@
-/**
- * Client-side validation utilities
- * Uses the same regex patterns as server-side validators for consistency
- */
-
-/**
- * Validate email address with specific domain requirements
- * Pattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.(com|co|in|org|net|edu|gov|io|info)$
- */
 export function validateEmail(email: string): {
   isValid: boolean;
   error?: string;
@@ -20,24 +11,35 @@ export function validateEmail(email: string): {
     return { isValid: false, error: "Email is required" };
   }
 
-  const emailRegex =
-    /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.(com|co|in|org|net|edu|gov|io|info)$/;
-  if (!emailRegex.test(trimmed)) {
+  const [local, domain, ...extra] = trimmed.split("@");
+  const labels = domain?.split(".") ?? [];
+  const valid =
+    trimmed.length <= 254 &&
+    !!local &&
+    local.length <= 64 &&
+    !local.startsWith(".") &&
+    !local.endsWith(".") &&
+    !local.includes("..") &&
+    /^[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+$/i.test(local) &&
+    !extra.length &&
+    labels.length >= 2 &&
+    labels.every(
+      label =>
+        label.length >= 1 &&
+        label.length <= 63 &&
+        /^[A-Z0-9](?:[A-Z0-9-]*[A-Z0-9])?$/i.test(label)
+    ) &&
+    labels[labels.length - 1]!.length >= 2;
+  if (!valid) {
     return {
       isValid: false,
-      error:
-        "Invalid email format. Email must end with .com, .co, .in, .org, .net, .edu, .gov, .io, or .info",
+      error: "Enter a valid email address",
     };
   }
 
   return { isValid: true };
 }
 
-/**
- * Validate phone number
- * Accepts any 10-digit number (0-9)
- * Strips non-digit characters before validation
- */
 export function validatePhone(phone: string): {
   isValid: boolean;
   error?: string;
@@ -51,10 +53,8 @@ export function validatePhone(phone: string): {
     return { isValid: false, error: "Phone number is required" };
   }
 
-  // Remove all non-digit characters
   const digitsOnly = trimmed.replace(/\D/g, "");
 
-  // Check if exactly 10 digits
   if (digitsOnly.length !== 10) {
     return {
       isValid: false,
@@ -65,28 +65,21 @@ export function validatePhone(phone: string): {
   return { isValid: true };
 }
 
-/**
- * Validate phone number (optional field)
- * Accepts any 10-digit number (0-9) if provided
- * Strips non-digit characters before validation
- */
 export function validatePhoneOptional(phone: string): {
   isValid: boolean;
   error?: string;
 } {
   if (!phone || typeof phone !== "string") {
-    return { isValid: true }; // Optional field
+    return { isValid: true };
   }
 
   const trimmed = phone.trim();
   if (trimmed.length === 0) {
-    return { isValid: true }; // Optional field
+    return { isValid: true };
   }
 
-  // Remove all non-digit characters
   const digitsOnly = trimmed.replace(/\D/g, "");
 
-  // Check if exactly 10 digits
   if (digitsOnly.length !== 10) {
     return {
       isValid: false,
@@ -97,11 +90,6 @@ export function validatePhoneOptional(phone: string): {
   return { isValid: true };
 }
 
-/**
- * Validate name field
- * - Non-empty after trim
- * - Max 255 characters
- */
 export function validateName(name: string): {
   isValid: boolean;
   error?: string;
@@ -122,20 +110,17 @@ export function validateName(name: string): {
   return { isValid: true };
 }
 
-/**
- * Validate pincode (6 digits)
- */
 export function validatePincode(pincode: string): {
   isValid: boolean;
   error?: string;
 } {
   if (!pincode || typeof pincode !== "string") {
-    return { isValid: true }; // Optional field
+    return { isValid: true };
   }
 
   const trimmed = pincode.trim();
   if (trimmed.length === 0) {
-    return { isValid: true }; // Optional field
+    return { isValid: true };
   }
 
   const pincodeRegex = /^\d{6}$/;
@@ -146,15 +131,12 @@ export function validatePincode(pincode: string): {
   return { isValid: true };
 }
 
-/**
- * Validate field length
- */
 export function validateFieldLength(
   field: string,
   maxLength: number
 ): { isValid: boolean; error?: string } {
   if (!field || typeof field !== "string") {
-    return { isValid: true }; // Empty fields are valid for length check
+    return { isValid: true };
   }
 
   const trimmed = field.trim();
@@ -168,37 +150,45 @@ export function validateFieldLength(
   return { isValid: true };
 }
 
-/**
- * Validate website URL format (basic validation)
- */
 export function validateWebsite(url: string): {
   isValid: boolean;
   error?: string;
 } {
   if (!url || typeof url !== "string") {
-    return { isValid: true }; // Optional field
+    return { isValid: true };
   }
 
   const trimmed = url.trim();
   if (trimmed.length === 0) {
-    return { isValid: true }; // Optional field
+    return { isValid: true };
   }
 
-  // Basic URL validation - starts with http:// or https://
-  const urlRegex = /^https?:\/\/.+/;
-  if (!urlRegex.test(trimmed)) {
+  if (!safeHttpUrl(trimmed)) {
     return {
       isValid: false,
-      error: "Website must start with http:// or https://",
+      error: "Website must be a valid http:// or https:// URL",
     };
   }
 
   return { isValid: true };
 }
 
-/**
- * Basic email format validation (for login, less strict)
- */
+export function safeHttpUrl(value: string): string | null {
+  try {
+    const parsed = new URL(value.trim());
+    if (
+      (parsed.protocol !== "https:" && parsed.protocol !== "http:") ||
+      parsed.username ||
+      parsed.password
+    ) {
+      return null;
+    }
+    return parsed.href;
+  } catch {
+    return null;
+  }
+}
+
 export function validateEmailBasic(email: string): {
   isValid: boolean;
   error?: string;

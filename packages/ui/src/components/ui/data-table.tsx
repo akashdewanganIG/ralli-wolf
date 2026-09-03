@@ -154,7 +154,6 @@ export function TableColumnHeader<TData, TValue>({
   title,
   className,
 }: TableColumnHeaderProps<TData, TValue>) {
-  // Extract inline event handlers to prevent unnecessary re-renders
   const handleSortAsc = useCallback(() => {
     column.toggleSorting(false);
   }, [column]);

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@repo/ui/components/ui/button";
 import { Input } from "@repo/ui/components/ui/input";
 import { useRouter } from "next/navigation";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   ErrorBanner,
   FilterBar,
@@ -17,20 +17,20 @@ import {
   StatusBadge,
   DEFAULT_PAGE_SIZE,
 } from "@/components/supply-chain/shared";
-import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
+import { WarehouseFilter } from "@/components/supply-chain/warehouse-filter";
 import {
   ProductPicker,
   type PickedProduct,
-} from "@/components/supply-chain/ProductPicker";
+} from "@/components/supply-chain/product-picker";
 import {
   usePurchaseRequisitions,
   usePurchasingMutations,
-} from "@/hooks/useSupplyChain";
+} from "@/hooks/use-supply-chain";
 import { formatDate, formatMoney, humanizeEnum } from "@/lib/utils/decimal";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { FormDialog } from "@repo/ui/components/ui/form-dialog";
 import { Tag } from "@repo/ui/components/ui/tag";
-import { DataTransfer } from "@/components/data-transfer/DataTransfer";
+import { DataTransfer } from "@/components/data-transfer/data-transfer";
 
 interface DraftLine {
   product: PickedProduct | null;
@@ -118,121 +118,109 @@ export default function PurchaseRequisitionsPage() {
           open={showForm}
           onOpenChange={setShowForm}
           title="New purchase requisition"
+          onSubmit={submit}
+          bodyClassName="block space-y-3"
+          isSubmitting={createRequisition.isPending}
+          submitDisabled={!warehouseId || validLines.length === 0}
+          submitLabel="Create requisition"
         >
-          <form onSubmit={submit} className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-3">
-              <Field label="Deliver to warehouse" composite>
-                <WarehouseFilter
-                  value={warehouseId}
-                  onChange={setWarehouseId}
-                  allowAll={false}
-                  required
-                />
-              </Field>
-              <Field label="Required by">
-                <Input
-                  type="date"
-                  value={requiredByDate}
-                  onChange={event => setRequiredByDate(event.target.value)}
-                />
-              </Field>
-              <Field label="Justification">
-                <Input
-                  value={justification}
-                  onChange={event => setJustification(event.target.value)}
-                />
-              </Field>
-            </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            <Field label="Deliver to warehouse" composite>
+              <WarehouseFilter
+                value={warehouseId}
+                onChange={setWarehouseId}
+                allowAll={false}
+                required
+              />
+            </Field>
+            <Field label="Required by">
+              <Input
+                type="date"
+                value={requiredByDate}
+                onChange={event => setRequiredByDate(event.target.value)}
+              />
+            </Field>
+            <Field label="Justification">
+              <Input
+                value={justification}
+                onChange={event => setJustification(event.target.value)}
+              />
+            </Field>
+          </div>
 
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">Lines</p>
-              {lines.map((line, index) => (
-                <div
-                  key={index}
-                  className="grid gap-2 md:grid-cols-[3fr,1fr,1fr,auto]"
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground">Lines</p>
+            {lines.map((line, index) => (
+              <div
+                key={index}
+                className="grid gap-2 md:grid-cols-[3fr,1fr,1fr,auto]"
+              >
+                <ProductPicker
+                  value={line.product}
+                  onChange={product =>
+                    setLines(current =>
+                      current.map((entry, i) =>
+                        i === index ? { ...entry, product } : entry
+                      )
+                    )
+                  }
+                />
+                <Input
+                  placeholder="Quantity"
+                  inputMode="decimal"
+                  value={line.quantity}
+                  onChange={event =>
+                    setLines(current =>
+                      current.map((entry, i) =>
+                        i === index
+                          ? { ...entry, quantity: event.target.value }
+                          : entry
+                      )
+                    )
+                  }
+                />
+                <Input
+                  placeholder="Est. unit price"
+                  inputMode="decimal"
+                  value={line.estimatedUnitPrice}
+                  onChange={event =>
+                    setLines(current =>
+                      current.map((entry, i) =>
+                        i === index
+                          ? {
+                              ...entry,
+                              estimatedUnitPrice: event.target.value,
+                            }
+                          : entry
+                      )
+                    )
+                  }
+                />
+                <button
+                  type="button"
+                  disabled={lines.length === 1}
+                  onClick={() =>
+                    setLines(current => current.filter((_, i) => i !== index))
+                  }
+                  className="rounded border px-3 text-sm hover:bg-muted disabled:opacity-40 whitespace-nowrap"
                 >
-                  <ProductPicker
-                    value={line.product}
-                    onChange={product =>
-                      setLines(current =>
-                        current.map((entry, i) =>
-                          i === index ? { ...entry, product } : entry
-                        )
-                      )
-                    }
-                  />
-                  <Input
-                    placeholder="Quantity"
-                    inputMode="decimal"
-                    value={line.quantity}
-                    onChange={event =>
-                      setLines(current =>
-                        current.map((entry, i) =>
-                          i === index
-                            ? { ...entry, quantity: event.target.value }
-                            : entry
-                        )
-                      )
-                    }
-                  />
-                  <Input
-                    placeholder="Est. unit price"
-                    inputMode="decimal"
-                    value={line.estimatedUnitPrice}
-                    onChange={event =>
-                      setLines(current =>
-                        current.map((entry, i) =>
-                          i === index
-                            ? {
-                                ...entry,
-                                estimatedUnitPrice: event.target.value,
-                              }
-                            : entry
-                        )
-                      )
-                    }
-                  />
-                  <button
-                    type="button"
-                    disabled={lines.length === 1}
-                    onClick={() =>
-                      setLines(current => current.filter((_, i) => i !== index))
-                    }
-                    className="rounded border px-3 text-sm hover:bg-muted disabled:opacity-40 whitespace-nowrap"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={() =>
-                  setLines(current => [
-                    ...current,
-                    { product: null, quantity: "", estimatedUnitPrice: "" },
-                  ])
-                }
-                className="rounded border px-3 py-1.5 text-sm hover:bg-muted whitespace-nowrap"
-              >
-                Add line
-              </button>
-            </div>
-
-            <div className="dialog-form-actions">
-              <Button
-                type="submit"
-                disabled={
-                  !warehouseId ||
-                  validLines.length === 0 ||
-                  createRequisition.isPending
-                }
-              >
-                {createRequisition.isPending
-                  ? "Creating…"
-                  : "Create requisition"}
-              </Button>
-            </div>
-          </form>
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() =>
+                setLines(current => [
+                  ...current,
+                  { product: null, quantity: "", estimatedUnitPrice: "" },
+                ])
+              }
+              className="rounded border px-3 py-1.5 text-sm hover:bg-muted whitespace-nowrap"
+            >
+              Add line
+            </button>
+          </div>
         </FormDialog>
 
         <Panel

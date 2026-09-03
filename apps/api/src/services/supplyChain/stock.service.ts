@@ -27,7 +27,6 @@ import {
 
 type Tx = Prisma.TransactionClient;
 
-/** Movement types that add stock. */
 const INBOUND_TYPES: StockMovementType[] = [
   "OPENING_BALANCE",
   "PURCHASE_RECEIPT",
@@ -38,7 +37,6 @@ const INBOUND_TYPES: StockMovementType[] = [
   "TRANSFER_IN",
 ];
 
-/** Movement types that remove stock. */
 const OUTBOUND_TYPES: StockMovementType[] = [
   "PURCHASE_RETURN",
   "SALES_ISSUE",
@@ -58,18 +56,6 @@ export function directionFor(
   return MovementDirection.INTERNAL;
 }
 
-/**
- * Serialise all stock mutations for one (product, warehouse) pair.
- *
- * Read-modify-write on `stock_balances` is not safe under concurrency on its
- * own: two transactions can both read 10 on hand and both issue 8. A
- * transaction-scoped advisory lock makes the second wait for the first to
- * commit, and it is released automatically on commit or rollback.
- *
- * Callers that touch several products in one transaction must acquire locks
- * in ascending product order — `sortLockOrder` does that — so two concurrent
- * multi-line documents can never deadlock against each other.
- */
 async function lockStock(
   tx: Tx,
   productId: number,
@@ -78,7 +64,6 @@ async function lockStock(
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(${productId}::int, ${warehouseId}::int)`;
 }
 
-/** Deterministic lock order for multi-line documents. */
 export function sortLockOrder<T extends { productId: number }>(
   lines: T[]
 ): T[] {
@@ -130,12 +115,6 @@ export interface ReceiveStockResult {
   totalCost: Prisma.Decimal;
 }
 
-/**
- * Resolve the bin a receipt should land in. An explicit bin always wins; a
- * warehouse's designated receiving bin is next; otherwise the first active
- * bin in traversal order. A warehouse with no bins cannot hold stock, and
- * saying so loudly is better than inventing a location.
- */
 async function resolveInboundBin(
   tx: Tx,
   warehouseId: number,
@@ -177,11 +156,6 @@ async function resolveInboundBin(
   );
 }
 
-/**
- * Find, or create, the balance row for one physical slot. The unique index
- * `stock_balances_slot_key` guarantees at most one row per slot; the advisory
- * lock held by the caller guarantees we do not race to create it.
- */
 async function upsertBalance(
   tx: Tx,
   slot: {
@@ -232,12 +206,6 @@ async function upsertBalance(
   });
 }
 
-/**
- * Derive an expiry date when the receipt does not carry one but the item has
- * a defined shelf life. Nothing is invented: if neither a manufactured date
- * nor a shelf life is on record the lot simply has no expiry, and FEFO will
- * sort it last.
- */
 function deriveExpiry(
   provided: Date | null | undefined,
   manufacturedDate: Date | null | undefined,
@@ -252,10 +220,6 @@ function deriveExpiry(
   return null;
 }
 
-/**
- * Post an inbound movement: purchase receipt, production output, customer
- * return, positive adjustment or opening balance.
- */
 export async function receiveStock(
   tx: Tx,
   input: ReceiveStockInput
@@ -290,9 +254,6 @@ export async function receiveStock(
   const binId = await resolveInboundBin(tx, input.warehouseId, input.binId);
   const identity = input.lot ?? {};
 
-  // Enforce the item's tracking policy up front — a serialised tool that
-  // arrives without a serial number is a data-quality problem, not something
-  // to paper over with a generated placeholder.
   if (
     product.trackingType === "BATCH" &&
     !identity.lotId &&
@@ -471,13 +432,6 @@ export interface Allocation {
   expiryDate: Date | null;
 }
 
-/**
- * Order the candidate slots by the item's picking strategy.
- *
- * FIFO/LIFO order by the date the layer was received; FEFO orders by expiry
- * so short-dated stock leaves first, with never-expiring layers last. Ties
- * break on lot id so the sequence is stable and reproducible.
- */
 export function sortCandidates(
   candidates: AllocationCandidate[],
   strategy: PickingStrategy
@@ -518,7 +472,7 @@ interface CandidateQuery {
   binId?: number | null;
   lotId?: number | null;
   status?: StockStatus;
-  /** Draw from reserved quantity instead of free quantity (picking a reservation). */
+
   includeReserved?: boolean;
 }
 
@@ -577,7 +531,7 @@ export interface IssueStockInput {
   uomId?: number | null;
   performedById?: number | null;
   occurredAt?: Date;
-  /** Consume against an existing reservation rather than free stock. */
+
   consumeReservedQuantity?: boolean;
 }
 
@@ -588,11 +542,6 @@ export interface IssueStockResult {
   movementIds: number[];
 }
 
-/**
- * Post an outbound movement, consuming cost layers in the item's configured
- * order. One ledger row is written per layer touched, so the cost of goods
- * issued is exact rather than an average applied after the fact.
- */
 export async function issueStock(
   tx: Tx,
   input: IssueStockInput
@@ -734,9 +683,6 @@ export async function issueStock(
   }
 
   if (remaining.greaterThan(0)) {
-    // Only reachable when the warehouse explicitly permits negative stock.
-    // The shortfall is still posted so the ledger and the balance agree; the
-    // balance simply goes negative and the resulting alert makes it visible.
     const binId = await resolveInboundBin(tx, input.warehouseId, input.binId);
     const fallbackCost = product.standardCost ?? ZERO;
     const lotNumber = await nextDocumentNumber(
@@ -855,14 +801,6 @@ export interface MoveStockInput {
   occurredAt?: Date;
 }
 
-/**
- * Move stock between locations without changing how much of it exists.
- *
- * A bin-to-bin move inside one warehouse writes a single INTERNAL row; a move
- * between warehouses writes a TRANSFER_OUT / TRANSFER_IN pair so per-warehouse
- * ledgers stay balanced. In both cases the cost layer travels with the goods,
- * which is what keeps FIFO/FEFO honest across a transfer.
- */
 export async function moveStock(tx: Tx, input: MoveStockInput) {
   const quantity = requirePositive(input.quantity, "quantity");
   const occurredAt = input.occurredAt ?? new Date();
@@ -881,8 +819,6 @@ export async function moveStock(tx: Tx, input: MoveStockInput) {
     });
   }
 
-  // Lock both sides in ascending warehouse order to avoid deadlocking against
-  // a transfer running the opposite way.
   const lockOrder = [input.fromWarehouseId, input.toWarehouseId].sort(
     (a, b) => a - b
   );
@@ -1044,10 +980,6 @@ export interface ReserveStockInput {
   createdById?: number | null;
 }
 
-/**
- * Soft-allocate stock to a demand document. Nothing moves; the reserved
- * quantity on each slot rises so the same units cannot be promised twice.
- */
 export async function reserveStock(tx: Tx, input: ReserveStockInput) {
   const quantity = requirePositive(input.quantity, "quantity");
 
@@ -1130,10 +1062,6 @@ export async function reserveStock(tx: Tx, input: ReserveStockInput) {
   return reservations;
 }
 
-/**
- * Give reserved stock back. Used when a demand document is cancelled, and
- * after picking, where the picked quantity has already left the slot.
- */
 export async function releaseReservations(
   tx: Tx,
   filter: {
@@ -1204,10 +1132,6 @@ export interface AvailabilityRow {
   value: Prisma.Decimal;
 }
 
-/**
- * On-hand, reserved and available quantity plus valuation, computed from the
- * balance rows and their cost layers. There is no cached total to drift.
- */
 export async function getAvailability(
   productIds: number[],
   warehouseId?: number | null,
@@ -1261,7 +1185,6 @@ export async function getAvailability(
   return result;
 }
 
-/** Available quantity for a single product/warehouse pair. */
 export async function getAvailableQuantity(
   productId: number,
   warehouseId?: number | null,
@@ -1271,10 +1194,6 @@ export async function getAvailableQuantity(
   return map.get(`${productId}:${warehouseId ?? 0}`)?.available ?? ZERO;
 }
 
-/**
- * Quantity already on order from suppliers and not yet received. Planning
- * needs this so a reorder alert is not raised for something already bought.
- */
 export async function getIncomingQuantity(
   productIds: number[],
   warehouseId?: number | null,
@@ -1308,7 +1227,6 @@ export async function getIncomingQuantity(
   return result;
 }
 
-/** Outstanding purchase quantity keyed by the physical destination warehouse. */
 export async function getIncomingQuantityByWarehouse(
   productIds: number[],
   warehouseIds?: number[],
@@ -1345,7 +1263,6 @@ export async function getIncomingQuantityByWarehouse(
   return result;
 }
 
-/** Stock position keyed by product and warehouse, without cross-location aggregation. */
 export async function getAvailabilityByWarehouse(
   productIds: number[],
   warehouseIds?: number[],
@@ -1389,7 +1306,7 @@ export interface AdjustStockInput {
   warehouseId: number;
   binId: number;
   lotId?: number | null;
-  /** Signed change: positive writes stock on, negative writes it off. */
+
   deltaQuantity: Prisma.Decimal | number | string;
   unitCost?: Prisma.Decimal | number | string | null;
   reasonCode: string;
@@ -1398,11 +1315,6 @@ export interface AdjustStockInput {
   movementType?: StockMovementType;
 }
 
-/**
- * Write stock on or off against a documented reason. A write-on must state
- * the unit cost of what is being added — the alternative would be booking
- * inventory value out of thin air.
- */
 export async function adjustStock(tx: Tx, input: AdjustStockInput) {
   const delta = toDecimal(input.deltaQuantity, "deltaQuantity");
   if (delta.isZero()) {
@@ -1417,9 +1329,10 @@ export async function adjustStock(tx: Tx, input: AdjustStockInput) {
   }
 
   if (delta.isPositive()) {
-    let unitCost = input.unitCost
-      ? toDecimal(input.unitCost, "unitCost")
-      : null;
+    let unitCost =
+      input.unitCost === undefined || input.unitCost === null
+        ? null
+        : requireNonNegative(input.unitCost, "unitCost");
     if (input.lotId && unitCost === null) {
       const lot = await tx.stockLot.findUnique({ where: { id: input.lotId } });
       if (!lot) throw new NotFoundError("Stock lot");

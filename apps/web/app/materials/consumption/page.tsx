@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Input } from "@repo/ui/components/ui/input";
 import Link from "next/link";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   ErrorBanner,
   PageHeader,
@@ -12,15 +12,15 @@ import {
   SimpleTable,
   StatCard,
 } from "@/components/supply-chain/shared";
-import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
-import { useConsumptionReport } from "@/hooks/useSupplyChain";
+import { WarehouseFilter } from "@/components/supply-chain/warehouse-filter";
+import { useConsumptionReport } from "@/hooks/use-supply-chain";
 import {
   formatMoney,
   formatPercent,
   formatQuantity,
   humanizeEnum,
 } from "@/lib/utils/decimal";
-import type { ItemType } from "@/lib/api/types/supplyChain";
+import type { ItemType } from "@/lib/api/types/supply-chain";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { Tag } from "@repo/ui/components/ui/tag";
 

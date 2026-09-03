@@ -3,6 +3,7 @@
 import React from "react";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -169,168 +170,173 @@ export function SegmentFormModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContentAny className="max-w-3xl">
+      <DialogContentAny className="max-w-3xl gap-0 overflow-hidden">
         <DialogHeaderAny>
           <DialogTitleAny>{title}</DialogTitleAny>
         </DialogHeaderAny>
-        <div className="space-y-4">
-          <div className="grid gap-4">
-            <div className="grid gap-2">
-              <Label>Segment Name</Label>
-              <Input
-                value={values.name}
-                onChange={e =>
-                  setValues(prev => ({ ...prev, name: e.target.value }))
-                }
-                placeholder="High intent Mumbai leads"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label>Description</Label>
-              <Textarea
-                value={values.description || ""}
-                onChange={e =>
-                  setValues(prev => ({ ...prev, description: e.target.value }))
-                }
-                rows={3}
-                placeholder="Internal notes about this segment"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label>Match Logic</Label>
-              <Select
-                value={values.logicOperator}
-                onValueChange={val =>
-                  setValues(prev => ({
-                    ...prev,
-                    logicOperator: val as "AND" | "OR",
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select logic" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="AND">All rules must match</SelectItem>
-                  <SelectItem value="OR">Any rule can match</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
+        <DialogBody>
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <Label>Rules</Label>
-                <p className="text-sm text-muted-foreground">
-                  Add keyword or location filters
-                </p>
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label>Segment Name</Label>
+                <Input
+                  value={values.name}
+                  onChange={e =>
+                    setValues(prev => ({ ...prev, name: e.target.value }))
+                  }
+                  placeholder="High intent Mumbai leads"
+                />
               </div>
-              <Button type="button" variant="outline" onClick={addRule}>
-                Add Rule
-              </Button>
+              <div className="grid gap-2">
+                <Label>Description</Label>
+                <Textarea
+                  value={values.description || ""}
+                  onChange={e =>
+                    setValues(prev => ({
+                      ...prev,
+                      description: e.target.value,
+                    }))
+                  }
+                  rows={3}
+                  placeholder="Internal notes about this segment"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Match Logic</Label>
+                <Select
+                  value={values.logicOperator}
+                  onValueChange={val =>
+                    setValues(prev => ({
+                      ...prev,
+                      logicOperator: val as "AND" | "OR",
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select logic" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="AND">All rules must match</SelectItem>
+                    <SelectItem value="OR">Any rule can match</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="space-y-4">
-              {values.rules.map(rule => (
-                <Card key={rule.id} className="p-4 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="grid min-w-0 flex-1 grid-cols-1 gap-4 sm:grid-cols-2 lg:flex">
-                      <div className="w-full lg:w-40">
-                        <Label>Rule Type</Label>
-                        <Select
-                          value={rule.ruleType}
-                          onValueChange={val =>
-                            updateRule(rule.id, {
-                              ruleType: val as SegmentRuleType,
-                              keywordIds: [],
-                              values: "",
-                            })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="KEYWORD">Keyword</SelectItem>
-                            <SelectItem value="CITY">City</SelectItem>
-                            <SelectItem value="STATE">State</SelectItem>
-                            <SelectItem value="PINCODE">Pincode</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="w-full lg:w-32">
-                        <Label>Operator</Label>
-                        <Select
-                          value={rule.operator}
-                          onValueChange={val =>
-                            updateRule(rule.id, {
-                              operator: val as SegmentRuleOperator,
-                            })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="IN">Matches</SelectItem>
-                            <SelectItem value="NOT_IN">
-                              Does not match
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    {values.rules.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeRule(rule.id)}
-                        aria-label="Remove rule"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label>Rules</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Add keyword or location filters
+                  </p>
+                </div>
+                <Button type="button" variant="outline" onClick={addRule}>
+                  Add Rule
+                </Button>
+              </div>
 
-                  {rule.ruleType === "KEYWORD" ? (
-                    <KeywordSelect
-                      selectedKeywordIds={rule.keywordIds}
-                      onSelectionChange={ids =>
-                        updateRule(rule.id, { keywordIds: ids })
-                      }
-                      label="Keywords"
-                    />
-                  ) : (
-                    <div className="grid gap-2">
-                      <Label>
-                        Values{" "}
-                        <span className="text-xs text-muted-foreground">
-                          Enter comma-separated values
-                        </span>
-                      </Label>
-                      <Input
-                        value={rule.values}
-                        onChange={e =>
-                          updateRule(rule.id, { values: e.target.value })
-                        }
-                        placeholder={
-                          rule.ruleType === "CITY"
-                            ? "Mumbai, Delhi"
-                            : rule.ruleType === "STATE"
-                              ? "Maharashtra, Karnataka"
-                              : "400001, 560001"
-                        }
-                      />
+              <div className="space-y-4">
+                {values.rules.map(rule => (
+                  <Card key={rule.id} className="p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="grid min-w-0 flex-1 grid-cols-1 gap-4 sm:grid-cols-2 lg:flex">
+                        <div className="w-full lg:w-40">
+                          <Label>Rule Type</Label>
+                          <Select
+                            value={rule.ruleType}
+                            onValueChange={val =>
+                              updateRule(rule.id, {
+                                ruleType: val as SegmentRuleType,
+                                keywordIds: [],
+                                values: "",
+                              })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="KEYWORD">Keyword</SelectItem>
+                              <SelectItem value="CITY">City</SelectItem>
+                              <SelectItem value="STATE">State</SelectItem>
+                              <SelectItem value="PINCODE">Pincode</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="w-full lg:w-32">
+                          <Label>Operator</Label>
+                          <Select
+                            value={rule.operator}
+                            onValueChange={val =>
+                              updateRule(rule.id, {
+                                operator: val as SegmentRuleOperator,
+                              })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="IN">Matches</SelectItem>
+                              <SelectItem value="NOT_IN">
+                                Does not match
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      {values.rules.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeRule(rule.id)}
+                          aria-label="Remove rule"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
-                  )}
-                </Card>
-              ))}
+
+                    {rule.ruleType === "KEYWORD" ? (
+                      <KeywordSelect
+                        selectedKeywordIds={rule.keywordIds}
+                        onSelectionChange={ids =>
+                          updateRule(rule.id, { keywordIds: ids })
+                        }
+                        label="Keywords"
+                      />
+                    ) : (
+                      <div className="grid gap-2">
+                        <Label>
+                          Values{" "}
+                          <span className="text-xs text-muted-foreground">
+                            Enter comma-separated values
+                          </span>
+                        </Label>
+                        <Input
+                          value={rule.values}
+                          onChange={e =>
+                            updateRule(rule.id, { values: e.target.value })
+                          }
+                          placeholder={
+                            rule.ruleType === "CITY"
+                              ? "Mumbai, Delhi"
+                              : rule.ruleType === "STATE"
+                                ? "Maharashtra, Karnataka"
+                                : "400001, 560001"
+                          }
+                        />
+                      </div>
+                    )}
+                  </Card>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-        <DialogFooterAny className="mt-4">
+        </DialogBody>
+        <DialogFooterAny>
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}

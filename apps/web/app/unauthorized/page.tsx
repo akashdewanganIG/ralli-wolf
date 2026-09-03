@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "../../contexts/AuthContext";
+import { useAuth } from "../../contexts/auth-context";
 import { Tag } from "@repo/ui/components/ui/tag";
 import { roleTone } from "@repo/ui/components/ui/status-badge";
 

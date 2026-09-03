@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@repo/ui/components/ui/button";
 import { Input } from "@repo/ui/components/ui/input";
 import { useRouter } from "next/navigation";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   ErrorBanner,
   FilterBar,
@@ -17,13 +17,16 @@ import {
   StatusBadge,
   DEFAULT_PAGE_SIZE,
 } from "@/components/supply-chain/shared";
-import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
-import { useInventoryMutations, useStockCounts } from "@/hooks/useSupplyChain";
+import { WarehouseFilter } from "@/components/supply-chain/warehouse-filter";
+import {
+  useInventoryMutations,
+  useStockCounts,
+} from "@/hooks/use-supply-chain";
 import { formatDateTime, humanizeEnum } from "@/lib/utils/decimal";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { FormDialog } from "@repo/ui/components/ui/form-dialog";
 import { Tag } from "@repo/ui/components/ui/tag";
-import { DataTransfer } from "@/components/data-transfer/DataTransfer";
+import { DataTransfer } from "@/components/data-transfer/data-transfer";
 
 export default function StockCountsPage() {
   const router = useRouter();
@@ -89,45 +92,40 @@ export default function StockCountsPage() {
           open={showForm}
           onOpenChange={setShowForm}
           title="Start a count"
+          onSubmit={submit}
+          bodyClassName="gap-3 md:grid-cols-3"
+          isSubmitting={createCount.isPending}
+          submitDisabled={!warehouseId}
+          submitLabel="Create count sheet"
         >
-          <form onSubmit={submit} className="grid gap-4 md:grid-cols-3">
-            <Field label="Warehouse" composite>
-              <WarehouseFilter
-                value={warehouseId}
-                onChange={setWarehouseId}
-                allowAll={false}
-                required
-              />
-            </Field>
-            <Field
-              label="Count type"
-              hint="Cycle counts a subset; full counts everything on hand"
+          <Field label="Warehouse" composite>
+            <WarehouseFilter
+              value={warehouseId}
+              onChange={setWarehouseId}
+              allowAll={false}
+              required
+            />
+          </Field>
+          <Field
+            label="Count type"
+            hint="Cycle counts a subset; full counts everything on hand"
+          >
+            <SelectField
+              value={countType}
+              onChange={event => setCountType(event.target.value)}
             >
-              <SelectField
-                value={countType}
-                onChange={event => setCountType(event.target.value)}
-              >
-                <option value="CYCLE">Cycle</option>
-                <option value="FULL">Full</option>
-                <option value="SPOT">Spot</option>
-              </SelectField>
-            </Field>
-            <Field label="Notes">
-              <Input
-                value={notes}
-                onChange={event => setNotes(event.target.value)}
-                placeholder="Optional"
-              />
-            </Field>
-            <div className="md:col-span-3 dialog-form-actions">
-              <Button
-                type="submit"
-                disabled={!warehouseId || createCount.isPending}
-              >
-                {createCount.isPending ? "Creating…" : "Create count sheet"}
-              </Button>
-            </div>
-          </form>
+              <option value="CYCLE">Cycle</option>
+              <option value="FULL">Full</option>
+              <option value="SPOT">Spot</option>
+            </SelectField>
+          </Field>
+          <Field label="Notes">
+            <Input
+              value={notes}
+              onChange={event => setNotes(event.target.value)}
+              placeholder="Optional"
+            />
+          </Field>
         </FormDialog>
 
         <Panel

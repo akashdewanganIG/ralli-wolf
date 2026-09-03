@@ -19,7 +19,7 @@ import {
   Warehouse,
   Wallet,
 } from "@repo/ui/icons";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "../contexts/auth-context";
 import { toast } from "../lib/toast";
 import {
   useBoms,
@@ -27,7 +27,7 @@ import {
   useMaterialShortages,
   usePurchasingDashboard,
   useWmsDashboard,
-} from "../hooks/useSupplyChain";
+} from "../hooks/use-supply-chain";
 import {
   formatMoney,
   formatQuantity,
@@ -43,13 +43,6 @@ import { CardActionButton } from "@repo/ui/components/ui/card-action-button";
 import { Panel } from "@repo/ui/components/ui/panel";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 
-/**
- * Dashboard KPI.
- *
- * Delegates to the shared `MetricCard` so the top row of this page and the stat
- * rows on every module screen are literally the same component — they had
- * drifted to different paddings, icon sizes, and hint colours.
- */
 function OverviewMetric({
   label,
   value,
@@ -95,9 +88,6 @@ function ModuleCard({
   loading?: boolean;
 }) {
   return (
-    // No trailing arrow. The whole tile is the link — the border, surface, and
-    // shadow all respond on hover and it carries a focus ring — so a chevron
-    // only restated what the cursor and the treatment already say.
     <Link
       href={href}
       className="group flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-sm shadow-foreground/[0.02] outline-none transition-[background-color,border-color,box-shadow] duration-150 hover:border-border-strong hover:bg-surface-subtle hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring/30"
@@ -131,14 +121,6 @@ function PanelRowsSkeleton({ rows = 5 }: { rows?: number }) {
   );
 }
 
-/**
- * The small label-over-number card used inside a panel.
- *
- * Warehouse flow set this pattern and it reads best of the lot, so every panel
- * that shows supporting figures uses exactly this rather than a hand-rolled
- * div: one muted label, one large tabular number, on the subtle surface so the
- * card separates from the panel without competing with it.
- */
 function MetricTile({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="rounded-lg border border-border bg-surface-subtle px-3 py-2.5">
@@ -150,13 +132,6 @@ function MetricTile({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-/**
- * The bordered box the tiles sit in.
- *
- * A rule between the chart above and the figures below separated them but left
- * the figures floating; a container groups them instead, and matches the box
- * the bin-occupancy gauge already sits in.
- */
 function MetricTiles({
   children,
   columns = 2,
@@ -178,12 +153,6 @@ function MetricTiles({
   );
 }
 
-/**
- * The panel's own action, at its foot.
- *
- * It used to sit in the header beside the title, where it competed with the
- * heading for first read and left the bottom edge of every panel ragged.
- */
 function PanelLink({ href, children }: { href: string; children: ReactNode }) {
   return <CardActionButton href={href}>{children}</CardActionButton>;
 }
@@ -238,7 +207,7 @@ export function AnalyticsDashboard() {
   };
 
   const movementRows = inventory?.movementsByType ?? [];
-  // Largest movement first, so the chart reads top-down by magnitude.
+
   const movementChartData = movementRows
     .map(row => ({
       name: humanizeEnum(row.movementType),
@@ -246,8 +215,7 @@ export function AnalyticsDashboard() {
       display: formatQuantity(row.quantity),
       detail: [{ label: "Ledger entries", value: String(row.count) }],
     }))
-    // Largest first; the chart gives every type its own row and scrolls past
-    // its cap, so there is no longer a reason to drop the smaller ones.
+
     .sort((a, b) => b.value - a.value);
 
   const orderStatusRows = purchasing?.ordersByStatus ?? [];
@@ -266,8 +234,7 @@ export function AnalyticsDashboard() {
       label: humanizeEnum(row.status),
       value,
       display: formatMoney(row.value),
-      // Bars scale to the largest status, so the share of the whole has to be
-      // stated rather than inferred from a length.
+
       meta: `${share}% · ${row.count} order${row.count === 1 ? "" : "s"}`,
     };
   });
@@ -289,9 +256,6 @@ export function AnalyticsDashboard() {
           </h1>
         </div>
 
-        {/* Sync state is not shown here any more — it lives in the system-status
-            menu in the header, so there is one place to look rather than a dot
-            above the metrics and a badge beside the page title. */}
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           <Button
             type="button"
@@ -426,10 +390,6 @@ export function AnalyticsDashboard() {
           </p>
         ) : (
           <div className="flex flex-col">
-            {/* No fixed height: the chart is one row per movement type and
-                sizes itself from the data. Past its row cap it scrolls, so a
-                workspace that grows new movement types over time never
-                squashes the rows nor pushes this panel off the page. */}
             <div className="pb-3">
               <CategoryBarChart
                 data={movementChartData}
@@ -450,10 +410,6 @@ export function AnalyticsDashboard() {
         )}
       </Panel>
 
-      {/* Warehouse flow used to be the narrow column beside stock movement and
-          the other three sat three-up. Two-up puts all four on the same width,
-          which is what these panels need — each carries a small grid or list of
-          its own that a third of the page was squeezing. */}
       <div className="grid items-stretch gap-3 xl:grid-cols-2">
         <Panel
           title="Warehouse flow"
@@ -480,8 +436,6 @@ export function AnalyticsDashboard() {
               className="mt-1"
               size={132}
               value={isLoading ? 0 : (wms?.binOccupancyPercent ?? 0)}
-              // Storage that is nearly full is the condition worth reacting to,
-              // so the arc changes colour rather than staying decorative.
               emphasis={
                 !isLoading && (wms?.binOccupancyPercent ?? 0) >= 85
                   ? "warning"
@@ -581,7 +535,6 @@ export function AnalyticsDashboard() {
             <PanelRowsSkeleton />
           ) : (purchasing?.ordersByStatus ?? []).length ? (
             <div className="flex h-full flex-col">
-              {/* The denominator the bars are read against, stated once. */}
               <div className="flex items-baseline justify-between gap-3 pb-3">
                 <span className="text-xs text-muted-foreground">
                   Committed value
@@ -590,8 +543,7 @@ export function AnalyticsDashboard() {
                   {formatMoney(committedOrderValue)}
                 </span>
               </div>
-              {/* The list absorbs the spare height so the tiles stay pinned to
-                  the foot of the panel, level with the sibling beside it. */}
+
               <MagnitudeBars data={orderStatusBars} className="flex-1" />
               <MetricTiles className="mt-3">
                 <MetricTile
@@ -635,7 +587,7 @@ export function AnalyticsDashboardSkeleton() {
           ))}
         </div>
       </div>
-      {/* Mirrors the real layout: one full-width panel, then four two-up. */}
+
       <div className="h-80 animate-pulse rounded-xl bg-muted" />
       <div className="grid gap-3 xl:grid-cols-2">
         {Array.from({ length: 4 }).map((_, index) => (

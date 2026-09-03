@@ -14,22 +14,6 @@ const DialogPortal = DialogPrimitive.Portal;
 
 const DialogClose = DialogPrimitive.Close;
 
-/**
- * The last element focused outside any dialog.
- *
- * Needed because neither obvious hook can see it:
- *
- *   - a render-time capture is wrong, because `DialogContent`'s body also runs
- *     while the dialog is closed (Radix returns null further down), so it
- *     records whatever was focused on an unrelated re-render;
- *   - `onOpenAutoFocus` is too late whenever the dialog contains a field with
- *     `autoFocus`. React applies that during commit, before Radix's effect
- *     fires, so `document.activeElement` is already an input inside the dialog.
- *
- * A capture-phase `focusin` listener sidesteps both: it records focus as it
- * moves, and skips anything inside a dialog, so what it holds when a dialog
- * opens is exactly the control the user came from.
- */
 let lastFocusOutsideDialog: HTMLElement | null = null;
 if (typeof document !== "undefined") {
   document.addEventListener(
@@ -55,9 +39,6 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      // `bg-overlay`, never `bg-foreground/…`: in dark mode --foreground is
-      // #fafafa, so the old rule painted a white wash over the page instead of
-      // dimming it. The scrim token darkens in both themes by definition.
       "fixed inset-0 z-50 bg-overlay backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className
     )}
@@ -69,20 +50,9 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
-    /** Hide the corner close button for dialogs the user must not dismiss. */
     showCloseButton?: boolean;
   }
 >(({ className, children, showCloseButton = true, ...props }, ref) => {
-  /**
-   * Where focus goes when the dialog closes.
-   *
-   * Radix restores focus to its own `DialogTrigger`, but most dialogs here are
-   * controlled by a boolean and have no trigger element for it to find — so
-   * closing one dropped focus onto `<body>` and a keyboard user lost their
-   * place in the page. Capturing the previously focused element on mount
-   * covers both cases: with a trigger it is the trigger, without one it is
-   * whatever the user was actually on.
-   */
   const restoreFocusTo = React.useRef<HTMLElement | null>(null);
 
   return (
@@ -94,19 +64,15 @@ const DialogContent = React.forwardRef<
           props.onCloseAutoFocus?.(event);
           if (event.defaultPrevented) return;
           const target = restoreFocusTo.current ?? lastFocusOutsideDialog;
-          // Only if it is still in the document — the dialog may have removed
-          // the very row whose button opened it.
+
           if (target && document.contains(target)) {
             event.preventDefault();
             target.focus({ preventScroll: true });
           }
         }}
+        data-slot="dialog-content"
         className={cn(
-          // Centred with pinned edges and auto margins on both axes, so the
-          // panel sits in the middle without a transform. The enter/exit
-          // animation is a fade only — the previous slide and zoom were
-          // transform-driven.
-          "fixed inset-0 z-50 m-auto grid h-fit max-h-[calc(100svh-2rem)] w-[calc(100%-2rem)] max-w-lg gap-4 overflow-y-auto rounded-xl border border-border bg-surface p-4 shadow-lg shadow-black/10 duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+          "fixed inset-0 z-50 m-auto flex h-fit max-h-[calc(100svh-1rem)] w-[calc(100%-1rem)] max-w-lg flex-col gap-0 overflow-hidden rounded-xl border border-border bg-surface p-0 shadow-lg shadow-black/10 duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 sm:max-h-[calc(100svh-2rem)] sm:w-[calc(100%-2rem)]",
           className
         )}
         {...props}
@@ -129,21 +95,40 @@ const DialogHeader = ({
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn("flex flex-col gap-1 pr-8 text-left", className)}
+    data-slot="dialog-header"
+    className={cn(
+      "relative z-10 shrink-0 border-b border-border bg-surface px-4 py-3 pr-12 text-left sm:px-5 sm:py-4 sm:pr-12",
+      className
+    )}
     {...props}
   />
 );
 DialogHeader.displayName = "DialogHeader";
+
+const DialogBody = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    data-slot="dialog-body"
+    className={cn(
+      "min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-5 sm:py-4",
+      className
+    )}
+    {...props}
+  />
+));
+DialogBody.displayName = "DialogBody";
 
 const DialogFooter = ({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
+    data-slot="dialog-footer"
     className={cn(
-      // Divider above the actions, edge to edge, so the footer reads as a
-      // separate region at any dialog width.
-      "-mx-4 -mb-4 mt-1 flex flex-col-reverse gap-2 border-t border-border px-4 py-3 sm:flex-row sm:justify-end",
+      "relative z-10 shrink-0 flex flex-col-reverse gap-2 border-t border-border bg-surface px-4 py-3 sm:flex-row sm:justify-end sm:px-5",
       className
     )}
     {...props}
@@ -186,6 +171,7 @@ export {
   DialogTrigger,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogFooter,
   DialogTitle,
   DialogDescription,

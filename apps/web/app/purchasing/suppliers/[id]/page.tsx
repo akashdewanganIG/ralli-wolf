@@ -7,7 +7,7 @@ import { Input } from "@repo/ui/components/ui/input";
 import Link from "next/link";
 import { Alert } from "@repo/ui/components/ui/alert";
 import { useParams } from "next/navigation";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   DetailRow,
   ErrorBanner,
@@ -21,13 +21,13 @@ import {
 import {
   ProductPicker,
   type PickedProduct,
-} from "@/components/supply-chain/ProductPicker";
+} from "@/components/supply-chain/product-picker";
 import {
   useSupplier,
   useSupplierCatalogue,
   useSupplierMutations,
   useSupplierPerformance,
-} from "@/hooks/useSupplyChain";
+} from "@/hooks/use-supply-chain";
 import {
   formatDate,
   formatDateTime,
@@ -37,6 +37,7 @@ import {
 } from "@/lib/utils/decimal";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { CategorySwitcher } from "@repo/ui/components/ui/category-switcher";
+import { SupplierLogoField } from "@/components/supply-chain/supplier-logo-field";
 
 export default function SupplierDetailPage() {
   const params = useParams<{ id: string }>();
@@ -234,6 +235,14 @@ export default function SupplierDetailPage() {
 
         {tab === "overview" && supplier && (
           <>
+            <Panel title="Supplier logo">
+              <SupplierLogoField
+                supplierId={supplier.id}
+                logoUrl={supplier.logoUrl}
+                supplierName={supplier.name}
+              />
+            </Panel>
+
             <Panel title="Supplier details">
               <div className="grid-auto-fit gap-4">
                 <DetailRow

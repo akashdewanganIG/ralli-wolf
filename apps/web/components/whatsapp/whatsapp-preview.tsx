@@ -9,7 +9,7 @@ import {
   MapPin,
 } from "@repo/ui/icons";
 
-type TemplateComponent = {
+export type TemplateComponent = {
   type: "HEADER" | "BODY" | "FOOTER" | "BUTTONS";
   format?: string;
   text?: string;
@@ -35,20 +35,16 @@ export function WhatsAppPreview({
   const footerComponent = components.find(c => c.type === "FOOTER");
   const buttonsComponent = components.find(c => c.type === "BUTTONS");
 
-  // Replace {{1}}, {{2}} etc with styled placeholders
   const formatText = (text: string | undefined) => {
     if (!text) return null;
 
-    // First, handle WhatsApp formatting
     const formattedText = text;
 
-    // Process the text and return React elements
     const parts = formattedText.split(
       /(\{\{\d+\}\}|\*[^*]+\*|_[^_]+_|~[^~]+~|```[^`]+```)/g
     );
 
     return parts.map((part, index) => {
-      // Variable placeholder
       if (/\{\{\d+\}\}/.test(part)) {
         return (
           <span
@@ -59,19 +55,19 @@ export function WhatsAppPreview({
           </span>
         );
       }
-      // Bold
+
       if (/^\*[^*]+\*$/.test(part)) {
         return <strong key={index}>{part.slice(1, -1)}</strong>;
       }
-      // Italic
+
       if (/^_[^_]+_$/.test(part)) {
         return <em key={index}>{part.slice(1, -1)}</em>;
       }
-      // Strikethrough
+
       if (/^~[^~]+~$/.test(part)) {
         return <s key={index}>{part.slice(1, -1)}</s>;
       }
-      // Code
+
       if (/^```[^`]+```$/.test(part)) {
         return (
           <code
@@ -92,7 +88,6 @@ export function WhatsAppPreview({
     footerComponent?.text ||
     buttonsComponent?.buttons?.length;
 
-  // Render media header placeholder
   const renderMediaHeader = () => {
     if (
       !headerComponent?.format ||
@@ -144,9 +139,7 @@ export function WhatsAppPreview({
         Preview
       </div>
 
-      {/* Phone frame */}
       <div className="flex-1 bg-surface-secondary rounded-2xl p-2 min-h-[25rem] flex flex-col">
-        {/* WhatsApp header */}
         <div className="bg-[#075e54] text-white px-4 py-3 rounded-t-xl flex items-center gap-3">
           <div className="w-8 h-8 bg-active rounded-full flex items-center justify-center">
             <span className="text-text-secondary text-xs font-bold">WA</span>
@@ -157,7 +150,6 @@ export function WhatsAppPreview({
           </div>
         </div>
 
-        {/* Chat area */}
         <div
           className="flex-1 p-3 overflow-y-auto"
           style={{
@@ -172,14 +164,11 @@ export function WhatsAppPreview({
           ) : (
             <div className="flex justify-end">
               <div className="max-w-[85%]">
-                {/* Message bubble */}
                 <div
                   className={`bg-[#dcf8c6] shadow-sm overflow-hidden ${hasMediaHeader ? "rounded-lg" : "rounded-lg"}`}
                 >
-                  {/* Media Header */}
                   {renderMediaHeader()}
 
-                  {/* Text Header */}
                   {headerComponent?.format === "TEXT" &&
                     headerComponent?.text && (
                       <div className="px-3 pt-2 pb-1 font-semibold text-[#303030] text-sm">
@@ -187,21 +176,18 @@ export function WhatsAppPreview({
                       </div>
                     )}
 
-                  {/* Body */}
                   {bodyComponent?.text && (
                     <div className="px-3 py-1 text-[#303030] text-sm whitespace-pre-wrap">
                       {formatText(bodyComponent.text)}
                     </div>
                   )}
 
-                  {/* Footer */}
                   {footerComponent?.text && (
                     <div className="px-3 pb-2 pt-1 text-[#667781] text-xs">
                       {formatText(footerComponent.text)}
                     </div>
                   )}
 
-                  {/* Timestamp */}
                   <div className="px-3 pb-1 flex justify-end">
                     <span className="text-[0.625rem] text-[#667781]">
                       {new Date().toLocaleTimeString([], {
@@ -212,7 +198,6 @@ export function WhatsAppPreview({
                   </div>
                 </div>
 
-                {/* Buttons */}
                 {buttonsComponent?.buttons &&
                   buttonsComponent.buttons.length > 0 && (
                     <div className="mt-1 space-y-1">
@@ -240,7 +225,6 @@ export function WhatsAppPreview({
           )}
         </div>
 
-        {/* Input area */}
         <div className="bg-[#f0f0f0] px-2 py-2 rounded-b-xl flex items-center gap-2">
           <div className="flex-1 bg-surface rounded-full px-4 py-2 text-sm text-muted-foreground">
             Type a message

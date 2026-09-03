@@ -34,8 +34,7 @@ export function DonutChart({
 }: DonutChartProps) {
   const values = data.datasets[0]?.data ?? [];
   const colors = data.datasets[0]?.backgroundColor ?? [];
-  // Fall back through the ordinal chart ramp rather than a pinned hex, so an
-  // unstyled slice still follows the theme instead of forcing brand red.
+
   const rows = data.labels.map((name, index) => ({
     name,
     value: Number(values[index] ?? 0),

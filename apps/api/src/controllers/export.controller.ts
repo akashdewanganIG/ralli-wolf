@@ -1,10 +1,11 @@
 import { Request, Response } from "express";
 import { prisma } from "@repo/db";
 import { stringify } from "csv-stringify/sync";
-import { handleError, handleValidationError } from "../utils/errorHandler.js";
+import { handleError, handleValidationError } from "../utils/error-handler.js";
 import { ExcelService, ExportEntity } from "../services/excel.service.js";
-import { buildFullName } from "../utils/nameHelpers.js";
-import { renderEmail } from "../services/emailTemplate.js";
+import { buildFullName } from "../utils/name-helpers.js";
+import { renderEmail } from "../services/email-template.js";
+import { parsePageRange, type PageRange } from "../utils/validators.js";
 
 const MAX_LIMIT = 100;
 const DEFAULT_LIMIT = 50;
@@ -57,24 +58,14 @@ function isExportEntity(value: string): value is ExportEntity {
   return EXPORT_ENTITIES.includes(value as ExportEntity);
 }
 
-function getPaging(req: Request) {
-  const startPage = Math.max(
-    1,
-    Number.parseInt(String(req.query.startPage || "1"), 10) || 1
+function getPaging(req: Request): PageRange | null {
+  return parsePageRange(
+    req.query.startPage,
+    req.query.endPage,
+    req.query.limit,
+    DEFAULT_LIMIT,
+    MAX_LIMIT
   );
-  const endPage = Math.max(
-    startPage,
-    Number.parseInt(String(req.query.endPage || startPage), 10) || startPage
-  );
-  const requestedLimit =
-    Number.parseInt(String(req.query.limit || DEFAULT_LIMIT), 10) ||
-    DEFAULT_LIMIT;
-
-  return {
-    startPage,
-    endPage,
-    limit: Math.min(Math.max(1, requestedLimit), MAX_LIMIT),
-  };
 }
 
 export class ExportController {
@@ -168,7 +159,16 @@ export class ExportController {
         );
       }
 
-      const { startPage, endPage, limit } = getPaging(req);
+      const pageRange = getPaging(req);
+      if (!pageRange) {
+        return handleValidationError(
+          res,
+          `Pages must be ordered positive integers and limit must be between 1 and ${MAX_LIMIT}.`,
+          undefined,
+          "Export entity xlsx"
+        );
+      }
+      const { startPage, endPage, limit } = pageRange;
       if (endPage - startPage + 1 > MAX_PAGE_COUNT) {
         return handleValidationError(
           res,
@@ -223,7 +223,16 @@ export class ExportController {
         );
       }
 
-      const { startPage, endPage, limit } = getPaging(req);
+      const pageRange = getPaging(req);
+      if (!pageRange) {
+        return handleValidationError(
+          res,
+          `Pages must be ordered positive integers and limit must be between 1 and ${MAX_LIMIT}.`,
+          undefined,
+          "Export entity csv"
+        );
+      }
+      const { startPage, endPage, limit } = pageRange;
       if (endPage - startPage + 1 > MAX_PAGE_COUNT) {
         return handleValidationError(
           res,
@@ -336,9 +345,7 @@ export class ExportController {
       const ok = await emailService.sendEmail({
         to,
         subject: `Leads Export (${items.length})`,
-        // `body` is the HTML part. This used to be a bare sentence, which
-        // arrived as one unstyled line with none of the shell every other
-        // message in the app carries.
+
         body: renderEmail({
           preview: `${items.length} leads attached as Excel.`,
           eyebrow: "Data export",

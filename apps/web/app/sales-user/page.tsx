@@ -1,6 +1,6 @@
 "use client";
 
-import { RoleGuard } from "@/components/guards/RoleGuard";
+import { RoleGuard } from "@/components/guards/role-guard";
 import { TablePageSkeleton } from "@/components/skeletons";
 import { salesService } from "@/lib/api/services";
 import { Enquiry, Lead } from "@/lib/api/types";
@@ -36,7 +36,6 @@ export default function SalesPage() {
   const [submittingRemark, setSubmittingRemark] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
-  // Fetch leads and stats
   useEffect(() => {
     fetchLeadsAndStats();
   }, []);
@@ -68,14 +67,12 @@ export default function SalesPage() {
       setActionLoading(true);
       await salesService.qualifyLead(selectedLead.id);
 
-      // Update lead in list
       setLeads(prev =>
         prev.map(l =>
           l.id === selectedLead.id ? { ...l, status: "QUALIFIED" } : l
         )
       );
 
-      // Update selected lead
       setSelectedLead(prev => (prev ? { ...prev, status: "QUALIFIED" } : null));
     } catch {
       setError("Failed to qualify lead");
@@ -90,14 +87,12 @@ export default function SalesPage() {
       setActionLoading(true);
       await salesService.disqualifyLead(selectedLead.id);
 
-      // Update lead in list
       setLeads(prev =>
         prev.map(l =>
           l.id === selectedLead.id ? { ...l, status: "UNQUALIFIED" } : l
         )
       );
 
-      // Update selected lead
       setSelectedLead(prev =>
         prev ? { ...prev, status: "UNQUALIFIED" } : null
       );
@@ -114,7 +109,6 @@ export default function SalesPage() {
       setSubmittingRemark(true);
       const result = await salesService.addRemark(selectedLead.id, remarkText);
 
-      // Update selected lead with new remark
       setSelectedLead(prev => {
         if (!prev) return null;
         return {
@@ -137,7 +131,6 @@ export default function SalesPage() {
       setActionLoading(true);
       await salesService.resolveEnquiry(enquiryId);
 
-      // Update selected lead's enquiries
       setSelectedLead(prev => {
         if (!prev) return null;
         return {
@@ -155,7 +148,6 @@ export default function SalesPage() {
         };
       });
 
-      // Refresh leads and stats
       await fetchLeadsAndStats();
     } catch {
       setError("Failed to resolve enquiry");
@@ -175,9 +167,7 @@ export default function SalesPage() {
   return (
     <RoleGuard allowedRoles={["SALES"]}>
       <div>
-        {/* The application shell already renders the header; this page only owns its content. */}
         <PageShell>
-          {/* Error Message */}
           {error && (
             <Alert
               className="mb-4"
@@ -192,7 +182,7 @@ export default function SalesPage() {
               {error}
             </Alert>
           )}
-          {/* Detail View */}
+
           {selectedLead ? (
             <div>
               <Button
@@ -204,7 +194,6 @@ export default function SalesPage() {
               </Button>
 
               <div className="bg-surface rounded-lg shadow-lg p-4 space-y-4">
-                {/* Lead Info */}
                 <div>
                   <h1 className="text-base sm:text-lg font-semibold mb-4">
                     {getLeadFullName(
@@ -274,7 +263,6 @@ export default function SalesPage() {
                   </div>
                 </div>
 
-                {/* Actions */}
                 <div className="flex gap-3 border-t pt-4">
                   <Button
                     onClick={handleQualify}
@@ -300,7 +288,6 @@ export default function SalesPage() {
                   </Button>
                 </div>
 
-                {/* Enquiries Section */}
                 {selectedLead.enquiries &&
                   selectedLead.enquiries.length > 0 && (
                     <div className="border-t pt-4">
@@ -363,7 +350,6 @@ export default function SalesPage() {
                                 )}
                               </div>
 
-                              {/* Custom Fields */}
                               {enquiry.customFields &&
                                 Object.keys(enquiry.customFields).length >
                                   0 && (
@@ -395,7 +381,6 @@ export default function SalesPage() {
                     </div>
                   )}
 
-                {/* Add Remark */}
                 <div className="border-t pt-4">
                   <Label className="text-sm font-semibold mb-2 block">
                     Add Remark
@@ -417,7 +402,6 @@ export default function SalesPage() {
                   </div>
                 </div>
 
-                {/* Remarks History */}
                 {selectedLead.remarks && selectedLead.remarks.length > 0 && (
                   <div className="border-t pt-4">
                     <Label className="text-sm font-semibold mb-3 block">
@@ -444,7 +428,6 @@ export default function SalesPage() {
               </div>
             </div>
           ) : (
-            /* List View */
             <div>
               <h1 className="text-base sm:text-lg font-semibold mb-4">
                 Assigned Leads

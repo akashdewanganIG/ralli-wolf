@@ -28,21 +28,11 @@ export interface ProfileDropdownProps {
   onManageNotifications?: () => void;
   onChangePassword?: () => void;
   onLogout?: () => void;
-  /** Rendered in its own group, e.g. the theme switch. */
+
   preferences?: React.ReactNode;
   className?: string;
 }
 
-/**
- * Account menu.
- *
- * Two regions, one rule: the top identifies who is signed in, everything below
- * is something you can do. The previous version mixed the two — an online dot
- * and a role sat inside the header block while the email hung underneath it,
- * and an 44px avatar was repeated at the top of a menu whose trigger was
- * already that avatar. Connectivity moved out entirely; it belongs to the
- * system-status menu next door, not to the person signed in.
- */
 export function ProfileDropdown({
   user,
   onEditProfile,
@@ -71,16 +61,11 @@ export function ProfileDropdown({
         <button
           type="button"
           className={cn(
-            // Matches the header's other controls so the two menu triggers read
-            // as a pair rather than as an icon button beside an avatar.
             "inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-surface outline-none transition-[background-color,border-color] duration-150 hover:border-border-strong hover:bg-surface-subtle focus-visible:ring-2 focus-visible:ring-ring/30",
             className
           )}
           aria-label={`Open account menu for ${user.name}`}
         >
-          {/* Concentric with the trigger, not a circle inside a rounded square.
-              The trigger is 8px with the avatar inset 4px, so the inner radius
-              is 8 − 4 = 4px; anything else leaves an uneven gap at the corners. */}
           <Avatar className="size-7 rounded-sm">
             <AvatarImage src={user.avatar} alt="" />
             <AvatarFallback className="bg-primary text-[0.6875rem] font-semibold text-primary-foreground">
@@ -95,8 +80,6 @@ export function ProfileDropdown({
         align="end"
         sideOffset={6}
       >
-        {/* Identity — not a menu item, so it is not focusable and does not
-            respond to hover. */}
         <div className="px-2 py-1.5">
           <p className="truncate text-[0.8125rem] font-semibold leading-5 text-foreground">
             {user.name}

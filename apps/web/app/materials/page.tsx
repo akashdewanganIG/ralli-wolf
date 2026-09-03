@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Input } from "@repo/ui/components/ui/input";
 import Link from "next/link";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   ErrorBanner,
   PageHeader,
@@ -14,14 +14,15 @@ import {
   StatCard,
   DEFAULT_PAGE_SIZE,
 } from "@/components/supply-chain/shared";
-import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
-import { useMaterialShortages, useMaterials } from "@/hooks/useSupplyChain";
+import { WarehouseFilter } from "@/components/supply-chain/warehouse-filter";
+import { useMaterialShortages, useMaterials } from "@/hooks/use-supply-chain";
 import { formatMoney, formatQuantity, humanizeEnum } from "@/lib/utils/decimal";
-import type { ItemType } from "@/lib/api/types/supplyChain";
+import type { ItemType } from "@/lib/api/types/supply-chain";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { DashboardToolbar } from "@repo/ui/components/ui/dashboard-toolbar";
 import { SearchInput } from "@repo/ui/components/ui/search-input";
 import { Tag } from "@repo/ui/components/ui/tag";
+import { ItemThumbnail } from "@/components/supply-chain/item-thumbnail";
 
 const MATERIAL_TYPES: ItemType[] = [
   "RAW_MATERIAL",
@@ -151,10 +152,13 @@ export default function MaterialsPage() {
                 cell: row => (
                   <Link
                     href={`/inventory/stock/${row.id}`}
-                    className="text-primary hover:text-info"
+                    className="flex items-center gap-2.5 text-primary hover:text-info"
                   >
-                    <span className="font-mono text-xs">{row.code}</span>
-                    <span className="ml-2 text-sm">{row.name}</span>
+                    <ItemThumbnail url={row.imageUrl} alt={row.name} />
+                    <span>
+                      <span className="font-mono text-xs">{row.code}</span>
+                      <span className="ml-2 text-sm">{row.name}</span>
+                    </span>
                   </Link>
                 ),
               },

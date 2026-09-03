@@ -10,7 +10,6 @@ interface UserFilterBadgesProps {
   onRegionRemove: () => void;
 }
 
-// Helper function to format region for display
 const formatRegion = (region?: string): string => {
   if (!region) return "-";
   const regionMap: Record<string, string> = {
@@ -39,7 +38,6 @@ export const UserFilterBadges: React.FC<UserFilterBadgesProps> = ({
 
   const badges = [];
 
-  // Role filter badge
   if (selectedRole !== undefined) {
     badges.push(
       <Tag key="role" onRemove={onRoleRemove} removeLabel="Remove filter">
@@ -48,7 +46,6 @@ export const UserFilterBadges: React.FC<UserFilterBadgesProps> = ({
     );
   }
 
-  // Region filter badge
   if (selectedRegion !== undefined) {
     badges.push(
       <Tag key="region" onRemove={onRegionRemove} removeLabel="Remove filter">

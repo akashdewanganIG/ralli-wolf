@@ -19,8 +19,6 @@ function CardHeader({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      // Tighter gap to the content below than to the card edges, so a heading
-      // reads as attached to its own section rather than floating between two.
       className={cn("flex flex-col gap-0.5 px-4 pb-2.5 pt-3.5", className)}
       {...props}
     />

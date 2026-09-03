@@ -6,7 +6,7 @@ import { Input } from "@repo/ui/components/ui/input";
 import Link from "next/link";
 import { Alert } from "@repo/ui/components/ui/alert";
 import { useParams } from "next/navigation";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   DetailRow,
   ErrorBanner,
@@ -20,7 +20,9 @@ import {
 import {
   useGoodsReceipt,
   useGoodsReceiptMutations,
-} from "@/hooks/useSupplyChain";
+} from "@/hooks/use-supply-chain";
+import { useReceiptImages } from "@/hooks/use-entity-images";
+import { EntityImageGallery } from "@/components/supply-chain/entity-image-gallery";
 import {
   formatDate,
   formatDateTime,
@@ -37,6 +39,7 @@ export default function GoodsReceiptDetailPage() {
 
   const { data, isLoading, error } = useGoodsReceipt(grnId);
   const { post, cancel, recordQualityCheck } = useGoodsReceiptMutations();
+  const receiptImages = useReceiptImages(grnId);
 
   const [qcLineId, setQcLineId] = useState<number | null>(null);
   const [qcForm, setQcForm] = useState({
@@ -443,6 +446,26 @@ export default function GoodsReceiptDetailPage() {
               </div>
             </form>
           )}
+        </Panel>
+
+        <Panel
+          title="Receipt photos"
+          description="Condition on arrival, packaging, damage, and delivery paperwork. Attach these while the shipment is in front of you — they are the evidence for any supplier claim later."
+        >
+          <EntityImageGallery
+            images={receiptImages.query.data?.data ?? []}
+            maxImages={12}
+            itemLabel="receipt photos"
+            emptyHint="No photos recorded for this receipt yet."
+            onUpload={images =>
+              receiptImages.addImages.mutateAsync({ images })
+            }
+            onDelete={imageId =>
+              receiptImages.deleteImage.mutateAsync(imageId)
+            }
+            isUploading={receiptImages.addImages.isPending}
+            isDeleting={receiptImages.deleteImage.isPending}
+          />
         </Panel>
 
         {lines.some(line => line.qualityChecks.length > 0) && (

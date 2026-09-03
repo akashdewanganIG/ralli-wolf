@@ -13,6 +13,7 @@ import {
 } from "@repo/ui/components/ui/select";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -23,9 +24,6 @@ import { cn } from "@repo/ui/lib/utils";
 import { KeywordSelect } from "./keyword-select";
 import { toast } from "@/lib/toast";
 
-// Local mirror of the Prisma LeadSource enum values (string values match the
-// schema 1:1) so this client component never pulls in @prisma/client's
-// generated runtime.
 const LeadSource = {
   MANUAL: "MANUAL",
   IMPORT: "IMPORT",
@@ -65,7 +63,6 @@ const sourceOptions = [
   { value: LeadSource.LANDING_PAGE, label: "Landing Page" },
 ];
 
-// Helper function to check if filters are active
 export const hasActiveFilters = (filters: LeadFilterValues): boolean => {
   return Object.entries(filters).some(([key, value]) => {
     if (key === "keywordIds") {
@@ -88,7 +85,6 @@ export const LeadFilter: React.FC<LeadFilterProps> = ({
   const [localFilters, setLocalFilters] = useState<LeadFilterValues>(filters);
   const hasActive = hasActiveFilters(filters);
 
-  // Sync local filters with props when dialog opens or filters change
   useEffect(() => {
     if (open) {
       setLocalFilters(filters);
@@ -103,7 +99,6 @@ export const LeadFilter: React.FC<LeadFilterProps> = ({
   };
 
   const handleApplyFilters = () => {
-    // Apply all local filter values to parent
     onStatusChange(localFilters.status ?? "");
     onSourceChange(localFilters.source ?? "");
     onCreatedFromChange(localFilters.createdFrom ?? null);
@@ -133,13 +128,11 @@ export const LeadFilter: React.FC<LeadFilterProps> = ({
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-[31.25rem]">
+        <DialogContent className="gap-0 overflow-hidden sm:max-w-[31.25rem]">
           <DialogHeader>
             <DialogTitle>Filter Leads</DialogTitle>
           </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            {/* Status Filter */}
+          <DialogBody className="space-y-3">
             <div className="space-y-2">
               <Label htmlFor="status">Status</Label>
               <Select
@@ -165,7 +158,6 @@ export const LeadFilter: React.FC<LeadFilterProps> = ({
               </Select>
             </div>
 
-            {/* Source Filter */}
             <div className="space-y-2">
               <Label htmlFor="source">Source</Label>
               <Select
@@ -194,7 +186,6 @@ export const LeadFilter: React.FC<LeadFilterProps> = ({
               </Select>
             </div>
 
-            {/* Keyword Filter */}
             <div className="space-y-2">
               <KeywordSelect
                 selectedKeywordIds={localFilters.keywordIds || []}
@@ -206,7 +197,6 @@ export const LeadFilter: React.FC<LeadFilterProps> = ({
               />
             </div>
 
-            {/* Created From Date */}
             <div className="space-y-2">
               <Label htmlFor="createdFrom">Created From</Label>
               <Input
@@ -229,7 +219,6 @@ export const LeadFilter: React.FC<LeadFilterProps> = ({
               />
             </div>
 
-            {/* Created To Date */}
             <div className="space-y-2">
               <Label htmlFor="createdTo">Created To</Label>
               <Input
@@ -249,9 +238,8 @@ export const LeadFilter: React.FC<LeadFilterProps> = ({
                 className="w-full"
               />
             </div>
-          </div>
+          </DialogBody>
 
-          {/* Action Buttons */}
           <DialogFooter>
             <Button variant="outline" onClick={handleClear}>
               Clear Filters

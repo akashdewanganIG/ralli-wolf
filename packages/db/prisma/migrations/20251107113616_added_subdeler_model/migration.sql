@@ -1,4 +1,4 @@
--- CreateTable
+
 CREATE TABLE "subdealers" (
     "id" SERIAL NOT NULL,
     "phone" TEXT NOT NULL,
@@ -23,7 +23,7 @@ CREATE TABLE "subdealers" (
     CONSTRAINT "subdealers_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
+
 CREATE TABLE "subdealer_otps" (
     "id" SERIAL NOT NULL,
     "subdealer_id" INTEGER,
@@ -38,17 +38,17 @@ CREATE TABLE "subdealer_otps" (
     CONSTRAINT "subdealer_otps_pkey" PRIMARY KEY ("id")
 );
 
--- CreateIndex
+
 CREATE UNIQUE INDEX "subdealers_phone_key" ON "subdealers"("phone");
 
--- CreateIndex
+
 CREATE UNIQUE INDEX "subdealers_gst_number_key" ON "subdealers"("gst_number");
 
--- CreateIndex
+
 CREATE INDEX "subdealer_otps_phone_idx" ON "subdealer_otps"("phone");
 
--- CreateIndex
+
 CREATE INDEX "subdealer_otps_subdealer_id_idx" ON "subdealer_otps"("subdealer_id");
 
--- AddForeignKey
+
 ALTER TABLE "subdealer_otps" ADD CONSTRAINT "subdealer_otps_subdealer_id_fkey" FOREIGN KEY ("subdealer_id") REFERENCES "subdealers"("id") ON DELETE CASCADE ON UPDATE CASCADE;

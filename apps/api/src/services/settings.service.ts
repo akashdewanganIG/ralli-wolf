@@ -10,8 +10,6 @@ export const getGlobalSettings = async () => {
     {} as Record<string, string>
   );
 
-  // `defaultCurrency` is the canonical key. Keep existing installations that
-  // still have the former `currency` key readable until their next save.
   if (!values.defaultCurrency && values.currency) {
     values.defaultCurrency = values.currency;
   }

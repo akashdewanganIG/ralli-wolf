@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
+import { createHash } from "node:crypto";
 import { prisma } from "@repo/db";
+import { roleHasPermission } from "@repo/db/permissions";
 import {
   Prisma,
   ApprovalStatus,
@@ -9,7 +11,6 @@ import {
   PurchaseOrderStatus,
   PurchaseRequisitionStatus,
   SupplierStatus,
-  UserRole,
 } from "@prisma/client";
 import {
   calculatePurchaseLines,
@@ -22,13 +23,15 @@ import {
 import { DomainError, NotFoundError } from "../services/supplyChain/errors.js";
 import {
   ZERO,
+  requireNonNegative,
+  requirePositive,
   roundMoney,
   roundQuantity,
-  toDecimal,
 } from "../services/supplyChain/decimal.js";
 import { createNotification } from "./notification.controller.js";
 import { emailService } from "../services/email.service.js";
-import { buildFullName } from "../utils/nameHelpers.js";
+import { buildFullName } from "../utils/name-helpers.js";
+import { logError, logWarn } from "../utils/logger.js";
 import {
   handleSupplyChainError,
   optionalString,
@@ -40,7 +43,9 @@ import {
   parsePagination,
   requireArray,
   requireUserId,
-} from "../utils/supplyChainHttp.js";
+} from "../utils/supply-chain-http.js";
+
+const DELIVERY_CLAIM_TIMEOUT_MS = 15 * 60 * 1_000;
 
 const PO_INCLUDE = {
   supplier: {
@@ -60,9 +65,6 @@ const PO_INCLUDE = {
 } as const;
 
 export class PurchasingController {
-  // -------------------------------------------------------- requisitions
-
-  /** GET /api/purchase-requisitions */
   async listRequisitions(req: Request, res: Response) {
     const operation = "List purchase requisitions";
     try {
@@ -108,7 +110,6 @@ export class PurchasingController {
     }
   }
 
-  /** GET /api/purchase-requisitions/:id */
   async getRequisition(req: Request, res: Response) {
     const operation = "Get purchase requisition";
     try {
@@ -154,7 +155,6 @@ export class PurchasingController {
     }
   }
 
-  /** POST /api/purchase-requisitions */
   async createRequisition(req: Request, res: Response) {
     const operation = "Create purchase requisition";
     try {
@@ -179,13 +179,19 @@ export class PurchasingController {
             String(line.productId),
             `lines[${index}].productId`
           );
-          const quantity = toDecimal(
+          const quantity = requirePositive(
             line.quantity as string,
             `lines[${index}].quantity`
           );
-          const unitPrice = line.estimatedUnitPrice
-            ? toDecimal(line.estimatedUnitPrice as string, "estimatedUnitPrice")
-            : ZERO;
+          const unitPrice =
+            line.estimatedUnitPrice === undefined ||
+            line.estimatedUnitPrice === null ||
+            line.estimatedUnitPrice === ""
+              ? ZERO
+              : requireNonNegative(
+                  line.estimatedUnitPrice as string,
+                  `lines[${index}].estimatedUnitPrice`
+                );
 
           estimatedValue = estimatedValue.plus(quantity.times(unitPrice));
           lineData.push({
@@ -224,10 +230,6 @@ export class PurchasingController {
     }
   }
 
-  /**
-   * PATCH /api/purchase-requisitions/:id/status
-   * Approve, reject or cancel a requisition.
-   */
   async setRequisitionStatus(req: Request, res: Response) {
     const operation = "Update requisition status";
     try {
@@ -270,11 +272,6 @@ export class PurchasingController {
     }
   }
 
-  /**
-   * POST /api/purchase-requisitions/:id/convert
-   * Turn an approved requisition into a purchase order. Lines already ordered
-   * are skipped, so converting twice cannot double-order.
-   */
   async convertRequisition(req: Request, res: Response) {
     const operation = "Convert requisition to purchase order";
     try {
@@ -352,7 +349,7 @@ export class PurchasingController {
           SEQUENCE_KEYS.PURCHASE_ORDER
         );
         const shippingAmount = req.body.shippingAmount
-          ? toDecimal(req.body.shippingAmount, "shippingAmount")
+          ? requireNonNegative(req.body.shippingAmount, "shippingAmount")
           : ZERO;
 
         const created = await tx.purchaseOrder.create({
@@ -439,9 +436,6 @@ export class PurchasingController {
     }
   }
 
-  // ------------------------------------------------------- purchase orders
-
-  /** GET /api/purchase-orders */
   async listOrders(req: Request, res: Response) {
     const operation = "List purchase orders";
     try {
@@ -490,7 +484,6 @@ export class PurchasingController {
     }
   }
 
-  /** GET /api/purchase-orders/:id */
   async getOrder(req: Request, res: Response) {
     const operation = "Get purchase order";
     try {
@@ -551,7 +544,6 @@ export class PurchasingController {
     }
   }
 
-  /** POST /api/purchase-orders */
   async createOrder(req: Request, res: Response) {
     const operation = "Create purchase order";
     try {
@@ -611,7 +603,7 @@ export class PurchasingController {
         );
 
         const shippingAmount = req.body.shippingAmount
-          ? toDecimal(req.body.shippingAmount, "shippingAmount")
+          ? requireNonNegative(req.body.shippingAmount, "shippingAmount")
           : ZERO;
         const grandTotal = roundMoney(priced.netTotal.plus(shippingAmount));
 
@@ -631,8 +623,6 @@ export class PurchasingController {
           orderDate
         );
 
-        // If the caller gave no expected date, derive one from the supplier's
-        // stated lead time rather than leaving delivery tracking blind.
         let expectedDeliveryDate = parseDate(
           req.body.expectedDeliveryDate,
           "expectedDeliveryDate"
@@ -657,7 +647,7 @@ export class PurchasingController {
             currencyCode:
               optionalString(req.body.currencyCode) ?? supplier.currencyCode,
             exchangeRate: req.body.exchangeRate
-              ? toDecimal(req.body.exchangeRate, "exchangeRate")
+              ? requirePositive(req.body.exchangeRate, "exchangeRate")
               : 1,
             subtotal: priced.subtotal,
             discountAmount: priced.discountAmount,
@@ -697,24 +687,27 @@ export class PurchasingController {
     }
   }
 
-  /** PUT /api/purchase-orders/:id — draft orders only. */
   async updateOrder(req: Request, res: Response) {
     const operation = "Update purchase order";
     try {
       const id = parseId(req.params.id, "Purchase order id");
-      const existing = await prisma.purchaseOrder.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundError("Purchase order");
-      if (
-        existing.status !== PurchaseOrderStatus.DRAFT &&
-        existing.status !== PurchaseOrderStatus.REJECTED
-      ) {
-        throw new DomainError(
-          `Only a draft or rejected purchase order can be edited; this one is ${existing.status.toLowerCase()}`,
-          { code: "PO_NOT_EDITABLE" }
-        );
-      }
 
       const order = await prisma.$transaction(async tx => {
+        await tx.$queryRaw`
+          SELECT "id" FROM "purchase_orders" WHERE "id" = ${id} FOR UPDATE
+        `;
+        const existing = await tx.purchaseOrder.findUnique({ where: { id } });
+        if (!existing) throw new NotFoundError("Purchase order");
+        if (
+          existing.status !== PurchaseOrderStatus.DRAFT &&
+          existing.status !== PurchaseOrderStatus.REJECTED
+        ) {
+          throw new DomainError(
+            `Only a draft or rejected purchase order can be edited; this one is ${existing.status.toLowerCase()}`,
+            { code: "PO_NOT_EDITABLE" }
+          );
+        }
+
         await tx.purchaseOrder.update({
           where: { id },
           data: {
@@ -751,7 +744,7 @@ export class PurchasingController {
               : {}),
             ...(req.body.shippingAmount !== undefined
               ? {
-                  shippingAmount: toDecimal(
+                  shippingAmount: requireNonNegative(
                     req.body.shippingAmount,
                     "shippingAmount"
                   ),
@@ -820,12 +813,6 @@ export class PurchasingController {
     }
   }
 
-  /**
-   * POST /api/purchase-orders/:id/submit
-   * Route the order for approval using the CRM's existing approval process,
-   * so purchase approvals land in the same queue, notifications and audit
-   * trail as sales approvals.
-   */
   async submitForApproval(req: Request, res: Response) {
     const operation = "Submit purchase order for approval";
     try {
@@ -835,15 +822,39 @@ export class PurchasingController {
         String(req.body.requestedToId),
         "requestedToId"
       );
+      if (requestedToId === userId) {
+        throw new DomainError(
+          "An approval request must be assigned to a different user",
+          { code: "INVALID_APPROVER" }
+        );
+      }
+      const comment = optionalString(req.body.comment);
+      if (comment && comment.length > 5_000) {
+        throw new DomainError("comment must not exceed 5000 characters", {
+          code: "VALIDATION_ERROR",
+        });
+      }
 
       const approver = await prisma.user.findUnique({
         where: { id: requestedToId },
+        select: {
+          id: true,
+          role: true,
+          permissions: true,
+          deletedAt: true,
+        },
       });
       if (!approver) throw new NotFoundError("Approver");
-      if (approver.role === UserRole.SALES) {
-        throw new DomainError("The approver must be an ADMIN", {
-          code: "INVALID_APPROVER",
-        });
+      if (
+        approver.deletedAt !== null ||
+        !roleHasPermission(approver.role, approver.permissions, "approvals.act")
+      ) {
+        throw new DomainError(
+          "The approver must be active and able to approve",
+          {
+            code: "INVALID_APPROVER",
+          }
+        );
       }
 
       const result = await prisma.$transaction(async tx => {
@@ -885,19 +896,30 @@ export class PurchasingController {
           );
         }
 
+        const claimed = await tx.purchaseOrder.updateMany({
+          where: {
+            id,
+            status: {
+              in: [PurchaseOrderStatus.DRAFT, PurchaseOrderStatus.REJECTED],
+            },
+          },
+          data: { status: PurchaseOrderStatus.PENDING_APPROVAL },
+        });
+        if (claimed.count !== 1) {
+          throw new DomainError(
+            "Purchase order status changed while it was being submitted",
+            { status: 409, code: "PO_STATUS_CHANGED" }
+          );
+        }
+
         const approval = await tx.approvalProcess.create({
           data: {
             targetObjectName: ApprovalTargetObject.PURCHASE_ORDER,
             targetRecordId: id,
             requestedToId,
             createdById: userId,
-            comment: optionalString(req.body.comment),
+            comment,
           },
-        });
-
-        await tx.purchaseOrder.update({
-          where: { id },
-          data: { status: PurchaseOrderStatus.PENDING_APPROVAL },
         });
 
         await tx.auditLog.create({
@@ -917,7 +939,10 @@ export class PurchasingController {
         return { approval, order };
       });
 
-      const requester = await prisma.user.findUnique({ where: { id: userId } });
+      const requester = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { firstName: true, lastName: true },
+      });
       createNotification({
         userId: requestedToId,
         type: "APPROVAL_REQUESTED",
@@ -925,7 +950,7 @@ export class PurchasingController {
         message: `${buildFullName(requester?.firstName ?? null, requester?.lastName ?? null)} submitted a ${result.order.grandTotal.toFixed(2)} ${result.order.currencyCode} order for ${result.order.supplier.name}.`,
         link: `/purchasing/orders/${id}`,
       }).catch(error =>
-        console.error("[Purchasing] Failed to create notification:", error)
+        logError("purchase_approval_notification_failed", error)
       );
 
       return res.status(201).json({ data: result.approval });
@@ -934,11 +959,6 @@ export class PurchasingController {
     }
   }
 
-  /**
-   * PATCH /api/purchase-orders/:id/status
-   * Drive the order through its lifecycle. Each transition is checked, so a
-   * cancelled order cannot be sent and a received order cannot be reopened.
-   */
   async setOrderStatus(req: Request, res: Response) {
     const operation = "Update purchase order status";
     try {
@@ -955,18 +975,11 @@ export class PurchasingController {
         PurchaseOrderStatus,
         PurchaseOrderStatus[]
       > = {
-        DRAFT: [
-          PurchaseOrderStatus.PENDING_APPROVAL,
-          PurchaseOrderStatus.APPROVED,
-          PurchaseOrderStatus.CANCELLED,
-        ],
-        PENDING_APPROVAL: [
-          PurchaseOrderStatus.APPROVED,
-          PurchaseOrderStatus.REJECTED,
-          PurchaseOrderStatus.CANCELLED,
-        ],
+        DRAFT: [PurchaseOrderStatus.CANCELLED],
+        PENDING_APPROVAL: [],
         APPROVED: [PurchaseOrderStatus.SENT, PurchaseOrderStatus.CANCELLED],
         REJECTED: [PurchaseOrderStatus.DRAFT, PurchaseOrderStatus.CANCELLED],
+        SENDING: [],
         SENT: [PurchaseOrderStatus.ACKNOWLEDGED, PurchaseOrderStatus.CANCELLED],
         ACKNOWLEDGED: [
           PurchaseOrderStatus.PARTIALLY_RECEIVED,
@@ -982,6 +995,104 @@ export class PurchasingController {
         CLOSED: [],
         CANCELLED: [],
       };
+
+      const cancellationReason = optionalString(req.body.reason);
+      if (
+        status === PurchaseOrderStatus.CANCELLED &&
+        (!cancellationReason || cancellationReason.length > 2_000)
+      ) {
+        throw new DomainError(
+          "A cancellation reason of at most 2000 characters is required",
+          { code: "VALIDATION_ERROR" }
+        );
+      }
+
+      if (status === PurchaseOrderStatus.SENT) {
+        let claimed = await prisma.purchaseOrder.updateMany({
+          where: { id, status: PurchaseOrderStatus.APPROVED },
+          data: { status: PurchaseOrderStatus.SENDING },
+        });
+        if (claimed.count !== 1) {
+          const existing = await prisma.purchaseOrder.findUnique({
+            where: { id },
+            select: { status: true, updatedAt: true },
+          });
+          if (!existing) throw new NotFoundError("Purchase order");
+          const staleBefore = new Date(Date.now() - DELIVERY_CLAIM_TIMEOUT_MS);
+          if (
+            existing.status === PurchaseOrderStatus.SENDING &&
+            existing.updatedAt <= staleBefore
+          ) {
+            const recovered = await prisma.purchaseOrder.updateMany({
+              where: {
+                id,
+                status: PurchaseOrderStatus.SENDING,
+                updatedAt: { lte: staleBefore },
+              },
+              data: { status: PurchaseOrderStatus.APPROVED },
+            });
+            if (recovered.count === 1) {
+              claimed = await prisma.purchaseOrder.updateMany({
+                where: { id, status: PurchaseOrderStatus.APPROVED },
+                data: { status: PurchaseOrderStatus.SENDING },
+              });
+            }
+          }
+        }
+        if (claimed.count !== 1) {
+          const existing = await prisma.purchaseOrder.findUnique({
+            where: { id },
+            select: { status: true },
+          });
+          if (!existing) throw new NotFoundError("Purchase order");
+          throw new DomainError(
+            `A purchase order cannot move from ${existing.status} to ${status}`,
+            { status: 409, code: "INVALID_STATUS_TRANSITION" }
+          );
+        }
+
+        const delivered = await this.deliverPurchaseOrder(id);
+        if (!delivered) {
+          await prisma.purchaseOrder.updateMany({
+            where: { id, status: PurchaseOrderStatus.SENDING },
+            data: { status: PurchaseOrderStatus.APPROVED },
+          });
+          throw new DomainError(
+            "The purchase order could not be delivered to the supplier",
+            { status: 502, code: "PO_DELIVERY_FAILED" }
+          );
+        }
+
+        const sent = await prisma.$transaction(async tx => {
+          const changed = await tx.purchaseOrder.updateMany({
+            where: { id, status: PurchaseOrderStatus.SENDING },
+            data: { status: PurchaseOrderStatus.SENT, sentAt: new Date() },
+          });
+          if (changed.count !== 1) {
+            throw new DomainError(
+              "Purchase order delivery state changed unexpectedly",
+              { status: 409, code: "PO_STATUS_CHANGED" }
+            );
+          }
+          await tx.auditLog.create({
+            data: {
+              entityType: "PurchaseOrder",
+              entityId: id,
+              changedBy: userId,
+              action: "STATUS_CHANGE",
+              category: AuditCategory.PROCUREMENT,
+              oldValues: { status: PurchaseOrderStatus.APPROVED },
+              newValues: { status: PurchaseOrderStatus.SENT },
+            },
+          });
+          return tx.purchaseOrder.findUniqueOrThrow({
+            where: { id },
+            include: PO_INCLUDE,
+          });
+        });
+
+        return res.json({ data: sent });
+      }
 
       const order = await prisma.$transaction(async tx => {
         const existing = await tx.purchaseOrder.findUnique({
@@ -1009,16 +1120,10 @@ export class PurchasingController {
           }
         }
 
-        const updated = await tx.purchaseOrder.update({
-          where: { id },
+        const changed = await tx.purchaseOrder.updateMany({
+          where: { id, status: existing.status },
           data: {
             status,
-            ...(status === PurchaseOrderStatus.APPROVED
-              ? { approvedById: userId, approvedAt: new Date() }
-              : {}),
-            ...(status === PurchaseOrderStatus.SENT
-              ? { sentAt: new Date() }
-              : {}),
             ...(status === PurchaseOrderStatus.ACKNOWLEDGED
               ? { acknowledgedAt: new Date() }
               : {}),
@@ -1026,11 +1131,16 @@ export class PurchasingController {
               ? { closedAt: new Date() }
               : {}),
             ...(status === PurchaseOrderStatus.CANCELLED
-              ? { cancellationReason: optionalString(req.body.reason) }
+              ? { cancellationReason }
               : {}),
           },
-          include: PO_INCLUDE,
         });
+        if (changed.count !== 1) {
+          throw new DomainError(
+            "Purchase order status changed while the request was being processed",
+            { status: 409, code: "PO_STATUS_CHANGED" }
+          );
+        }
 
         if (status === PurchaseOrderStatus.CANCELLED) {
           await tx.purchaseOrderLine.updateMany({
@@ -1051,17 +1161,11 @@ export class PurchasingController {
           },
         });
 
-        return updated;
+        return tx.purchaseOrder.findUniqueOrThrow({
+          where: { id },
+          include: PO_INCLUDE,
+        });
       });
-
-      // Sending the order to the supplier happens after the transaction, not
-      // inside it: a mail failure must not roll back a status change that has
-      // already been decided, and the supplier can be re-sent to.
-      if (status === PurchaseOrderStatus.SENT) {
-        void this.deliverPurchaseOrder(order.id).catch(error =>
-          console.error("[Purchasing] Sending PO to supplier failed:", error)
-        );
-      }
 
       return res.json({ data: order });
     } catch (error) {
@@ -1069,14 +1173,9 @@ export class PurchasingController {
     }
   }
 
-  /**
-   * Emails a purchase order to its supplier and tells the raiser it went.
-   *
-   * Until this existed an order could be marked SENT without anything leaving
-   * the building: the status said the supplier had it, and the supplier did
-   * not. Never throws — the caller has already committed the status change.
-   */
-  private async deliverPurchaseOrder(purchaseOrderId: number) {
+  private async deliverPurchaseOrder(
+    purchaseOrderId: number
+  ): Promise<boolean> {
     const po = await prisma.purchaseOrder.findUnique({
       where: { id: purchaseOrderId },
       include: {
@@ -1091,52 +1190,85 @@ export class PurchasingController {
         },
       },
     });
-    if (!po) return;
+    if (!po) return false;
 
     if (!po.supplier.email) {
-      console.warn("[Purchasing] Supplier has no email; PO not sent", {
-        poNumber: po.poNumber,
+      logWarn("purchase_order_supplier_email_missing", {
+        purchaseOrderId: po.id,
       });
-    } else {
-      await emailService.sendPurchaseOrderEmail({
-        to: po.supplier.email,
-        supplierName: po.supplier.name,
-        poNumber: po.poNumber,
-        orderDate: po.orderDate,
-        expectedDeliveryDate: po.expectedDeliveryDate,
-        currencyCode: po.currencyCode,
-        subtotal: Number(po.subtotal),
-        taxAmount: Number(po.taxAmount),
-        grandTotal: Number(po.grandTotal),
-        paymentTerms: po.paymentTerms,
-        deliverTo: po.shipToAddress ?? po.warehouse?.name ?? null,
-        notes: po.notes,
-        lines: po.lines.map(line => ({
-          description:
-            line.description ?? line.product?.name ?? `Item ${line.lineNumber}`,
-          quantity: line.quantity.toFixed(2),
-          uom: line.uom?.code ?? null,
-          unitPrice: line.unitPrice.toFixed(2),
-          lineTotal: line.lineTotal.toFixed(2),
-        })),
-      });
+      return false;
     }
 
-    await createNotification({
+    const deliveryDigest = createHash("sha256")
+      .update(
+        JSON.stringify({
+          purchaseOrderId: po.id,
+          recipient: po.supplier.email.trim().toLowerCase(),
+          poNumber: po.poNumber,
+          orderDate: po.orderDate.toISOString(),
+          expectedDeliveryDate: po.expectedDeliveryDate?.toISOString() ?? null,
+          currencyCode: po.currencyCode,
+          subtotal: po.subtotal.toString(),
+          taxAmount: po.taxAmount.toString(),
+          grandTotal: po.grandTotal.toString(),
+          paymentTerms: po.paymentTerms,
+          shipToAddress: po.shipToAddress,
+          warehouseName: po.warehouse?.name ?? null,
+          notes: po.notes,
+          lines: po.lines.map(line => ({
+            lineNumber: line.lineNumber,
+            description: line.description,
+            productName: line.product?.name ?? null,
+            quantity: line.quantity.toString(),
+            uom: line.uom?.code ?? null,
+            unitPrice: line.unitPrice.toString(),
+            lineTotal: line.lineTotal.toString(),
+          })),
+        })
+      )
+      .digest("hex")
+      .slice(0, 40);
+
+    const delivered = await emailService.sendPurchaseOrderEmail({
+      to: po.supplier.email,
+      supplierName: po.supplier.name,
+      poNumber: po.poNumber,
+      orderDate: po.orderDate,
+      expectedDeliveryDate: po.expectedDeliveryDate,
+      currencyCode: po.currencyCode,
+      subtotal: Number(po.subtotal),
+      taxAmount: Number(po.taxAmount),
+      grandTotal: Number(po.grandTotal),
+      paymentTerms: po.paymentTerms,
+      deliverTo: po.shipToAddress ?? po.warehouse?.name ?? null,
+      notes: po.notes,
+      idempotencyKey: `purchase-order-${po.id}-${deliveryDigest}`,
+      lines: po.lines.map(line => ({
+        description:
+          line.description ?? line.product?.name ?? `Item ${line.lineNumber}`,
+        quantity: line.quantity.toFixed(2),
+        uom: line.uom?.code ?? null,
+        unitPrice: line.unitPrice.toFixed(2),
+        lineTotal: line.lineTotal.toFixed(2),
+      })),
+    });
+    if (!delivered) return false;
+
+    void createNotification({
       userId: po.createdById,
       type: "PURCHASE_ORDER_SENT",
       title: `${po.poNumber} has been sent to ${po.supplier.name}`,
-      message: po.supplier.email
-        ? `The order was emailed to ${po.supplier.email}. You will be notified when goods are received against it.`
-        : `${po.supplier.name} has no email address on file, so the order could not be emailed. Send it to them another way, or add an address to the supplier record.`,
+      message: `The order was emailed to ${po.supplier.email}. You will be notified when goods are received against it.`,
       link: `/purchasing/orders/${po.id}`,
-    });
+      dedupeKey: `purchase-order-sent:user:${po.createdById}:order:${po.id}`,
+    }).catch(error =>
+      logError("purchase_order_sent_notification_failed", error, {
+        purchaseOrderId: po.id,
+      })
+    );
+    return true;
   }
 
-  /**
-   * GET /api/purchase-orders/dashboard
-   * Spend and pipeline figures for the purchasing landing page.
-   */
   async dashboard(req: Request, res: Response) {
     const operation = "Purchasing dashboard";
     try {
@@ -1186,7 +1318,13 @@ export class PurchasingController {
             status: { in: ["OPEN", "PARTIALLY_RECEIVED"] },
             purchaseOrder: {
               status: {
-                in: ["APPROVED", "SENT", "ACKNOWLEDGED", "PARTIALLY_RECEIVED"],
+                in: [
+                  "APPROVED",
+                  "SENDING",
+                  "SENT",
+                  "ACKNOWLEDGED",
+                  "PARTIALLY_RECEIVED",
+                ],
               },
               ...(warehouseId ? { warehouseId } : {}),
             },
@@ -1215,7 +1353,13 @@ export class PurchasingController {
         prisma.purchaseOrder.count({
           where: {
             status: {
-              in: ["APPROVED", "SENT", "ACKNOWLEDGED", "PARTIALLY_RECEIVED"],
+              in: [
+                "APPROVED",
+                "SENDING",
+                "SENT",
+                "ACKNOWLEDGED",
+                "PARTIALLY_RECEIVED",
+              ],
             },
             ...(warehouseId ? { warehouseId } : {}),
             OR: [

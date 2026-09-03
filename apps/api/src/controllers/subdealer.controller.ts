@@ -1,19 +1,46 @@
 import { Request, Response } from "express";
 import { prisma } from "@repo/db";
-import { gstService, GstDetails } from "../services/gst.service.js";
+import type { Subdealer } from "@prisma/client";
+import {
+  gstService,
+  GstRecordNotFoundError,
+  GstServiceUnavailableError,
+} from "../services/gst.service.js";
 import { msg91Service } from "../services/msg91.service.js";
-import { isValidPhone, isValidGstNumber } from "../utils/validators.js";
+import {
+  isValidEmail,
+  isValidPhone,
+  isValidGstNumber,
+  normalizeEmail,
+} from "../utils/validators.js";
 import {
   handleError,
   handleValidationError,
   handleUnauthorizedError,
-} from "../utils/errorHandler.js";
+} from "../utils/error-handler.js";
+import { generateSubdealerToken, hashBearerToken } from "../utils/jwt.utils.js";
+
+function publicSubdealer(subdealer: Subdealer) {
+  return {
+    id: subdealer.id,
+    phone: subdealer.phone,
+    gstNumber: subdealer.gstNumber,
+    legalName: subdealer.legalName,
+    tradeName: subdealer.tradeName,
+    address: subdealer.address,
+    city: subdealer.city,
+    state: subdealer.state,
+    pincode: subdealer.pincode,
+    panNumber: subdealer.panNumber,
+    registrationDate: subdealer.registrationDate,
+    businessType: subdealer.businessType,
+    status: subdealer.status,
+    jurisdiction: subdealer.jurisdiction,
+    email: subdealer.email,
+  };
+}
 
 export class SubdealerController {
-  /**
-   * Fetch GST details by GST number
-   * POST /api/subdealer/fetch-gst { gstNumber }
-   */
   async fetchGstDetails(req: Request, res: Response) {
     try {
       const { gstNumber } = req.body as { gstNumber?: string };
@@ -27,7 +54,6 @@ export class SubdealerController {
         );
       }
 
-      // Validate GST number format
       if (!isValidGstNumber(gstNumber)) {
         return handleValidationError(
           res,
@@ -37,7 +63,6 @@ export class SubdealerController {
         );
       }
 
-      // Check if GST number already exists
       const existingSubdealer = await prisma.subdealer.findUnique({
         where: { gstNumber: gstNumber.trim().toUpperCase() },
       });
@@ -51,7 +76,6 @@ export class SubdealerController {
         );
       }
 
-      // Fetch GST details from service
       const gstDetails = await gstService.fetchGstDetails(gstNumber);
 
       return res.json({
@@ -59,14 +83,20 @@ export class SubdealerController {
         data: gstDetails,
       });
     } catch (error) {
+      if (error instanceof GstRecordNotFoundError) {
+        return res.status(422).json({
+          error: "GST registration could not be verified",
+        });
+      }
+      if (error instanceof GstServiceUnavailableError) {
+        return res.status(503).json({
+          error: "GST verification is temporarily unavailable",
+        });
+      }
       handleError(error, res, "Fetch GST details");
     }
   }
 
-  /**
-   * Generate and send OTP to phone number
-   * POST /api/subdealer/generate-otp { phone }
-   */
   async generateOtp(req: Request, res: Response) {
     try {
       const { phone } = req.body as { phone?: string };
@@ -80,10 +110,8 @@ export class SubdealerController {
         );
       }
 
-      // Normalize phone number (remove +91, 91 prefix, spaces)
       const normalizedPhone = phone.replace(/[-\s+()]/g, "").replace(/^91/, "");
 
-      // Validate phone number (10 digits, starting with 6-9)
       if (!isValidPhone(normalizedPhone)) {
         return handleValidationError(
           res,
@@ -93,8 +121,6 @@ export class SubdealerController {
         );
       }
 
-      // Generate OTP (MSG91 will generate it, but we need to pass a placeholder)
-      // MSG91 generates the OTP automatically, so we pass an empty string
       const otpSent = await msg91Service.sendOtp(normalizedPhone, "");
 
       if (!otpSent) {
@@ -114,31 +140,26 @@ export class SubdealerController {
     }
   }
 
-  /**
-   * Verify OTP and create subdealer
-   * POST /api/subdealer/verify-otp { phone, otp, gstDetails }
-   */
   async verifyOtpAndRegister(req: Request, res: Response) {
     try {
-      const { phone, otp, gstDetails } = req.body as {
+      const { phone, otp, gstNumber, email } = req.body as {
         phone?: string;
         otp?: string;
-        gstDetails?: GstDetails & { gstNumber: string; email?: string };
+        gstNumber?: string;
+        email?: string;
       };
 
-      if (!phone || !otp || !gstDetails) {
+      if (!phone || !otp || !gstNumber) {
         return handleValidationError(
           res,
-          "Phone, OTP, and GST details are required",
+          "Phone, OTP, and GST number are required",
           undefined,
           "Verify OTP"
         );
       }
 
-      // Normalize phone number
       const normalizedPhone = phone.replace(/[-\s+()]/g, "").replace(/^91/, "");
 
-      // Validate phone number
       if (!isValidPhone(normalizedPhone)) {
         return handleValidationError(
           res,
@@ -148,8 +169,7 @@ export class SubdealerController {
         );
       }
 
-      // Validate GST number
-      if (!gstDetails.gstNumber || !isValidGstNumber(gstDetails.gstNumber)) {
+      if (!isValidGstNumber(gstNumber)) {
         return handleValidationError(
           res,
           "Invalid GST number",
@@ -158,47 +178,17 @@ export class SubdealerController {
         );
       }
 
-      // Validate required GST fields
-      if (!gstDetails.legalName) {
+      const normalizedGst = gstNumber.trim().toUpperCase();
+      const normalizedEmail = normalizeEmail(email);
+      if (normalizedEmail && !isValidEmail(normalizedEmail)) {
         return handleValidationError(
           res,
-          "Legal name is required",
-          "legalName",
+          "Invalid email address",
+          "email",
           "Verify OTP"
         );
       }
 
-      const normalizedGst = gstDetails.gstNumber.trim().toUpperCase();
-
-      // Early duplicate check
-      const earlyDuplicateCheck = await Promise.all([
-        prisma.subdealer.findUnique({
-          where: { phone: normalizedPhone },
-        }),
-        prisma.subdealer.findUnique({
-          where: { gstNumber: normalizedGst },
-        }),
-      ]);
-
-      if (earlyDuplicateCheck[0]) {
-        return handleValidationError(
-          res,
-          "Phone number already registered",
-          "phone",
-          "Verify OTP"
-        );
-      }
-
-      if (earlyDuplicateCheck[1]) {
-        return handleValidationError(
-          res,
-          "GST number already registered",
-          "gstNumber",
-          "Verify OTP"
-        );
-      }
-
-      // Verify OTP via MSG91
       const isOtpValid = await msg91Service.verifyOtp(normalizedPhone, otp);
 
       if (!isOtpValid) {
@@ -209,10 +199,9 @@ export class SubdealerController {
         );
       }
 
-      // Create subdealer record
-      // Use transaction to ensure atomicity of registration
-      const subdealer = await prisma.$transaction(async tx => {
-        // Check for duplicate phone or GST again within transaction (prevents race conditions)
+      const verifiedGst = await gstService.fetchGstDetails(normalizedGst);
+
+      const registration = await prisma.$transaction(async tx => {
         const duplicateCheck = await Promise.all([
           tx.subdealer.findUnique({
             where: { phone: normalizedPhone },
@@ -230,62 +219,63 @@ export class SubdealerController {
           throw new Error("GST number already registered");
         }
 
-        // Create subdealer record
-        return tx.subdealer.create({
+        const subdealer = await tx.subdealer.create({
           data: {
             phone: normalizedPhone,
             gstNumber: normalizedGst,
-            email: gstDetails.email || null,
-            legalName: gstDetails.legalName,
-            tradeName: gstDetails.tradeName || null,
-            address: gstDetails.address || null,
-            city: gstDetails.city || null,
-            state: gstDetails.state || null,
-            pincode: gstDetails.pincode || null,
-            panNumber: gstDetails.panNumber || null,
-            registrationDate: gstDetails.registrationDate
-              ? new Date(gstDetails.registrationDate)
+            email: normalizedEmail,
+            legalName: verifiedGst.legalName,
+            tradeName: verifiedGst.tradeName || null,
+            address: verifiedGst.address || null,
+            city: verifiedGst.city || null,
+            state: verifiedGst.state || null,
+            pincode: verifiedGst.pincode || null,
+            panNumber: verifiedGst.panNumber || null,
+            registrationDate: verifiedGst.registrationDate
+              ? new Date(verifiedGst.registrationDate)
               : null,
-            businessType: gstDetails.businessType || null,
-            status: gstDetails.status || null,
-            jurisdiction: gstDetails.jurisdiction || null,
+            businessType: verifiedGst.businessType || null,
+            status: verifiedGst.status || null,
+            jurisdiction: verifiedGst.jurisdiction || null,
             phoneVerified: true,
             verifiedAt: new Date(),
           },
         });
+        const token = generateSubdealerToken(
+          subdealer.id,
+          subdealer.phone,
+          subdealer.gstNumber
+        );
+        await tx.subdealer.update({
+          where: { id: subdealer.id },
+          data: {
+            jwtTokenHash: hashBearerToken(token),
+            tokenIssuedAt: new Date(),
+          },
+        });
+        return { subdealer, token };
       });
-
-      // Generate JWT token for subdealer
-      const { generateSubdealerToken } = await import("../utils/jwt.utils.js");
-      const token = generateSubdealerToken(
-        subdealer.id,
-        subdealer.phone,
-        subdealer.gstNumber
-      );
-
-      // Store token in database
-      await prisma.subdealer.update({
-        where: { id: subdealer.id },
-        data: {
-          jwtToken: token,
-          tokenIssuedAt: new Date(),
-        },
-      });
+      const { subdealer, token } = registration;
 
       return res.json({
         success: true,
         message: "Subdealer registered successfully",
-        data: {
-          id: subdealer.id,
-          phone: subdealer.phone,
-          gstNumber: subdealer.gstNumber,
-          legalName: subdealer.legalName,
-        },
-        token, // Return token to client
+        data: publicSubdealer(subdealer),
+        token,
       });
-    } catch (error: any) {
-      // Handle transaction errors with specific messages
-      if (error?.message) {
+    } catch (error: unknown) {
+      if (error instanceof GstRecordNotFoundError) {
+        return res.status(422).json({
+          error: "GST registration could not be verified",
+        });
+      }
+      if (error instanceof GstServiceUnavailableError) {
+        return res.status(503).json({
+          error: "GST verification is temporarily unavailable",
+        });
+      }
+
+      if (error instanceof Error) {
         if (error.message === "Phone number already registered") {
           return handleValidationError(
             res,
@@ -307,69 +297,6 @@ export class SubdealerController {
     }
   }
 
-  /**
-   * Check if phone number exists
-   * POST /api/subdealer/check-phone { phone }
-   */
-  async checkPhone(req: Request, res: Response) {
-    try {
-      const { phone } = req.body as { phone?: string };
-
-      if (!phone) {
-        return handleValidationError(
-          res,
-          "Phone number is required",
-          "phone",
-          "Check Phone"
-        );
-      }
-
-      // Normalize phone number
-      const normalizedPhone = phone.replace(/[-\s+()]/g, "").replace(/^91/, "");
-
-      // Validate phone number
-      if (!isValidPhone(normalizedPhone)) {
-        return handleValidationError(
-          res,
-          "Invalid phone number",
-          "phone",
-          "Check Phone"
-        );
-      }
-
-      // Check if phone exists
-      const subdealer = await prisma.subdealer.findUnique({
-        where: { phone: normalizedPhone },
-        select: {
-          id: true,
-          phone: true,
-          gstNumber: true,
-          legalName: true,
-          tradeName: true,
-          address: true,
-          city: true,
-          state: true,
-          pincode: true,
-          panNumber: true,
-          businessType: true,
-          status: true,
-        },
-      });
-
-      return res.json({
-        success: true,
-        exists: !!subdealer,
-        data: subdealer || null,
-      });
-    } catch (error) {
-      handleError(error, res, "Check Phone");
-    }
-  }
-
-  /**
-   * Login existing subdealer
-   * POST /api/subdealer/login { phone, otp }
-   */
   async login(req: Request, res: Response) {
     try {
       const { phone, otp } = req.body as { phone?: string; otp?: string };
@@ -383,10 +310,8 @@ export class SubdealerController {
         );
       }
 
-      // Normalize phone number
       const normalizedPhone = phone.replace(/[-\s+()]/g, "").replace(/^91/, "");
 
-      // Validate phone number
       if (!isValidPhone(normalizedPhone)) {
         return handleValidationError(
           res,
@@ -396,40 +321,27 @@ export class SubdealerController {
         );
       }
 
-      // Check if subdealer exists
-      const subdealer = await prisma.subdealer.findUnique({
-        where: { phone: normalizedPhone },
-      });
-
-      if (!subdealer) {
-        return handleValidationError(
-          res,
-          "Phone number not registered",
-          "phone",
-          "Login"
-        );
-      }
-
-      // Verify OTP via MSG91
       const isOtpValid = await msg91Service.verifyOtp(normalizedPhone, otp);
 
-      if (!isOtpValid) {
+      const subdealer = isOtpValid
+        ? await prisma.subdealer.findUnique({
+            where: { phone: normalizedPhone },
+          })
+        : null;
+      if (!isOtpValid || !subdealer) {
         return handleUnauthorizedError(res, "Invalid or expired OTP", "Login");
       }
 
-      // Generate new JWT token
-      const { generateSubdealerToken } = await import("../utils/jwt.utils.js");
       const token = generateSubdealerToken(
         subdealer.id,
         subdealer.phone,
         subdealer.gstNumber
       );
 
-      // Update token in database
       await prisma.subdealer.update({
         where: { id: subdealer.id },
         data: {
-          jwtToken: token,
+          jwtTokenHash: hashBearerToken(token),
           tokenIssuedAt: new Date(),
         },
       });
@@ -437,16 +349,30 @@ export class SubdealerController {
       return res.json({
         success: true,
         message: "Login successful",
-        data: {
-          id: subdealer.id,
-          phone: subdealer.phone,
-          gstNumber: subdealer.gstNumber,
-          legalName: subdealer.legalName,
-        },
+        data: publicSubdealer(subdealer),
         token,
       });
     } catch (error) {
       handleError(error, res, "Login");
+    }
+  }
+
+  async logout(req: Request, res: Response) {
+    try {
+      if (!req.subdealer) {
+        return handleUnauthorizedError(
+          res,
+          "Authentication required",
+          "Logout"
+        );
+      }
+      await prisma.subdealer.updateMany({
+        where: { id: req.subdealer.id },
+        data: { jwtTokenHash: null, tokenIssuedAt: null },
+      });
+      return res.json({ success: true, message: "Logged out successfully" });
+    } catch (error) {
+      handleError(error, res, "Logout");
     }
   }
 }

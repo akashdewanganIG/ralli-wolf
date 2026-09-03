@@ -1,9 +1,3 @@
-/**
- * GST Service - Real API integration with GSTIN Check
- * API Endpoint: https://sheet.gstincheck.co.in/check/{api-key}/{gstin-number}
- * Falls back to mock data if API key is not configured or API fails
- */
-
 export interface GstDetails {
   legalName: string;
   tradeName?: string;
@@ -18,198 +12,275 @@ export interface GstDetails {
   jurisdiction?: string;
 }
 
+export class GstServiceUnavailableError extends Error {
+  constructor(message = "GST verification service is unavailable") {
+    super(message);
+    this.name = "GstServiceUnavailableError";
+  }
+}
+
+export class GstRecordNotFoundError extends Error {
+  constructor(message = "GST registration could not be verified") {
+    super(message);
+    this.name = "GstRecordNotFoundError";
+  }
+}
+
 interface GstApiResponse {
   flag?: boolean;
   message?: string;
   data?: {
     gstin?: string;
-    lgnm?: string; // Legal name
-    tradeNam?: string; // Trade name
-    stj?: string; // State jurisdiction
-    dty?: string; // Deity (Regular)
-    cxdt?: string; // Cancellation date
+    lgnm?: string;
+    tradeNam?: string;
+    stj?: string;
+    dty?: string;
+    cxdt?: string;
     gstinStatus?: string;
-    rgdt?: string; // Registration date
-    ctb?: string; // Constitution of business
-    sts?: string; // Status
+    rgdt?: string;
+    ctb?: string;
+    sts?: string;
     pradr?: {
-      adr?: string; // Full address string
+      adr?: string;
       addr?: {
         addr?: string;
-        loc?: string; // Location/city
-        bno?: string; // Building number
-        st?: string; // Street
-        bnm?: string; // Building name
-        dst?: string; // District
-        stcd?: string; // State code
-        pncd?: string; // Pincode
-        lg?: string; // Locality
-        flno?: string; // Floor number
-        lt?: string; // Locality type
+        loc?: string;
+        bno?: string;
+        st?: string;
+        bnm?: string;
+        dst?: string;
+        stcd?: string;
+        pncd?: string;
+        lg?: string;
+        flno?: string;
+        lt?: string;
         city?: string;
       };
     };
-    adadr?: Array<any>; // Additional addresses
-    nba?: string[]; // Nature of business activities
     errorMsg?: string | null;
   };
   error?: string;
-  [key: string]: any; // Allow other fields
+}
+
+type JsonRecord = Record<string, unknown>;
+
+function asRecord(value: unknown): JsonRecord | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as JsonRecord)
+    : null;
+}
+
+function optionalProviderText(
+  record: JsonRecord | null,
+  key: string
+): string | undefined {
+  const value = record?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function parseGstProviderResponse(value: unknown): GstApiResponse {
+  const root = asRecord(value);
+  if (!root) {
+    throw new GstServiceUnavailableError(
+      "GST verification provider returned an invalid response"
+    );
+  }
+  if (root.flag !== undefined && typeof root.flag !== "boolean") {
+    throw new GstServiceUnavailableError(
+      "GST verification provider returned an invalid response"
+    );
+  }
+
+  const rawData = asRecord(root.data);
+  if (root.data !== undefined && root.data !== null && !rawData) {
+    throw new GstServiceUnavailableError(
+      "GST verification provider returned an invalid response"
+    );
+  }
+  const rawPrimaryAddress = asRecord(rawData?.pradr);
+  if (
+    rawData?.pradr !== undefined &&
+    rawData.pradr !== null &&
+    !rawPrimaryAddress
+  ) {
+    throw new GstServiceUnavailableError(
+      "GST verification provider returned an invalid response"
+    );
+  }
+  const rawAddress = asRecord(rawPrimaryAddress?.addr);
+  if (
+    rawPrimaryAddress?.addr !== undefined &&
+    rawPrimaryAddress.addr !== null &&
+    !rawAddress
+  ) {
+    throw new GstServiceUnavailableError(
+      "GST verification provider returned an invalid response"
+    );
+  }
+  const data = rawData
+    ? {
+        gstin: optionalProviderText(rawData, "gstin"),
+        lgnm: optionalProviderText(rawData, "lgnm"),
+        tradeNam: optionalProviderText(rawData, "tradeNam"),
+        stj: optionalProviderText(rawData, "stj"),
+        dty: optionalProviderText(rawData, "dty"),
+        cxdt: optionalProviderText(rawData, "cxdt"),
+        gstinStatus: optionalProviderText(rawData, "gstinStatus"),
+        rgdt: optionalProviderText(rawData, "rgdt"),
+        ctb: optionalProviderText(rawData, "ctb"),
+        sts: optionalProviderText(rawData, "sts"),
+        errorMsg: optionalProviderText(rawData, "errorMsg") ?? null,
+        pradr: rawPrimaryAddress
+          ? {
+              adr: optionalProviderText(rawPrimaryAddress, "adr"),
+              addr: rawAddress
+                ? {
+                    addr: optionalProviderText(rawAddress, "addr"),
+                    loc: optionalProviderText(rawAddress, "loc"),
+                    bno: optionalProviderText(rawAddress, "bno"),
+                    st: optionalProviderText(rawAddress, "st"),
+                    bnm: optionalProviderText(rawAddress, "bnm"),
+                    dst: optionalProviderText(rawAddress, "dst"),
+                    stcd: optionalProviderText(rawAddress, "stcd"),
+                    pncd: optionalProviderText(rawAddress, "pncd"),
+                    lg: optionalProviderText(rawAddress, "lg"),
+                    flno: optionalProviderText(rawAddress, "flno"),
+                    lt: optionalProviderText(rawAddress, "lt"),
+                    city: optionalProviderText(rawAddress, "city"),
+                  }
+                : undefined,
+            }
+          : undefined,
+      }
+    : undefined;
+
+  return {
+    flag: typeof root.flag === "boolean" ? root.flag : undefined,
+    message: optionalProviderText(root, "message"),
+    error: optionalProviderText(root, "error"),
+    data,
+  };
 }
 
 export class GstService {
   private apiBaseUrl = "https://sheet.gstincheck.co.in/check";
 
-  /**
-   * Get GST API key from environment
-   * Tries multiple common variable names
-   */
   private getApiKey(): string | null {
-    return (
-      process.env.GST_API_KEY ||
-      process.env.GSTIN_CHECK_API_KEY ||
-      process.env.GSTINCHECK_API_KEY ||
-      null
-    );
+    return process.env.GST_API_KEY || null;
   }
 
-  /**
-   * Fetch GST details by GST number
-   * Uses real API if configured, falls back to mock data
-   */
   async fetchGstDetails(gstNumber: string): Promise<GstDetails> {
-    // Normalize GST number
     const normalized = gstNumber.trim().toUpperCase();
 
-    // Validate GST number format
     if (!/^[0-9A-Z]{15}$/.test(normalized)) {
       throw new Error("Invalid GST number format");
     }
 
     const apiKey = this.getApiKey();
 
-    // If API key is configured, use real API
-    if (apiKey) {
-      try {
-        return await this.fetchFromRealApi(normalized, apiKey);
-      } catch (error: any) {
-        console.error("GST API Error:", error.message);
-        // Always fall back to mock data if API fails (even in production for now)
-        // This ensures the registration flow can continue even if the API is down
-        console.warn(
-          `Falling back to mock GST data due to API error: ${error.message}`
-        );
-        return this.getMockData(normalized);
-      }
+    if (!apiKey?.trim()) {
+      throw new GstServiceUnavailableError(
+        "GST verification is not configured"
+      );
     }
-
-    // No API key configured, use mock data
-    if (process.env.NODE_ENV === "development") {
-      console.log("GST API key not configured, using mock data");
-    }
-    return this.getMockData(normalized);
+    return this.fetchFromRealApi(normalized, apiKey.trim());
   }
 
-  /**
-   * Fetch GST details from real API
-   */
   private async fetchFromRealApi(
     gstNumber: string,
     apiKey: string
   ): Promise<GstDetails> {
-    const url = `${this.apiBaseUrl}/${apiKey}/${gstNumber}`;
+    const url = `${this.apiBaseUrl}/${encodeURIComponent(apiKey)}/${encodeURIComponent(gstNumber)}`;
 
     try {
-      // Create AbortController for timeout
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          Accept: "application/json",
-        },
-        signal: controller.signal,
-      });
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          method: "GET",
+          headers: { Accept: "application/json" },
+          signal: controller.signal,
+          redirect: "error",
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
-      clearTimeout(timeoutId);
-
-      // Read response body once
-      const responseText = await response.text();
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error("GST number not found");
-        }
-        if (response.status === 401 || response.status === 403) {
-          throw new Error("Invalid GST API key or unauthorized access");
-        }
-        throw new Error(
-          `GST API error: ${response.status} - ${responseText || response.statusText}`
+      const declaredLength = Number(response.headers.get("content-length"));
+      if (Number.isFinite(declaredLength) && declaredLength > 1_000_000) {
+        throw new GstServiceUnavailableError(
+          "GST verification provider returned an oversized response"
         );
       }
 
-      // Parse JSON response
+      const responseText = await response.text();
+      if (responseText.length > 1_000_000) {
+        throw new GstServiceUnavailableError(
+          "GST verification provider returned an oversized response"
+        );
+      }
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new GstRecordNotFoundError();
+        }
+        if (response.status === 401 || response.status === 403) {
+          throw new GstServiceUnavailableError(
+            "GST verification provider rejected its configured credentials"
+          );
+        }
+        throw new GstServiceUnavailableError(
+          `GST verification provider returned status ${response.status}`
+        );
+      }
+
       let data: GstApiResponse;
       try {
         if (!responseText || responseText.trim() === "") {
           throw new Error("Empty response from GST API");
         }
-        data = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error("Failed to parse GST API response:", parseError);
-        console.error("Response text:", responseText);
-        throw new Error("Invalid JSON response from GST API");
+        data = parseGstProviderResponse(JSON.parse(responseText) as unknown);
+      } catch {
+        throw new GstServiceUnavailableError(
+          "GST verification provider returned an invalid response"
+        );
       }
 
-      // Handle case where API returns error in response body
       if (data.error || (data.data && data.data.errorMsg)) {
-        throw new Error(
-          data.error || data.data?.errorMsg || "Error from GST API"
-        );
+        throw new GstRecordNotFoundError();
       }
 
-      // Check if API indicates success
       if (data.flag === false || !data.data) {
-        console.warn(
-          "GST API returned no valid data for:",
-          gstNumber,
-          "Response:",
-          JSON.stringify(data)
-        );
-        throw new Error(
-          data.message || "GST number not found or no data available"
-        );
+        throw new GstRecordNotFoundError();
       }
 
-      // Extract the actual data from nested structure
       const gstData = data.data;
 
-      // Check if we have valid data
-      if (!gstData || (!gstData.gstin && !gstData.lgnm && !gstData.tradeNam)) {
-        console.warn(
-          "GST API returned no valid data for:",
-          gstNumber,
-          "Response:",
-          JSON.stringify(data)
+      if (!gstData.gstin || !gstData.lgnm) {
+        throw new GstServiceUnavailableError(
+          "GST verification provider omitted required registration fields"
         );
-        throw new Error("GST number not found or no data available");
+      }
+      if (gstData.gstin && gstData.gstin.trim().toUpperCase() !== gstNumber) {
+        throw new GstServiceUnavailableError(
+          "GST verification provider returned a mismatched registration"
+        );
       }
 
-      // Extract address details (API uses pradr.addr structure)
       const address = gstData.pradr?.addr || null;
       const fullAddressString = gstData.pradr?.adr || null;
 
-      // Build address string from components or use the full address string provided
       let fullAddress = fullAddressString;
       if (!fullAddress && address) {
         const addressParts = [
-          address?.flno, // Floor number
-          address?.bno, // Building number
-          address?.bnm, // Building name
-          address?.st, // Street
-          address?.lg, // Locality
-          address?.loc, // Location
+          address?.flno,
+          address?.bno,
+          address?.bnm,
+          address?.st,
+          address?.lg,
+          address?.loc,
         ].filter(Boolean);
         fullAddress =
           addressParts.length > 0
@@ -217,127 +288,58 @@ export class GstService {
             : address?.addr || null;
       }
 
-      // Extract state code (first 2 digits of GST number or from address)
-      // Note: stcd in this API format is the state name, not code
-      const stateCode = gstNumber.substring(0, 2);
-      const stateName =
-        address?.stcd || this.getStateNameFromCode(stateCode) || undefined;
+      const stateName = address?.stcd || undefined;
 
-      // Parse registration date (format: DD/MM/YYYY)
-      let registrationDate: string | null = null;
-      if (gstData.rgdt) {
-        const dateParts = gstData.rgdt.split("/");
-        if (dateParts.length === 3) {
-          // Convert DD/MM/YYYY to ISO format
-          registrationDate = new Date(
-            `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`
-          ).toISOString();
-        }
-      }
+      const registrationDate = gstData.rgdt
+        ? this.parseProviderDate(gstData.rgdt)
+        : null;
 
-      // Map API response to GstDetails interface
       return {
-        legalName: gstData.lgnm || gstData.tradeNam || "N/A",
+        legalName: gstData.lgnm,
         tradeName: gstData.tradeNam || undefined,
         address: fullAddress ? fullAddress : undefined,
         city: address?.loc || address?.dst || address?.city || undefined,
         state: stateName || undefined,
         pincode: address?.pncd || undefined,
-        panNumber: gstNumber.substring(2, 12), // PAN is embedded in GST number (chars 3-12)
+        panNumber: gstNumber.substring(2, 12),
         registrationDate: registrationDate ? registrationDate : undefined,
         businessType: gstData.ctb || undefined,
         status:
-          gstData.sts || (gstData.cxdt ? "Cancelled" : "Active") || undefined,
+          gstData.sts ||
+          gstData.gstinStatus ||
+          (gstData.cxdt ? "Cancelled" : undefined),
         jurisdiction: gstData.stj || undefined,
       };
-    } catch (error: any) {
-      // Handle fetch errors
-      if (error.name === "AbortError") {
-        throw new Error("GST API request timed out");
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new GstServiceUnavailableError("GST verification timed out");
       }
-      if (error.name === "TypeError" && error.message.includes("fetch")) {
-        throw new Error(
-          "Failed to connect to GST API. Please check your internet connection."
-        );
+      if (
+        error instanceof Error &&
+        error.name === "TypeError" &&
+        error.message.includes("fetch")
+      ) {
+        throw new GstServiceUnavailableError();
       }
       throw error;
     }
   }
 
-  /**
-   * Parse date from various formats
-   */
-  private parseDate(dateStr: string): string | null {
-    if (!dateStr) return null;
-    try {
-      // Try parsing different date formats
-      const date = new Date(dateStr);
-      if (isNaN(date.getTime())) {
-        return null;
-      }
-      return date.toISOString();
-    } catch {
+  private parseProviderDate(dateStr: string): string | null {
+    const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(dateStr.trim());
+    if (!match) return null;
+    const day = Number(match[1]);
+    const month = Number(match[2]);
+    const year = Number(match[3]);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    if (
+      date.getUTCFullYear() !== year ||
+      date.getUTCMonth() !== month - 1 ||
+      date.getUTCDate() !== day
+    ) {
       return null;
     }
-  }
-
-  /**
-   * Get mock data (fallback when API is not configured or fails)
-   */
-  private getMockData(gstNumber: string): GstDetails {
-    const stateCode = gstNumber.substring(0, 2);
-    const panNumber = gstNumber.substring(2, 12);
-
-    return {
-      legalName: `Sample Business ${gstNumber.slice(-4)}`,
-      tradeName: `Trade Name ${gstNumber.slice(-4)}`,
-      address: `123 Business Street, Commercial Area`,
-      city: this.getCityFromStateCode(stateCode),
-      state: this.getStateFromStateCode(stateCode),
-      pincode: "110001",
-      panNumber: panNumber,
-      registrationDate: new Date("2020-01-15").toISOString(),
-      businessType: "Private Limited Company",
-      status: "Active",
-      jurisdiction: `${this.getStateFromStateCode(stateCode)} - Ward 1`,
-    };
-  }
-
-  /**
-   * Get state name from state code
-   */
-  private getStateNameFromCode(stateCode: string): string {
-    return this.getStateFromStateCode(stateCode);
-  }
-
-  /**
-   * Get city name from state code (mock mapping)
-   */
-  private getCityFromStateCode(stateCode: string): string {
-    const cityMap: Record<string, string> = {
-      "07": "Delhi",
-      "09": "Haryana",
-      "10": "Himachal Pradesh",
-      "27": "Maharashtra",
-      "29": "Karnataka",
-      "33": "Tamil Nadu",
-    };
-    return cityMap[stateCode] || "Mumbai";
-  }
-
-  /**
-   * Get state name from state code (mock mapping)
-   */
-  private getStateFromStateCode(stateCode: string): string {
-    const stateMap: Record<string, string> = {
-      "07": "Delhi",
-      "09": "Haryana",
-      "10": "Himachal Pradesh",
-      "27": "Maharashtra",
-      "29": "Karnataka",
-      "33": "Tamil Nadu",
-    };
-    return stateMap[stateCode] || "Maharashtra";
+    return date.toISOString();
   }
 }
 

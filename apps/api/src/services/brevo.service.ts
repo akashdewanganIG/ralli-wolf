@@ -2,54 +2,53 @@ import axios, { AxiosInstance, AxiosError } from "axios";
 import https from "node:https";
 import {
   BrevoContact,
+  BrevoCreateContactResponse,
   BrevoContactResponse,
   BrevoCampaign,
   BrevoCampaignsResponse,
+  BrevoAccountDetails,
+  BrevoAggregatedEmailStats,
   BrevoSendEmailRequest,
   BrevoSendEmailResponse,
-  BrevoWebhookPayload,
   BrevoErrorResponse,
-  EngagementScoreConfig,
-  DEFAULT_ENGAGEMENT_SCORES,
   BrevoUpdateCampaignRequest,
 } from "../utils/brevo.types.js";
 import { prisma } from "@repo/db";
-import * as nodeCrypto from "node:crypto";
+import { decryptSecret } from "@repo/db/crypto";
+import {
+  assertProviderUrl,
+  normalizeProviderBaseUrl,
+} from "../utils/provider-url.js";
 
-function deriveKey(): Buffer {
-  const key = process.env.ENCRYPTION_KEY || "";
-  const raw = key.startsWith("base64:")
-    ? Buffer.from(key.slice(7), "base64")
-    : key.startsWith("hex:")
-      ? Buffer.from(key.slice(4), "hex")
-      : Buffer.from(key, "utf8");
-  return raw.length === 32
-    ? raw
-    : nodeCrypto.createHash("sha256").update(raw).digest();
+const BREVO_API_BASE_URL = "https://api.brevo.com/v3";
+
+export class BrevoProviderError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+    readonly providerCode?: string,
+    readonly retryable = false
+  ) {
+    super(message);
+    this.name = "BrevoProviderError";
+  }
 }
 
-function decryptGCM(cipherText: string, iv: string, authTag: string): string {
-  const key = deriveKey();
-  const ivBuf = Buffer.from(iv, "base64");
-  const tagBuf = Buffer.from(authTag, "base64");
-  const decipher = nodeCrypto.createDecipheriv("aes-256-gcm", key, ivBuf);
-  decipher.setAuthTag(tagBuf);
-  const decrypted = Buffer.concat([
-    decipher.update(Buffer.from(cipherText, "base64")),
-    decipher.final(),
-  ]);
-  return decrypted.toString("utf8");
+function isRetryable(error: unknown): boolean {
+  return error instanceof BrevoProviderError && error.retryable;
+}
+
+async function retryDelay(attempt: number): Promise<void> {
+  const delay = Math.min(500 * 2 ** Math.max(0, attempt - 1), 5_000);
+  await new Promise(resolve => setTimeout(resolve, delay));
 }
 
 export class BrevoService {
   private client: AxiosInstance;
-  private webhookSecret: string;
 
   constructor() {
-    const baseURL = process.env.BREVO_BASE_URL || "https://api.brevo.com/v3";
-    this.webhookSecret = "";
+    const baseURL = normalizeProviderBaseUrl(BREVO_API_BASE_URL, "brevo");
 
-    // Create HTTPS agent with specific settings
     const httpsAgent = new https.Agent({
       keepAlive: false,
       rejectUnauthorized: true,
@@ -61,113 +60,88 @@ export class BrevoService {
         "Content-Type": "application/json",
         Accept: "application/json",
       },
-      timeout: 30000, // 30 seconds timeout
-      maxRedirects: 5,
+      timeout: 30000,
+
+      maxRedirects: 0,
       httpsAgent: httpsAgent,
     });
 
-    // Add delay between requests; inject API key and baseURL from DB
     let lastRequestTime = 0;
+    let throttle = Promise.resolve();
     this.client.interceptors.request.use(
       async config => {
-        // Rate limiting: Add delay between requests
-        const now = Date.now();
-        const timeSinceLastRequest = now - lastRequestTime;
-        if (timeSinceLastRequest < 100) {
-          await new Promise(resolve =>
-            setTimeout(resolve, 100 - timeSinceLastRequest)
-          );
-        }
-        lastRequestTime = Date.now();
-
-        // Inject fresh API key from DB
-        const cred = await prisma.integrationCredential.findUnique({
-          where: { provider: "email" },
+        const turn = throttle.then(async () => {
+          const waitFor = 100 - (Date.now() - lastRequestTime);
+          if (waitFor > 0) {
+            await new Promise(resolve => setTimeout(resolve, waitFor));
+          }
+          lastRequestTime = Date.now();
         });
+        throttle = turn.catch(() => undefined);
+        await turn;
+
+        const [cred, cfg] = await Promise.all([
+          prisma.integrationCredential.findUnique({
+            where: { provider: "email" },
+          }),
+          prisma.appConfig.findUnique({
+            where: { key: "email.baseUrl" },
+          }),
+        ]);
         const apiKey =
           cred?.encryptedApiKey && cred.iv && cred.authTag
-            ? decryptGCM(cred.encryptedApiKey, cred.iv, cred.authTag)
+            ? decryptSecret(cred.encryptedApiKey, cred.iv, cred.authTag)
             : null;
         if (!apiKey) {
           throw new Error(
             "Brevo API key not set. Configure in Integration Manager."
           );
         }
-        if (!config.headers) {
-          config.headers = {} as any;
-        }
-        (config.headers as any)["api-key"] = apiKey;
+        config.headers.set("api-key", apiKey);
 
-        // Inject baseURL from DB if present
-        const cfg = await prisma.appConfig.findUnique({
-          where: { key: "email.baseUrl" },
-        });
         const dbBaseUrl = cfg?.plainValue ?? null;
-        if (dbBaseUrl) config.baseURL = dbBaseUrl;
+        if (dbBaseUrl) {
+          config.baseURL = normalizeProviderBaseUrl(dbBaseUrl, "brevo");
+        }
 
-        // Debug info (non-sensitive): log key length and tail, and baseURL used
-        const keyTail = apiKey.slice(-4);
         const usedBaseUrl = config.baseURL || this.client.defaults.baseURL;
-        console.log(
-          `[BrevoService] Using api-key len=${apiKey.length}, tail=****${keyTail}, baseURL=${usedBaseUrl}`
-        );
+        assertProviderUrl(String(usedBaseUrl), "brevo");
 
-        console.log(
-          `[BrevoService] ${config.method?.toUpperCase()} ${config.url}`
-        );
         return config;
       },
       error => {
-        console.error("[BrevoService] Request error:", error);
         return Promise.reject(error);
       }
     );
 
-    // Add response interceptor for error handling
     this.client.interceptors.response.use(
       response => {
-        console.log(`[BrevoService] ${response.status} ${response.config.url}`);
         return response;
       },
       (error: AxiosError) => {
-        console.error("[BrevoService] Response error:", {
-          status: error.response?.status,
-          url: error.config?.url,
-          data: error.response?.data,
-          code: error.code,
-          message: error.message,
-        });
         return Promise.reject(this.handleBrevoError(error));
       }
     );
   }
 
-  /**
-   * Create or update a contact in Brevo
-   */
   async createOrUpdateContact(
     contact: BrevoContact,
     retries = 5
-  ): Promise<BrevoContactResponse> {
+  ): Promise<BrevoCreateContactResponse> {
     try {
-      const response = await this.client.post("/contacts", contact);
-      return response.data;
-    } catch (error: any) {
-      console.error("Error creating/updating Brevo contact:", error.message);
-
-      // Retry on connection errors with exponential backoff
-      if (
-        retries > 0 &&
-        (error.code === "ECONNRESET" ||
-          error.code === "ETIMEDOUT" ||
-          error.code === "ECONNREFUSED" ||
-          !error.response)
-      ) {
-        const delay = Math.min(1000 * (6 - retries), 5000); // Exponential backoff, max 5 seconds
-        console.log(
-          `Retrying createOrUpdateContact... (${retries} retries left, waiting ${delay}ms)`
+      const response = await this.client.post<BrevoCreateContactResponse>(
+        "/contacts",
+        contact
+      );
+      if (!Number.isSafeInteger(response.data?.id) || response.data.id <= 0) {
+        throw new BrevoProviderError(
+          "Brevo returned an invalid contact identifier"
         );
-        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+      return response.data;
+    } catch (error: unknown) {
+      if (retries > 0 && isRetryable(error)) {
+        await retryDelay(6 - retries);
         return this.createOrUpdateContact(contact, retries - 1);
       }
 
@@ -175,107 +149,62 @@ export class BrevoService {
     }
   }
 
-  /**
-   * Get contact by email
-   */
   async getContactByEmail(email: string): Promise<BrevoContactResponse | null> {
     try {
       const response = await this.client.get(
         `/contacts/${encodeURIComponent(email)}`
       );
       return response.data;
-    } catch (error: any) {
-      if (error.response?.status === 404) {
+    } catch (error: unknown) {
+      if (error instanceof BrevoProviderError && error.status === 404) {
         return null;
       }
       throw error;
     }
   }
 
-  /**
-   * Delete contact by email
-   */
   async deleteContact(email: string): Promise<void> {
     try {
       await this.client.delete(`/contacts/${encodeURIComponent(email)}`);
-    } catch (error: any) {
-      if (error.response?.status === 404) {
-        console.log(`Contact ${email} not found in Brevo`);
+    } catch (error: unknown) {
+      if (error instanceof BrevoProviderError && error.status === 404) {
         return;
       }
       throw error;
     }
   }
 
-  /**
-   * Get all campaigns
-   */
   async getAllCampaigns(
     limit = 50,
     offset = 0,
+    status?: BrevoCampaign["status"],
     retries = 3
   ): Promise<BrevoCampaignsResponse> {
     try {
-      const response = await this.client.get("/emailCampaigns", {
-        params: { limit, offset, sort: "desc" },
-      });
+      const response = await this.client.get<BrevoCampaignsResponse>(
+        "/emailCampaigns",
+        {
+          params: {
+            limit,
+            offset,
+            sort: "desc",
+            statistics: "globalStats",
+            excludeHtmlContent: true,
+            ...(status ? { status } : {}),
+          },
+        }
+      );
       return response.data;
-    } catch (error: any) {
-      console.error("Error fetching Brevo campaigns:", {
-        message: error?.message,
-        code: error?.code,
-        status: error?.response?.status,
-        isTimeout:
-          error?.code === "ECONNABORTED" || error?.code === "ETIMEDOUT",
-      });
-
-      // Retry on connection errors, timeouts, or 5xx server errors with exponential backoff
-      const isRetryable =
-        retries > 0 &&
-        (error.code === "ECONNRESET" ||
-          error.code === "ETIMEDOUT" ||
-          error.code === "ECONNABORTED" || // Axios timeout error
-          error.code === "ECONNREFUSED" ||
-          error.message?.includes("timeout") ||
-          !error.response ||
-          (error.response?.status >= 500 && error.response?.status < 600));
-
-      if (isRetryable) {
-        const delay = Math.min(1000 * Math.pow(2, 3 - retries), 5000); // Exponential backoff, max 5 seconds
-        console.log(
-          `Retrying getAllCampaigns... (${retries} retries left, waiting ${delay}ms)`
-        );
-        await new Promise(resolve => setTimeout(resolve, delay));
-        return this.getAllCampaigns(limit, offset, retries - 1);
+    } catch (error: unknown) {
+      if (retries > 0 && isRetryable(error)) {
+        await retryDelay(4 - retries);
+        return this.getAllCampaigns(limit, offset, status, retries - 1);
       }
 
       throw error;
     }
   }
 
-  /**
-   * Get active campaigns only
-   */
-  async getActiveCampaigns(): Promise<BrevoCampaign[]> {
-    try {
-      const response = await this.client.get("/emailCampaigns", {
-        params: {
-          limit: 100,
-          offset: 0,
-          status: "sent",
-          sort: "desc",
-        },
-      });
-      return response.data.campaigns || [];
-    } catch (error) {
-      console.error("Error fetching active Brevo campaigns:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get campaign by ID
-   */
   async getCampaignById(
     campaignId: number,
     statistics?: string,
@@ -287,24 +216,9 @@ export class BrevoService {
         params,
       });
       return response.data;
-    } catch (error: any) {
-      console.error(`Error fetching Brevo campaign ${campaignId}:`, error);
-
-      // Retry on connection errors or 5xx server errors with exponential backoff
-      const isRetryable =
-        retries > 0 &&
-        (error.code === "ECONNRESET" ||
-          error.code === "ETIMEDOUT" ||
-          error.code === "ECONNREFUSED" ||
-          !error.response ||
-          (error.response?.status >= 500 && error.response?.status < 600));
-
-      if (isRetryable) {
-        const delay = Math.min(1000 * Math.pow(2, 3 - retries), 5000); // Exponential backoff, max 5 seconds
-        console.log(
-          `Retrying getCampaignById for ${campaignId}... (${retries} retries left, waiting ${delay}ms)`
-        );
-        await new Promise(resolve => setTimeout(resolve, delay));
+    } catch (error: unknown) {
+      if (retries > 0 && isRetryable(error)) {
+        await retryDelay(4 - retries);
         return this.getCampaignById(campaignId, statistics, retries - 1);
       }
 
@@ -312,32 +226,19 @@ export class BrevoService {
     }
   }
 
-  /**
-   * Delete campaign by ID
-   */
   async deleteCampaign(campaignId: number): Promise<void> {
-    try {
-      await this.client.delete(`/emailCampaigns/${campaignId}`);
-    } catch (error) {
-      console.error(`Error deleting Brevo campaign ${campaignId}:`, error);
-      throw error;
-    }
+    await this.client.delete(`/emailCampaigns/${campaignId}`);
   }
 
-  /**
-   * Update campaign by ID
-   */
   async updateCampaign(
     campaignId: number,
     updateData: BrevoUpdateCampaignRequest,
     retries = 3
   ): Promise<BrevoCampaign> {
     try {
-      // First, get the campaign to check its status (only on first attempt)
       if (retries === 3) {
         const campaign = await this.getCampaignById(campaignId);
 
-        // Brevo typically doesn't allow updating archived campaigns
         if (campaign.status === "archive") {
           throw new Error(
             `Cannot update campaign with status '${campaign.status}'. Archived campaigns cannot be updated.`
@@ -345,267 +246,123 @@ export class BrevoService {
         }
       }
 
-      // Clean up the update data - remove undefined/null values
-      const cleanedData: any = {};
-      Object.keys(updateData).forEach(key => {
-        const value = (updateData as any)[key];
-        if (value !== undefined && value !== null) {
-          // Handle nested objects
-          if (
-            typeof value === "object" &&
-            !Array.isArray(value) &&
-            value !== null
-          ) {
-            const cleanedNested: any = {};
-            Object.keys(value).forEach(nestedKey => {
-              if (value[nestedKey] !== undefined && value[nestedKey] !== null) {
-                cleanedNested[nestedKey] = value[nestedKey];
-              }
-            });
-            if (Object.keys(cleanedNested).length > 0) {
-              cleanedData[key] = cleanedNested;
-            }
-          } else {
-            cleanedData[key] = value;
-          }
-        }
-      });
-
-      console.log(
-        `Updating Brevo campaign ${campaignId} with data:`,
-        JSON.stringify(cleanedData, null, 2)
-      );
+      const cleanedData = Object.fromEntries(
+        Object.entries(updateData).filter(
+          ([, value]) => value !== undefined && value !== null
+        )
+      ) as BrevoUpdateCampaignRequest;
 
       const response = await this.client.put(
         `/emailCampaigns/${campaignId}`,
         cleanedData
       );
       return response.data;
-    } catch (error: any) {
-      console.error(`Error updating Brevo campaign ${campaignId}:`, error);
-
-      // Retry on connection errors with exponential backoff
-      if (
-        retries > 0 &&
-        (error.code === "ECONNRESET" ||
-          error.code === "ETIMEDOUT" ||
-          error.code === "ECONNREFUSED" ||
-          !error.response)
-      ) {
-        const delay = Math.min(1000 * (4 - retries), 5000); // Exponential backoff, max 5 seconds
-        console.log(
-          `Retrying updateCampaign... (${retries} retries left, waiting ${delay}ms)`
-        );
-        await new Promise(resolve => setTimeout(resolve, delay));
+    } catch (error: unknown) {
+      if (retries > 0 && isRetryable(error)) {
+        await retryDelay(4 - retries);
         return this.updateCampaign(campaignId, updateData, retries - 1);
-      }
-
-      // Log more details about the error
-      if (error.response) {
-        console.error("Brevo API Error Response:", {
-          status: error.response.status,
-          statusText: error.response.statusText,
-          data: error.response.data,
-          url: error.config?.url,
-        });
       }
 
       throw error;
     }
   }
 
-  /**
-   * Update campaign status
-   */
   async updateCampaignStatus(
     campaignId: number,
     status: string
   ): Promise<void> {
-    try {
-      await this.client.put(`/emailCampaigns/${campaignId}/status`, { status });
-    } catch (error) {
-      console.error(
-        `Error updating Brevo campaign ${campaignId} status:`,
-        error
-      );
-      throw error;
-    }
+    await this.client.put(`/emailCampaigns/${campaignId}/status`, { status });
   }
 
-  /**
-   * Send transactional email
-   */
   async sendTransactionalEmail(
     emailRequest: BrevoSendEmailRequest
   ): Promise<BrevoSendEmailResponse> {
-    try {
-      const response = await this.client.post("/smtp/email", emailRequest);
-      return response.data;
-    } catch (error) {
-      console.error("Error sending transactional email:", error);
-      throw error;
-    }
+    const response = await this.client.post("/smtp/email", emailRequest);
+    return response.data;
   }
 
-  /**
-   * Send campaign to specific contacts
-   */
-  async sendCampaignToContacts(
-    campaignId: number,
-    contactEmails: string[]
-  ): Promise<BrevoSendEmailResponse[]> {
-    try {
-      const results: BrevoSendEmailResponse[] = [];
-
-      // Brevo doesn't have a direct API to send existing campaigns to specific contacts
-      // We'll need to send transactional emails with campaign content
-      const campaign = await this.getCampaignById(campaignId);
-
-      if (!campaign.htmlContent) {
-        throw new Error(
-          `Campaign ${campaignId} has no HTML content; Brevo rejects a transactional send with no body.`
-        );
-      }
-
-      for (const email of contactEmails) {
-        const emailRequest: BrevoSendEmailRequest = {
-          to: [{ email }],
-          subject: campaign.subject || "Campaign Email",
-          sender: campaign.sender,
-          htmlContent: campaign.htmlContent,
-        };
-
-        const result = await this.sendTransactionalEmail(emailRequest);
-        results.push(result);
-      }
-
-      return results;
-    } catch (error) {
-      console.error(`Error sending campaign ${campaignId} to contacts:`, error);
-      throw error;
-    }
+  async getAccountDetails(): Promise<BrevoAccountDetails> {
+    const response = await this.client.get<BrevoAccountDetails>("/account");
+    return response.data;
   }
 
-  /**
-   * Get account statistics
-   */
-  async getAccountStatistics(): Promise<any> {
-    try {
-      const response = await this.client.get("/account");
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching Brevo account statistics:", error);
-      throw error;
-    }
+  async getAggregatedEmailStatistics(): Promise<BrevoAggregatedEmailStats> {
+    const response = await this.client.get<BrevoAggregatedEmailStats>(
+      "/smtp/statistics/aggregatedReport"
+    );
+    return response.data;
   }
 
-  /**
-   * Verify webhook signature
-   */
-  verifyWebhookSignature(payload: string, signature: string): boolean {
-    try {
-      // Fetch secret from DB (fallback to env only if needed in future)
-      // Synchronously block on promise via deopt: not possible; instead, this method remains sync.
-      // Adapt: compute with latest known secret captured from config on each request is not viable here.
-      // Provide a best-effort: try env first, otherwise skip with warning.
-      const secret = process.env.BREVO_WEBHOOK_SECRET || "";
-      if (!secret) {
-        console.warn(
-          "Brevo webhook secret not set; skipping signature verification"
-        );
-        return true;
-      }
-
-      const expectedSignature = nodeCrypto
-        .createHmac("sha256", secret)
-        .update(payload, "utf8")
-        .digest("hex");
-
-      const providedSignature = signature.replace("sha256=", "");
-
-      return nodeCrypto.timingSafeEqual(
-        Buffer.from(expectedSignature, "hex"),
-        Buffer.from(providedSignature, "hex")
-      );
-    } catch (error) {
-      console.error("Error verifying webhook signature:", error);
-      return false;
-    }
+  async getCampaignCount(status?: BrevoCampaign["status"]): Promise<number> {
+    const response = await this.client.get<BrevoCampaignsResponse>(
+      "/emailCampaigns",
+      { params: { limit: 1, offset: 0, ...(status ? { status } : {}) } }
+    );
+    return response.data.count;
   }
 
-  /**
-   * Parse webhook payload
-   */
-  parseWebhookPayload(payload: string): BrevoWebhookPayload {
-    try {
-      return JSON.parse(payload);
-    } catch (error) {
-      console.error("Error parsing webhook payload:", error);
-      throw new Error("Invalid webhook payload");
-    }
-  }
-
-  /**
-   * Get engagement score for webhook event
-   */
-  getEngagementScore(
-    eventType: string,
-    config: EngagementScoreConfig = DEFAULT_ENGAGEMENT_SCORES
-  ): number {
-    const score = config[eventType as keyof EngagementScoreConfig];
-    return score !== undefined ? score : 0;
-  }
-
-  /**
-   * Handle Brevo API errors
-   */
   private handleBrevoError(error: AxiosError): Error {
-    const brevoError = error.response?.data as BrevoErrorResponse;
+    const status = error.response?.status;
+    const responseData = error.response?.data;
+    const brevoError =
+      typeof responseData === "object" && responseData !== null
+        ? (responseData as Partial<BrevoErrorResponse>)
+        : null;
+    const providerCode =
+      typeof brevoError?.code === "string" ? brevoError.code : undefined;
+    const retryable =
+      !error.response ||
+      status === 429 ||
+      (status !== undefined && status >= 500) ||
+      ["ECONNRESET", "ETIMEDOUT", "ECONNABORTED", "ECONNREFUSED"].includes(
+        error.code || ""
+      );
 
-    if (brevoError) {
-      return new Error(
-        `Brevo API Error: ${brevoError.message} (${brevoError.code})`
+    if (status === 401 || status === 403) {
+      return new BrevoProviderError(
+        "Brevo API authentication failed",
+        status,
+        providerCode,
+        false
       );
     }
-
-    if (error.response?.status === 401) {
-      return new Error("Brevo API authentication failed. Check your API key.");
-    }
-
-    if (error.response?.status === 429) {
-      return new Error(
-        "Brevo API rate limit exceeded. Please try again later."
+    if (status === 404) {
+      return new BrevoProviderError(
+        "Brevo resource not found",
+        status,
+        providerCode,
+        false
       );
     }
-
-    if (error.response && error.response.status >= 500) {
-      return new Error("Brevo API server error. Please try again later.");
-    }
-
-    // Handle connection errors
-    if (
-      error.code === "ECONNRESET" ||
-      error.code === "ETIMEDOUT" ||
-      error.code === "ECONNREFUSED"
-    ) {
-      return new Error(
-        `Brevo API connection error (${error.code}): ${error.message}. Please check your network connection and API key.`
+    if (status === 400) {
+      return new BrevoProviderError(
+        "Brevo rejected the request",
+        status,
+        providerCode,
+        false
       );
     }
-
-    return new Error(`Brevo API request failed: ${error.message}`);
-  }
-
-  /**
-   * Test API connection
-   */
-  async testConnection(): Promise<boolean> {
-    try {
-      await this.getAccountStatistics();
-      return true;
-    } catch (error) {
-      console.error("Brevo API connection test failed:", error);
-      return false;
+    if (status === 429) {
+      return new BrevoProviderError(
+        "Brevo rate limit exceeded",
+        status,
+        providerCode,
+        true
+      );
     }
+    if (status !== undefined && status >= 500) {
+      return new BrevoProviderError(
+        "Brevo service is temporarily unavailable",
+        status,
+        providerCode,
+        true
+      );
+    }
+    return new BrevoProviderError(
+      "Brevo API request failed",
+      status,
+      providerCode,
+      retryable
+    );
   }
 }

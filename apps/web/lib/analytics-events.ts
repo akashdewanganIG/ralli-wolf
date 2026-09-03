@@ -1,9 +1,33 @@
 import { AnalyticsEvent } from "./api/types";
 
+function displayValue(value: unknown): string | null {
+  if (typeof value === "string") {
+    const text = value.trim();
+    return text ? text.slice(0, 300) : null;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (typeof value === "boolean") return value ? "true" : "false";
+  return null;
+}
+
+function eventValue(
+  data: Record<string, unknown>,
+  ...keys: string[]
+): string | null {
+  for (const key of keys) {
+    const value = displayValue(data[key]);
+    if (value) return value;
+  }
+  return null;
+}
+
+function joinPieces(pieces: Array<string | null>): string {
+  return pieces.filter((piece): piece is string => piece !== null).join(" • ");
+}
+
 export function formatAnalyticsTitle(eventType?: string) {
   if (!eventType) return "Activity";
 
-  // Handle WhatsApp campaign events
   if (eventType.startsWith("whatsapp.")) {
     const status = eventType.replace("whatsapp.", "");
     const statusMap: Record<string, string> = {
@@ -33,71 +57,70 @@ export function formatAnalyticsTitle(eventType?: string) {
 
 export function formatAnalyticsDescription(event: AnalyticsEvent) {
   const data = event.eventData;
-  if (data && typeof data === "object") {
-    const campaignName = (data as any).campaignName;
-    const status = (data as any).status || (data as any).event;
-    const error =
-      (data as any).errorMessage || (data as any).error || (data as any).reason;
-    const userName = (data as any).userName;
-    const messageText = (data as any).messageText;
-    const source = (data as any).source;
-    const reason = (data as any).reason;
+  if (data) {
+    const campaignName = eventValue(data, "campaignName");
+    const status = eventValue(data, "status", "event");
+    const error = eventValue(data, "errorMessage", "error", "reason");
+    const userName = eventValue(data, "userName");
+    const messageText = eventValue(data, "messageText");
+    const source = eventValue(data, "source");
+    const reason = eventValue(data, "reason");
 
-    // Handle opt-out events specially
     if (event.eventType === "whatsapp.opted_out_stop_message") {
       const pieces = [
         userName ? `User: ${userName}` : null,
         messageText ? `Message: "${messageText}"` : null,
         source ? `Source: ${source}` : null,
-      ].filter(Boolean);
-      return pieces.join(" • ");
+      ];
+      return joinPieces(pieces);
     }
 
-    // Handle opt-out removal events
     if (event.eventType === "whatsapp.opt_out_removed") {
-      const previousCampaignName = (data as any).previousCampaignName;
+      const previousCampaignName = eventValue(data, "previousCampaignName");
       const pieces = [
         userName ? `User: ${userName}` : null,
         reason ? `${reason}` : "User can now receive messages again",
         previousCampaignName
           ? `Previous campaign: ${previousCampaignName}`
           : null,
-      ].filter(Boolean);
-      return pieces.join(" • ");
+      ];
+      return joinPieces(pieces);
     }
 
-    // Handle generic opt-out events
     if (event.eventType === "whatsapp.opted_out") {
       const pieces = [
         userName ? `User: ${userName}` : null,
         reason ? `Reason: ${reason}` : null,
         campaignName ? `Campaign: ${campaignName}` : null,
-      ].filter(Boolean);
-      return pieces.join(" • ");
+      ];
+      return joinPieces(pieces);
     }
 
-    // For WhatsApp campaign events, show campaign name prominently
     if (event.eventType?.startsWith("whatsapp.") && campaignName) {
       const pieces = [
         `Campaign: ${campaignName}`,
         status ? `Status: ${status}` : null,
         error ? `Error: ${error}` : null,
-      ].filter(Boolean);
-      return pieces.join(" • ");
+      ];
+      return joinPieces(pieces);
     }
 
-    const address =
-      (data as any).address || (data as any).phone || (data as any).mobile;
+    const address = eventValue(data, "address", "phone", "mobile");
     const pieces = [
       campaignName ? `Campaign: ${campaignName}` : null,
       status ? `Status: ${status}` : null,
       address ? `Recipient: ${address}` : null,
       error ? `Error: ${error}` : null,
-    ].filter(Boolean);
-    if (pieces.length) return pieces.join(" • ");
-    const summary = Object.entries(data as Record<string, unknown>)
-      .slice(0, 3)
-      .map(([key, value]) => `${key}: ${String(value)}`);
+    ];
+    const description = joinPieces(pieces);
+    if (description) return description;
+    const summary = Object.entries(data)
+      .map(([key, value]) => {
+        const text = displayValue(value);
+        return text ? `${key}: ${text}` : null;
+      })
+      .filter((piece): piece is string => piece !== null)
+      .slice(0, 3);
     if (summary.length) return summary.join(" • ");
   }
   return "No additional metadata";

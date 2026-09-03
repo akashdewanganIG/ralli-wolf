@@ -15,9 +15,8 @@ if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
 }
 
-// Export Prisma namespace (types and runtime values like JsonNull/DbNull)
 export { Prisma } from "@prisma/client";
-// Re-export commonly used enums for convenience across packages
+
 export { UserRole, LeadStatus, LeadSource } from "@prisma/client";
 export {
   getDecryptedCredential,

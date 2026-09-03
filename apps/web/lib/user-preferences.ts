@@ -49,6 +49,6 @@ export const setColumnPreferences = (
       JSON.stringify(preferences)
     );
   } catch {
-    // Ignore write errors (e.g., storage quota)
+    return;
   }
 };

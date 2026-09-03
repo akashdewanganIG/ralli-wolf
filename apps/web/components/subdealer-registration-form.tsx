@@ -1,7 +1,7 @@
 "use client";
 
 import { subdealerService } from "@/lib/api/services";
-import { GstDetails } from "@/lib/api/types";
+import { GstDetails, SubdealerSessionProfile } from "@/lib/api/types";
 import { toast } from "@/lib/toast";
 import {
   emailSchema,
@@ -36,7 +36,7 @@ import {
   Phone,
   Shield,
 } from "@repo/ui/icons";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Step = 1 | 2 | 3 | 4 | 5;
 
@@ -51,16 +51,16 @@ export function SubdealerRegistrationForm() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [isExistingUser, setIsExistingUser] = useState(false);
-  const [existingUserData, setExistingUserData] = useState<any>(null);
+  const [verifiedSubdealer, setVerifiedSubdealer] =
+    useState<SubdealerSessionProfile | null>(null);
 
-  // Validation
   const phoneValidation = useMemo(() => {
     if (!phone) return { isValid: true, error: undefined };
     const result = phoneSchema.safeParse(phone);
     if (result.success) {
       return { isValid: true, error: undefined };
     }
-    // Safely extract error message - ZodError has 'issues' property
+
     const errorMessage =
       result.error?.issues?.[0]?.message ||
       result.error?.message ||
@@ -77,7 +77,7 @@ export function SubdealerRegistrationForm() {
     if (result.success) {
       return { isValid: true, error: undefined };
     }
-    // Safely extract error message - ZodError has 'issues' property
+
     const errorMessage =
       result.error?.issues?.[0]?.message ||
       result.error?.message ||
@@ -94,7 +94,7 @@ export function SubdealerRegistrationForm() {
     if (result.success) {
       return { isValid: true, error: undefined };
     }
-    // Safely extract error message - ZodError has 'issues' property
+
     const errorMessage =
       result.error?.issues?.[0]?.message ||
       result.error?.message ||
@@ -106,12 +106,12 @@ export function SubdealerRegistrationForm() {
   }, [otp]);
 
   const emailValidation = useMemo(() => {
-    if (!email) return { isValid: true, error: undefined }; // Optional field
+    if (!email) return { isValid: true, error: undefined };
     const result = emailSchema.safeParse(email);
     if (result.success) {
       return { isValid: true, error: undefined };
     }
-    // Safely extract error message - ZodError has 'issues' property
+
     const errorMessage =
       result.error?.issues?.[0]?.message ||
       result.error?.message ||
@@ -122,62 +122,29 @@ export function SubdealerRegistrationForm() {
     };
   }, [email]);
 
-  // Handle phone input - check if user exists
-  const handlePhoneChange = async (value: string) => {
+  const selectMode = (existing: boolean) => {
+    setIsExistingUser(existing);
+    setStep(1);
+    setPhone("");
+    setGstNumber("");
+    setGstDetails(null);
+    setVerifiedSubdealer(null);
+    setOtp("");
+    setError(null);
+  };
+
+  const handlePhoneChange = (value: string) => {
     const digitsOnly = value.replace(/\D/g, "");
     const previousLength = phone.length;
     const newPhone = digitsOnly.slice(0, 10);
     setPhone(newPhone);
     setError(null);
 
-    // Show validation toast when user completes entering 10 digits
     if (newPhone.length === 10 && previousLength !== 10) {
       const result = phoneSchema.safeParse(newPhone);
       if (result.success) {
         toast.success("Phone number validated successfully");
-
-        // Check if phone exists in database
-        setLoading(true);
-        try {
-          const response = await subdealerService.checkPhone(newPhone);
-
-          if (response.exists && response.data) {
-            // Existing user - skip GST step
-            setIsExistingUser(true);
-            setExistingUserData(response.data);
-            setGstDetails({
-              legalName: response.data.legalName,
-              gstNumber: response.data.gstNumber,
-              tradeName: response.data.tradeName,
-              address: response.data.address,
-              city: response.data.city,
-              state: response.data.state,
-              pincode: response.data.pincode,
-              panNumber: response.data.panNumber,
-              businessType: response.data.businessType,
-              status: response.data.status,
-            } as GstDetails);
-            toast.info(`Welcome back, ${response.data.legalName}!`);
-            // Auto-advance to step 3 (skip GST)
-            setTimeout(() => setStep(3), 100);
-          } else {
-            // New user - show GST step
-            setIsExistingUser(false);
-            setExistingUserData(null);
-            // Auto-advance to step 2 (GST input)
-            setTimeout(() => setStep(2), 100);
-          }
-        } catch (err: any) {
-          console.error("Error checking phone:", err);
-          // On error, assume new user and show GST step
-          setIsExistingUser(false);
-          toast.error(
-            "Could not verify phone number. Please continue with registration."
-          );
-          setTimeout(() => setStep(2), 100);
-        } finally {
-          setLoading(false);
-        }
+        setStep(isExistingUser ? 3 : 2);
       } else {
         const errorMessage =
           result.error?.issues?.[0]?.message ||
@@ -186,14 +153,13 @@ export function SubdealerRegistrationForm() {
       }
     }
   };
-  // Handle GST input
+
   const handleGstChange = (value: string) => {
     const upperValue = value.toUpperCase().replace(/[^0-9A-Z]/g, "");
     setGstNumber(upperValue.slice(0, 15));
     setError(null);
   };
 
-  // Fetch GST details
   const handleFetchGst = async () => {
     if (!gstValidation.isValid) return;
 
@@ -221,7 +187,6 @@ export function SubdealerRegistrationForm() {
     }
   };
 
-  // Generate OTP
   const handleGenerateOtp = async () => {
     if (!phoneValidation.isValid) return;
 
@@ -248,8 +213,6 @@ export function SubdealerRegistrationForm() {
     }
   };
 
-  // Verify OTP and register
-  // Verify OTP and register/login
   const handleVerifyOtp = async () => {
     if (!otpValidation.isValid) return;
     if (email && !emailValidation.isValid) return;
@@ -259,11 +222,11 @@ export function SubdealerRegistrationForm() {
 
     try {
       if (isExistingUser) {
-        // Login existing user
         const response = await subdealerService.login({ phone, otp });
 
         if (response.success && response.token) {
-          localStorage.setItem("subdealer_token", response.token);
+          subdealerService.setSession(response.token);
+          setVerifiedSubdealer(response.data);
           setSuccess(true);
           setStep(5);
           toast.success("Login successful!");
@@ -271,24 +234,18 @@ export function SubdealerRegistrationForm() {
           setError("Login failed");
         }
       } else {
-        // Register new user
         if (!gstDetails) return;
-
-        const gstDetailsWithEmail = {
-          ...gstDetails,
-          email: email.trim() || undefined,
-        };
 
         const response = await subdealerService.verifyOtpAndRegister({
           phone,
           otp,
-          gstDetails: gstDetailsWithEmail,
+          gstNumber: gstDetails.gstNumber,
+          email: email.trim() || undefined,
         });
 
         if (response.success) {
-          if ((response as any).token) {
-            localStorage.setItem("subdealer_token", (response as any).token);
-          }
+          subdealerService.setSession(response.token);
+          setVerifiedSubdealer(response.data);
           setSuccess(true);
           setStep(5);
           toast.success("Registration successful!");
@@ -306,22 +263,18 @@ export function SubdealerRegistrationForm() {
     }
   };
 
-  // Success view
   if (step === 5 && success) {
     return (
       <PostVerificationFlow
-        gstDetails={gstDetails}
-        phone={phone}
-        subdealerId={
-          existingUserData?.id ||
-          (localStorage.getItem("subdealer_token")
-            ? JSON.parse(
-                atob(
-                  localStorage.getItem("subdealer_token")!.split(".")[1] || ""
-                )
-              ).id
-            : null)
+        legalName={
+          verifiedSubdealer?.legalName || gstDetails?.legalName || null
         }
+        onLogout={async () => {
+          await subdealerService.logout();
+          setSuccess(false);
+          selectMode(true);
+          toast.success("Signed out successfully");
+        }}
       />
     );
   }
@@ -332,11 +285,12 @@ export function SubdealerRegistrationForm() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Building2 className="h-5 w-5" />
-            Subdealer Registration
+            {isExistingUser ? "Subdealer Sign In" : "Subdealer Registration"}
           </CardTitle>
           <CardDescription>
-            Complete your registration by providing your phone number and GST
-            details
+            {isExistingUser
+              ? "Verify your registered phone number to continue"
+              : "Complete registration with verified phone and GST details"}
           </CardDescription>
           <div className="flex gap-2 mt-2">
             <Badge
@@ -371,7 +325,29 @@ export function SubdealerRegistrationForm() {
           )}
 
           <FieldGroup className="space-y-4">
-            {/* Step 1: Phone Number */}
+            {step === 1 && (
+              <div
+                className="grid grid-cols-2 gap-2"
+                role="group"
+                aria-label="Account mode"
+              >
+                <Button
+                  type="button"
+                  variant={!isExistingUser ? "default" : "outline"}
+                  onClick={() => selectMode(false)}
+                >
+                  Register
+                </Button>
+                <Button
+                  type="button"
+                  variant={isExistingUser ? "default" : "outline"}
+                  onClick={() => selectMode(true)}
+                >
+                  Sign in
+                </Button>
+              </div>
+            )}
+
             <Field>
               <FieldLabel htmlFor="phone">Phone Number</FieldLabel>
               <Input
@@ -397,7 +373,6 @@ export function SubdealerRegistrationForm() {
               )}
             </Field>
 
-            {/* Step 2: GST Number (shown when phone is valid) */}
             {!isExistingUser && step >= 2 && (
               <Field>
                 <FieldLabel htmlFor="gst">GST Number</FieldLabel>
@@ -438,7 +413,21 @@ export function SubdealerRegistrationForm() {
               </Field>
             )}
 
-            {/* Step 3: Prefilled GST Details + Generate OTP */}
+            {isExistingUser && step === 3 && (
+              <div className="space-y-3 rounded-lg border bg-muted/50 p-4">
+                <p className="text-sm text-muted-foreground">
+                  We will send a one-time code to the registered phone number.
+                </p>
+                <Button
+                  onClick={handleGenerateOtp}
+                  disabled={loading}
+                  className="w-full"
+                >
+                  {loading ? "Sending OTP..." : "Send OTP"}
+                </Button>
+              </div>
+            )}
+
             {step >= 3 && gstDetails && (
               <div className="space-y-4 rounded-lg border bg-muted/50 p-4">
                 <div className="flex items-center justify-between">
@@ -588,7 +577,6 @@ export function SubdealerRegistrationForm() {
               </div>
             )}
 
-            {/* Step 4: OTP Verification */}
             {step >= 4 && (
               <Field>
                 <FieldLabel htmlFor="otp">Enter OTP</FieldLabel>
@@ -643,8 +631,6 @@ export function SubdealerRegistrationForm() {
   );
 }
 
-// --- Post Verification Components ---
-
 import {
   invoiceService,
   orderService,
@@ -656,13 +642,11 @@ import { SearchInput } from "@repo/ui/components/ui/search-input";
 import { formatMoney } from "@/lib/utils/decimal";
 
 function PostVerificationFlow({
-  gstDetails,
-  phone,
-  subdealerId,
+  legalName,
+  onLogout,
 }: {
-  gstDetails: GstDetails | null;
-  phone: string;
-  subdealerId: number | null;
+  legalName: string | null;
+  onLogout: () => Promise<void>;
 }) {
   const [mode, setMode] = useState<"choice" | "upload" | "order">("choice");
 
@@ -676,8 +660,8 @@ function PostVerificationFlow({
             </div>
             <CardTitle>Verification Successful!</CardTitle>
             <CardDescription>
-              Welcome, {gstDetails?.legalName || "Subdealer"}. What would you
-              like to do next?
+              Welcome, {legalName || "Subdealer"}. What would you like to do
+              next?
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -691,6 +675,9 @@ function PostVerificationFlow({
               <span className="text-xs text-muted-foreground">
                 Upload your past invoices
               </span>
+            </Button>
+            <Button variant="ghost" className="w-full" onClick={onLogout}>
+              Sign out
             </Button>
             <Button
               className="w-full h-auto py-4 flex flex-col items-center gap-2"
@@ -709,28 +696,17 @@ function PostVerificationFlow({
   }
 
   if (mode === "upload") {
-    return <InvoiceUploadView phone={phone} onBack={() => setMode("choice")} />;
+    return <InvoiceUploadView onBack={() => setMode("choice")} />;
   }
 
   if (mode === "order") {
-    return (
-      <OrderBookingView
-        subdealerId={subdealerId}
-        onBack={() => setMode("choice")}
-      />
-    );
+    return <OrderBookingView onBack={() => setMode("choice")} />;
   }
 
   return null;
 }
 
-function InvoiceUploadView({
-  phone,
-  onBack,
-}: {
-  phone: string;
-  onBack: () => void;
-}) {
+function InvoiceUploadView({ onBack }: { onBack: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -738,10 +714,9 @@ function InvoiceUploadView({
     if (!file) return;
     setUploading(true);
     try {
-      await invoiceService.uploadInvoice(file, phone);
+      await invoiceService.uploadInvoice(file);
       toast.success("Invoice uploaded successfully!");
       setFile(null);
-      // Optional: Navigate back or show success state
     } catch (err: any) {
       toast.error(err.message || "Failed to upload invoice");
     } finally {
@@ -791,13 +766,7 @@ function InvoiceUploadView({
   );
 }
 
-function OrderBookingView({
-  subdealerId,
-  onBack,
-}: {
-  subdealerId: number | null;
-  onBack: () => void;
-}) {
+function OrderBookingView({ onBack }: { onBack: () => void }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
@@ -813,8 +782,7 @@ function OrderBookingView({
     totalAmount: string | number;
   } | null>(null);
 
-  // Fetch products on mount
-  useState(() => {
+  useEffect(() => {
     const fetchProducts = async () => {
       try {
         const res = await productService.getActiveProducts();
@@ -827,8 +795,8 @@ function OrderBookingView({
         setLoading(false);
       }
     };
-    fetchProducts();
-  });
+    void fetchProducts();
+  }, []);
 
   const handleInputChange = (productId: number, value: string) => {
     const qty = parseInt(value) || 0;
@@ -845,7 +813,7 @@ function OrderBookingView({
       ...prev,
       [productId]: (prev[productId] || 0) + qtyToAdd,
     }));
-    setInputQuantities(prev => ({ ...prev, [productId]: 1 })); // Reset input to 1
+    setInputQuantities(prev => ({ ...prev, [productId]: 1 }));
     toast.success("Added to cart");
   };
 
@@ -874,11 +842,6 @@ function OrderBookingView({
   };
 
   const confirmOrder = async () => {
-    if (!subdealerId) {
-      toast.error("Subdealer ID missing. Please login again.");
-      return;
-    }
-
     const lineItems = Object.entries(cart).map(([productId, quantity]) => ({
       productId: parseInt(productId),
       quantity,
@@ -887,7 +850,6 @@ function OrderBookingView({
     setSubmitting(true);
     try {
       const res = await orderService.createOrder({
-        subdealerId,
         lineItems,
       });
 
@@ -922,7 +884,6 @@ function OrderBookingView({
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-8 relative">
-      {/* Confirmation Modal */}
       {showConfirmation && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4">
           <Card className="w-full max-w-md">
@@ -965,7 +926,6 @@ function OrderBookingView({
         </div>
       )}
 
-      {/* Success Modal */}
       {orderSuccess && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4">
           <Card className="w-full max-w-md text-center">
@@ -1002,13 +962,11 @@ function OrderBookingView({
           &larr; Back
         </Button>
         <h2 className="text-base sm:text-lg font-semibold">Book Order</h2>
-        <div className="w-20" /> {/* Spacer */}
+        <div className="w-20" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Product List */}
         <div className="lg:col-span-2 space-y-4">
-          {/* Search Bar */}
           <SearchInput
             placeholder="Search products by name or code..."
             value={searchQuery}
@@ -1089,7 +1047,6 @@ function OrderBookingView({
           </div>
         </div>
 
-        {/* Cart Summary */}
         <div className="lg:col-span-1">
           <Card className="sticky top-4">
             <CardHeader className="pb-4">
@@ -1140,7 +1097,6 @@ function OrderBookingView({
                           </p>
 
                           <div className="flex items-center justify-between mt-2">
-                            {/* ---- NEW INPUT FIELD FOR QUANTITY ---- */}
                             <Input
                               type="number"
                               min={1}
@@ -1150,12 +1106,11 @@ function OrderBookingView({
                               onChange={e => {
                                 const newQty = parseInt(e.target.value, 10);
                                 if (!isNaN(newQty) && newQty >= 1) {
-                                  updateCartQuantity(product.id, newQty - qty); // keeps logic compatible
+                                  updateCartQuantity(product.id, newQty - qty);
                                 }
                               }}
                             />
 
-                            {/* Remove button */}
                             <Button
                               type="button"
                               size="icon"

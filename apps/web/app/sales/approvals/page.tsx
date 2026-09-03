@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { useQueryStates, parseAsString } from "nuqs";
-import { RoleGuard } from "@/components/guards/RoleGuard";
+import { RoleGuard } from "@/components/guards/role-guard";
 import {
   Tabs,
   TabsContent,
@@ -18,7 +18,7 @@ import {
 import { CategorySwitcher } from "@repo/ui/components/ui/category-switcher";
 import { PageHeader } from "@repo/ui/components/ui/page-header";
 import { ApprovalsTable } from "@/components/approvals/approvals-table";
-import { useAllApprovals, useMyApprovals } from "@/hooks/useApprovals";
+import { useAllApprovals, useMyApprovals } from "@/hooks/use-approvals";
 import { TableSkeleton } from "@/components/skeletons";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { DEFAULT_PAGE_SIZE } from "@/components/data-table";
@@ -238,7 +238,7 @@ function ApprovalsPageContent() {
 
 export default function ApprovalsPage() {
   return (
-    <RoleGuard allowedRoles={["ADMIN", "ADMIN", "SALES"]}>
+    <RoleGuard allowedRoles={["ADMIN", "SALES"]}>
       <NuqsAdapter>
         <ApprovalsPageContent />
       </NuqsAdapter>

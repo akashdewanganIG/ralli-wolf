@@ -19,7 +19,11 @@ import {
   SEQUENCE_KEYS,
 } from "../services/supplyChain/numbering.service.js";
 import { DomainError, NotFoundError } from "../services/supplyChain/errors.js";
-import { toDecimal } from "../services/supplyChain/decimal.js";
+import {
+  requireNonNegative,
+  requirePercentage,
+  requirePositive,
+} from "../services/supplyChain/decimal.js";
 import {
   handleSupplyChainError,
   optionalString,
@@ -28,12 +32,14 @@ import {
   parseDate,
   parseEnum,
   parseId,
+  parseInteger,
   parseOptionalId,
+  parseOptionalInteger,
   parsePagination,
   requireArray,
   requireString,
   requireUserId,
-} from "../utils/supplyChainHttp.js";
+} from "../utils/supply-chain-http.js";
 
 const BOM_LIST_INCLUDE = {
   product: { select: { id: true, code: true, name: true, itemType: true } },
@@ -43,8 +49,24 @@ const BOM_LIST_INCLUDE = {
   _count: { select: { components: true } },
 } as const;
 
+async function lockDraftBom(tx: Prisma.TransactionClient, bomId: number) {
+  await tx.$queryRaw`
+    SELECT "id" FROM "bills_of_materials" WHERE "id" = ${bomId} FOR UPDATE
+  `;
+  const bom = await tx.billOfMaterials.findUnique({
+    where: { id: bomId },
+    select: { id: true, status: true },
+  });
+  if (!bom) throw new NotFoundError("Bill of materials");
+  if (bom.status !== BomStatus.DRAFT) {
+    throw new DomainError(
+      "Only a draft BOM can be edited. Return a pending BOM to draft or create a revision of an active BOM.",
+      { status: 409, code: "BOM_FROZEN" }
+    );
+  }
+}
+
 export class BomController {
-  /** GET /api/boms */
   async list(req: Request, res: Response) {
     const operation = "List bills of materials";
     try {
@@ -92,7 +114,6 @@ export class BomController {
     }
   }
 
-  /** GET /api/boms/:id */
   async getById(req: Request, res: Response) {
     const operation = "Get bill of materials";
     try {
@@ -156,7 +177,6 @@ export class BomController {
     }
   }
 
-  /** POST /api/boms */
   async create(req: Request, res: Response) {
     const operation = "Create bill of materials";
     try {
@@ -168,18 +188,44 @@ export class BomController {
       });
       if (!product) throw new NotFoundError("Product");
 
-      const components = Array.isArray(req.body.components)
-        ? req.body.components
-        : [];
-      for (const component of components) {
+      if (
+        req.body.components !== undefined &&
+        (!Array.isArray(req.body.components) ||
+          req.body.components.length > 1_000)
+      ) {
+        throw new DomainError(
+          "components must be an array of at most 1000 rows",
+          { code: "VALIDATION_ERROR" }
+        );
+      }
+      const components = (
+        Array.isArray(req.body.components) ? req.body.components : []
+      ) as Record<string, unknown>[];
+      const seenComponents = new Set<number>();
+      for (const [index, component] of components.entries()) {
         const componentProductId = parseId(
           String(component.componentProductId),
-          "componentProductId"
+          `components[${index}].componentProductId`
         );
+        if (seenComponents.has(componentProductId)) {
+          throw new DomainError(
+            "The same component appears more than once; merge the quantities instead",
+            { code: "DUPLICATE_COMPONENT" }
+          );
+        }
+        seenComponents.add(componentProductId);
         await assertNoCircularReference(productId, componentProductId);
       }
 
       const isDefault = parseBoolean(req.body.isDefault) ?? false;
+      const effectiveFrom = parseDate(req.body.effectiveFrom, "effectiveFrom");
+      const effectiveTo = parseDate(req.body.effectiveTo, "effectiveTo");
+      if (effectiveFrom && effectiveTo && effectiveTo < effectiveFrom) {
+        throw new DomainError(
+          "effectiveTo cannot be earlier than effectiveFrom",
+          { code: "VALIDATION_ERROR" }
+        );
+      }
 
       const bom = await prisma.$transaction(async tx => {
         const highest = await tx.billOfMaterials.findFirst({
@@ -206,15 +252,18 @@ export class BomController {
             revision: optionalString(req.body.revision) ?? "A",
             status: BomStatus.DRAFT,
             isDefault,
-            outputQuantity: toDecimal(
+            outputQuantity: requirePositive(
               req.body.outputQuantity ?? 1,
               "outputQuantity"
             ),
             uomId: parseOptionalId(req.body.uomId) ?? product.uomId,
-            effectiveFrom: parseDate(req.body.effectiveFrom, "effectiveFrom"),
-            effectiveTo: parseDate(req.body.effectiveTo, "effectiveTo"),
-            laborCost: toDecimal(req.body.laborCost ?? 0, "laborCost"),
-            overheadCost: toDecimal(req.body.overheadCost ?? 0, "overheadCost"),
+            effectiveFrom,
+            effectiveTo,
+            laborCost: requireNonNegative(req.body.laborCost ?? 0, "laborCost"),
+            overheadCost: requireNonNegative(
+              req.body.overheadCost ?? 0,
+              "overheadCost"
+            ),
             notes: optionalString(req.body.notes),
             createdById: userId,
           },
@@ -224,16 +273,25 @@ export class BomController {
           await tx.bomComponent.create({
             data: {
               bomId: created.id,
-              componentProductId: Number(component.componentProductId),
-              lineNumber: Number(component.lineNumber) || index + 1,
-              quantity: toDecimal(
+              componentProductId: parseId(
+                String(component.componentProductId),
+                `components[${index}].componentProductId`
+              ),
+              lineNumber:
+                parseOptionalInteger(
+                  component.lineNumber,
+                  `components[${index}].lineNumber`,
+                  1,
+                  1_000_000
+                ) ?? index + 1,
+              quantity: requirePositive(
                 component.quantity,
                 `components[${index}].quantity`
               ),
               uomId: parseOptionalId(component.uomId),
-              scrapPercent: toDecimal(
+              scrapPercent: requirePercentage(
                 component.scrapPercent ?? 0,
-                "scrapPercent"
+                `components[${index}].scrapPercent`
               ),
               isOptional: parseBoolean(component.isOptional) ?? false,
               isPhantom: parseBoolean(component.isPhantom) ?? false,
@@ -246,7 +304,6 @@ export class BomController {
           });
         }
 
-        // The product is manufactured by definition once it has a structure.
         if (!product.isManufactured) {
           await tx.product.update({
             where: { id: productId },
@@ -289,7 +346,6 @@ export class BomController {
     }
   }
 
-  /** PUT /api/boms/:id */
   async update(req: Request, res: Response) {
     const operation = "Update bill of materials";
     try {
@@ -300,22 +356,35 @@ export class BomController {
         where: { id },
       });
       if (!existing) throw new NotFoundError("Bill of materials");
-      if (existing.status === BomStatus.OBSOLETE) {
+      if (existing.status !== BomStatus.DRAFT) {
         throw new DomainError(
-          "An obsolete BOM cannot be edited; create a revision instead",
-          { code: "BOM_OBSOLETE" }
-        );
-      }
-      if (existing.status === BomStatus.ACTIVE) {
-        throw new DomainError(
-          "An active BOM is frozen so production orders stay reproducible. Create a revision to change it.",
-          { code: "BOM_ACTIVE_FROZEN" }
+          "Only a draft BOM can be edited. Return a pending BOM to draft or create a revision of an active BOM.",
+          { code: "BOM_FROZEN" }
         );
       }
 
       const isDefault = parseBoolean(req.body.isDefault);
+      const nextEffectiveFrom =
+        req.body.effectiveFrom === undefined
+          ? existing.effectiveFrom
+          : parseDate(req.body.effectiveFrom, "effectiveFrom");
+      const nextEffectiveTo =
+        req.body.effectiveTo === undefined
+          ? existing.effectiveTo
+          : parseDate(req.body.effectiveTo, "effectiveTo");
+      if (
+        nextEffectiveFrom &&
+        nextEffectiveTo &&
+        nextEffectiveTo < nextEffectiveFrom
+      ) {
+        throw new DomainError(
+          "effectiveTo cannot be earlier than effectiveFrom",
+          { code: "VALIDATION_ERROR" }
+        );
+      }
 
       const updated = await prisma.$transaction(async tx => {
+        await lockDraftBom(tx, id);
         if (isDefault === true) {
           await tx.billOfMaterials.updateMany({
             where: {
@@ -338,7 +407,7 @@ export class BomController {
               : {}),
             ...(req.body.outputQuantity !== undefined
               ? {
-                  outputQuantity: toDecimal(
+                  outputQuantity: requirePositive(
                     req.body.outputQuantity,
                     "outputQuantity"
                   ),
@@ -348,22 +417,22 @@ export class BomController {
               ? { uomId: parseOptionalId(req.body.uomId) }
               : {}),
             ...(req.body.effectiveFrom !== undefined
+              ? { effectiveFrom: nextEffectiveFrom }
+              : {}),
+            ...(req.body.effectiveTo !== undefined
+              ? { effectiveTo: nextEffectiveTo }
+              : {}),
+            ...(req.body.laborCost !== undefined
               ? {
-                  effectiveFrom: parseDate(
-                    req.body.effectiveFrom,
-                    "effectiveFrom"
+                  laborCost: requireNonNegative(
+                    req.body.laborCost,
+                    "laborCost"
                   ),
                 }
               : {}),
-            ...(req.body.effectiveTo !== undefined
-              ? { effectiveTo: parseDate(req.body.effectiveTo, "effectiveTo") }
-              : {}),
-            ...(req.body.laborCost !== undefined
-              ? { laborCost: toDecimal(req.body.laborCost, "laborCost") }
-              : {}),
             ...(req.body.overheadCost !== undefined
               ? {
-                  overheadCost: toDecimal(
+                  overheadCost: requireNonNegative(
                     req.body.overheadCost,
                     "overheadCost"
                   ),
@@ -393,12 +462,6 @@ export class BomController {
     }
   }
 
-  /**
-   * PATCH /api/boms/:id/status
-   * Activating a BOM retires the previously active one for the same product,
-   * because two live structures for one item is how the wrong thing gets
-   * built.
-   */
   async changeStatus(req: Request, res: Response) {
     const operation = "Change BOM status";
     try {
@@ -412,17 +475,51 @@ export class BomController {
       ) as BomStatus;
 
       const updated = await prisma.$transaction(async tx => {
+        await tx.$queryRaw`
+          SELECT "id" FROM "bills_of_materials" WHERE "id" = ${id} FOR UPDATE
+        `;
         const existing = await tx.billOfMaterials.findUnique({
           where: { id },
           include: { components: true, product: { select: { code: true } } },
         });
         if (!existing) throw new NotFoundError("Bill of materials");
 
+        const allowedTransitions: Record<BomStatus, BomStatus[]> = {
+          [BomStatus.DRAFT]: [BomStatus.PENDING_APPROVAL],
+          [BomStatus.PENDING_APPROVAL]: [BomStatus.DRAFT, BomStatus.ACTIVE],
+          [BomStatus.ACTIVE]: [BomStatus.OBSOLETE],
+          [BomStatus.OBSOLETE]: [],
+        };
+        if (!allowedTransitions[existing.status].includes(status)) {
+          throw new DomainError(
+            `A BOM cannot move from ${existing.status} to ${status}`,
+            { status: 409, code: "INVALID_STATUS_TRANSITION" }
+          );
+        }
+        const reason = optionalString(req.body.reason, "reason", 1_000);
+        if (status === BomStatus.DRAFT && !reason) {
+          throw new DomainError(
+            "A reason is required when returning a BOM to draft",
+            { code: "VALIDATION_ERROR" }
+          );
+        }
+
+        if (
+          (status === BomStatus.PENDING_APPROVAL ||
+            status === BomStatus.ACTIVE) &&
+          existing.components.length === 0
+        ) {
+          throw new DomainError(
+            "A BOM with no components cannot be submitted or activated",
+            { code: "BOM_EMPTY" }
+          );
+        }
+
         if (status === BomStatus.ACTIVE) {
-          if (existing.components.length === 0) {
+          if (existing.createdById === userId) {
             throw new DomainError(
-              "A BOM with no components cannot be activated",
-              { code: "BOM_EMPTY" }
+              "The author cannot approve their own BOM; another BOM manager must approve it",
+              { status: 403, code: "SELF_APPROVAL_NOT_ALLOWED" }
             );
           }
           await tx.billOfMaterials.updateMany({
@@ -433,21 +530,6 @@ export class BomController {
             },
             data: { status: BomStatus.OBSOLETE, effectiveTo: new Date() },
           });
-        }
-
-        if (status === BomStatus.OBSOLETE) {
-          const openOrders = await tx.productionOrder.count({
-            where: {
-              bomId: id,
-              status: { in: ["DRAFT", "PLANNED", "RELEASED", "IN_PROGRESS"] },
-            },
-          });
-          if (openOrders > 0) {
-            throw new DomainError(
-              `${openOrders} open production order(s) still use this BOM; close them before retiring it`,
-              { status: 409, code: "BOM_IN_USE" }
-            );
-          }
         }
 
         const bom = await tx.billOfMaterials.update({
@@ -464,6 +546,9 @@ export class BomController {
             ...(status === BomStatus.OBSOLETE
               ? { effectiveTo: new Date() }
               : {}),
+            ...(status === BomStatus.DRAFT
+              ? { approvedById: null, approvedAt: null }
+              : {}),
           },
         });
 
@@ -474,7 +559,7 @@ export class BomController {
           oldValue: existing.status,
           newValue: status,
           description: `Status changed from ${existing.status} to ${status}`,
-          reason: optionalString(req.body.reason),
+          reason,
           changedById: userId,
         });
 
@@ -499,7 +584,6 @@ export class BomController {
     }
   }
 
-  /** POST /api/boms/:id/components */
   async addComponent(req: Request, res: Response) {
     const operation = "Add BOM component";
     try {
@@ -514,10 +598,7 @@ export class BomController {
         where: { id: bomId },
       });
       if (!bom) throw new NotFoundError("Bill of materials");
-      if (
-        bom.status === BomStatus.ACTIVE ||
-        bom.status === BomStatus.OBSOLETE
-      ) {
+      if (bom.status !== BomStatus.DRAFT) {
         throw new DomainError(
           "Components can only be changed on a draft BOM; create a revision instead",
           {
@@ -529,6 +610,7 @@ export class BomController {
       await assertNoCircularReference(bom.productId, componentProductId);
 
       const component = await prisma.$transaction(async tx => {
+        await lockDraftBom(tx, bomId);
         const highest = await tx.bomComponent.findFirst({
           where: { bomId },
           orderBy: { lineNumber: "desc" },
@@ -540,10 +622,18 @@ export class BomController {
             bomId,
             componentProductId,
             lineNumber:
-              Number(req.body.lineNumber) || (highest?.lineNumber ?? 0) + 10,
-            quantity: toDecimal(req.body.quantity, "quantity"),
+              parseOptionalInteger(
+                req.body.lineNumber,
+                "lineNumber",
+                1,
+                1_000_000
+              ) ?? (highest?.lineNumber ?? 0) + 10,
+            quantity: requirePositive(req.body.quantity, "quantity"),
             uomId: parseOptionalId(req.body.uomId),
-            scrapPercent: toDecimal(req.body.scrapPercent ?? 0, "scrapPercent"),
+            scrapPercent: requirePercentage(
+              req.body.scrapPercent ?? 0,
+              "scrapPercent"
+            ),
             isOptional: parseBoolean(req.body.isOptional) ?? false,
             isPhantom: parseBoolean(req.body.isPhantom) ?? false,
             operationSequence: parseOptionalId(req.body.operationSequence),
@@ -574,7 +664,6 @@ export class BomController {
     }
   }
 
-  /** PUT /api/boms/components/:componentId */
   async updateComponent(req: Request, res: Response) {
     const operation = "Update BOM component";
     try {
@@ -586,10 +675,7 @@ export class BomController {
         include: { bom: true, componentProduct: { select: { code: true } } },
       });
       if (!existing) throw new NotFoundError("BOM component");
-      if (
-        existing.bom.status === BomStatus.ACTIVE ||
-        existing.bom.status === BomStatus.OBSOLETE
-      ) {
+      if (existing.bom.status !== BomStatus.DRAFT) {
         throw new DomainError(
           "Components can only be changed on a draft BOM; create a revision instead",
           {
@@ -599,16 +685,21 @@ export class BomController {
       }
 
       const updated = await prisma.$transaction(async tx => {
+        await lockDraftBom(tx, existing.bomId);
         const component = await tx.bomComponent.update({
           where: { id: componentId },
           data: {
             ...(req.body.quantity !== undefined
-              ? { quantity: toDecimal(req.body.quantity, "quantity") }
+              ? { quantity: requirePositive(req.body.quantity, "quantity") }
               : {}),
             ...(req.body.lineNumber !== undefined
               ? {
-                  lineNumber:
-                    Number(req.body.lineNumber) || existing.lineNumber,
+                  lineNumber: parseInteger(
+                    req.body.lineNumber,
+                    "lineNumber",
+                    1,
+                    1_000_000
+                  ),
                 }
               : {}),
             ...(req.body.uomId !== undefined
@@ -616,7 +707,7 @@ export class BomController {
               : {}),
             ...(req.body.scrapPercent !== undefined
               ? {
-                  scrapPercent: toDecimal(
+                  scrapPercent: requirePercentage(
                     req.body.scrapPercent,
                     "scrapPercent"
                   ),
@@ -668,7 +759,6 @@ export class BomController {
     }
   }
 
-  /** DELETE /api/boms/components/:componentId */
   async removeComponent(req: Request, res: Response) {
     const operation = "Remove BOM component";
     try {
@@ -680,10 +770,7 @@ export class BomController {
         include: { bom: true, componentProduct: { select: { code: true } } },
       });
       if (!existing) throw new NotFoundError("BOM component");
-      if (
-        existing.bom.status === BomStatus.ACTIVE ||
-        existing.bom.status === BomStatus.OBSOLETE
-      ) {
+      if (existing.bom.status !== BomStatus.DRAFT) {
         throw new DomainError(
           "Components can only be changed on a draft BOM; create a revision instead",
           {
@@ -693,6 +780,7 @@ export class BomController {
       }
 
       await prisma.$transaction(async tx => {
+        await lockDraftBom(tx, existing.bomId);
         await tx.bomComponent.delete({ where: { id: componentId } });
         await logBomChange(tx, {
           bomId: existing.bomId,
@@ -710,7 +798,6 @@ export class BomController {
     }
   }
 
-  /** POST /api/boms/components/:componentId/substitutes */
   async addSubstitute(req: Request, res: Response) {
     const operation = "Add component substitute";
     try {
@@ -726,6 +813,12 @@ export class BomController {
         include: { bom: true, componentProduct: { select: { code: true } } },
       });
       if (!component) throw new NotFoundError("BOM component");
+      if (component.bom.status !== BomStatus.DRAFT) {
+        throw new DomainError(
+          "Substitutes can only be changed on a draft BOM; create a revision instead",
+          { code: "BOM_FROZEN" }
+        );
+      }
       if (component.componentProductId === substituteProductId) {
         throw new DomainError("A component cannot substitute for itself", {
           code: "VALIDATION_ERROR",
@@ -738,12 +831,15 @@ export class BomController {
       );
 
       const substitute = await prisma.$transaction(async tx => {
+        await lockDraftBom(tx, component.bomId);
         const created = await tx.bomComponentSubstitute.create({
           data: {
             bomComponentId: componentId,
             substituteProductId,
-            priority: Number(req.body.priority) || 1,
-            conversionFactor: toDecimal(
+            priority:
+              parseOptionalInteger(req.body.priority, "priority", 1, 10_000) ??
+              1,
+            conversionFactor: requirePositive(
               req.body.conversionFactor ?? 1,
               "conversionFactor"
             ),
@@ -773,7 +869,6 @@ export class BomController {
     }
   }
 
-  /** DELETE /api/boms/substitutes/:substituteId */
   async removeSubstitute(req: Request, res: Response) {
     const operation = "Remove component substitute";
     try {
@@ -783,13 +878,20 @@ export class BomController {
       const existing = await prisma.bomComponentSubstitute.findUnique({
         where: { id: substituteId },
         include: {
-          bomComponent: true,
+          bomComponent: { include: { bom: true } },
           substituteProduct: { select: { code: true } },
         },
       });
       if (!existing) throw new NotFoundError("Component substitute");
+      if (existing.bomComponent.bom.status !== BomStatus.DRAFT) {
+        throw new DomainError(
+          "Substitutes can only be changed on a draft BOM; create a revision instead",
+          { code: "BOM_FROZEN" }
+        );
+      }
 
       await prisma.$transaction(async tx => {
+        await lockDraftBom(tx, existing.bomComponent.bomId);
         await tx.bomComponentSubstitute.delete({ where: { id: substituteId } });
         await logBomChange(tx, {
           bomId: existing.bomComponent.bomId,
@@ -806,10 +908,6 @@ export class BomController {
     }
   }
 
-  /**
-   * GET /api/boms/:id/explode
-   * The full indented structure for a build quantity.
-   */
   async explode(req: Request, res: Response) {
     const operation = "Explode bill of materials";
     try {
@@ -821,7 +919,7 @@ export class BomController {
       if (!bom) throw new NotFoundError("Bill of materials");
 
       const quantity = req.query.quantity
-        ? toDecimal(String(req.query.quantity), "quantity")
+        ? requirePositive(String(req.query.quantity), "quantity")
         : 1;
       const maxLevels = parseOptionalId(req.query.maxLevels);
 
@@ -854,7 +952,6 @@ export class BomController {
     }
   }
 
-  /** POST /api/boms/:id/cost-rollup */
   async costRollup(req: Request, res: Response) {
     const operation = "Roll up BOM cost";
     try {
@@ -872,7 +969,6 @@ export class BomController {
     }
   }
 
-  /** GET /api/boms/where-used/:productId */
   async whereUsed(req: Request, res: Response) {
     const operation = "BOM where-used";
     try {
@@ -884,7 +980,6 @@ export class BomController {
     }
   }
 
-  /** POST /api/boms/:id/revise */
   async revise(req: Request, res: Response) {
     const operation = "Revise bill of materials";
     try {
@@ -909,7 +1004,6 @@ export class BomController {
     }
   }
 
-  /** GET /api/boms/:id/history */
   async history(req: Request, res: Response) {
     const operation = "Get BOM change history";
     try {
@@ -940,11 +1034,6 @@ export class BomController {
     }
   }
 
-  /**
-   * POST /api/boms/:id/components/bulk
-   * Replace a draft BOM's component list in one call, which is what the
-   * structure editor in the UI posts.
-   */
   async replaceComponents(req: Request, res: Response) {
     const operation = "Replace BOM components";
     try {
@@ -966,16 +1055,22 @@ export class BomController {
         );
       }
 
-      for (const component of components) {
+      for (const [index, component] of components.entries()) {
         await assertNoCircularReference(
           bom.productId,
-          Number(component.componentProductId)
+          parseId(
+            String(component.componentProductId),
+            `components[${index}].componentProductId`
+          )
         );
       }
 
       const seen = new Set<number>();
-      for (const component of components) {
-        const productId = Number(component.componentProductId);
+      for (const [index, component] of components.entries()) {
+        const productId = parseId(
+          String(component.componentProductId),
+          `components[${index}].componentProductId`
+        );
         if (seen.has(productId)) {
           throw new DomainError(
             "The same component appears more than once; merge the quantities instead",
@@ -988,22 +1083,32 @@ export class BomController {
       }
 
       const result = await prisma.$transaction(async tx => {
+        await lockDraftBom(tx, bomId);
         await tx.bomComponent.deleteMany({ where: { bomId } });
 
         for (const [index, component] of components.entries()) {
           await tx.bomComponent.create({
             data: {
               bomId,
-              componentProductId: Number(component.componentProductId),
-              lineNumber: Number(component.lineNumber) || (index + 1) * 10,
-              quantity: toDecimal(
+              componentProductId: parseId(
+                String(component.componentProductId),
+                `components[${index}].componentProductId`
+              ),
+              lineNumber:
+                parseOptionalInteger(
+                  component.lineNumber,
+                  `components[${index}].lineNumber`,
+                  1,
+                  1_000_000
+                ) ?? (index + 1) * 10,
+              quantity: requirePositive(
                 component.quantity as string,
                 `components[${index}].quantity`
               ),
               uomId: parseOptionalId(component.uomId),
-              scrapPercent: toDecimal(
+              scrapPercent: requirePercentage(
                 (component.scrapPercent as string) ?? 0,
-                "scrapPercent"
+                `components[${index}].scrapPercent`
               ),
               isOptional: parseBoolean(component.isOptional) ?? false,
               isPhantom: parseBoolean(component.isPhantom) ?? false,

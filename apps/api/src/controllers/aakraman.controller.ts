@@ -1,64 +1,60 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@repo/db";
+import { Prisma, Region } from "@prisma/client";
 import crypto from "crypto";
-import jwt from "jsonwebtoken";
 import { msg91Service } from "../services/msg91.service.js";
 import { emailService } from "../services/email.service.js";
+import { generateAakramanToken } from "../utils/jwt.utils.js";
+import {
+  getOrderCatalogueProducts,
+  OrderPricingError,
+  resolveOrderLines,
+} from "../services/order-pricing.service.js";
+import {
+  nextDocumentNumber,
+  SEQUENCE_KEYS,
+} from "../services/supplyChain/numbering.service.js";
+import { handleError, handleValidationError } from "../utils/error-handler.js";
+import { logWarn } from "../utils/logger.js";
+import {
+  isValidEmail,
+  parseBoundedInteger,
+  parsePositiveInteger,
+} from "../utils/validators.js";
 
-const prisma = new PrismaClient();
-
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 const OTP_EXPIRY_MINUTES = 10;
 const MAX_OTP_ATTEMPTS = 5;
 
-/**
- * Generate a 6-digit OTP
- */
+const ORDER_PRODUCT_SELECT = {
+  id: true,
+  name: true,
+  code: true,
+  imageUrl: true,
+  description: true,
+  categoryId: true,
+  active: true,
+  component: true,
+} satisfies Prisma.ProductSelect;
+
 function generateOtp(): string {
   return crypto.randomInt(100000, 999999).toString();
 }
 
-/**
- * Hash OTP for secure storage
- */
 function hashOtp(otp: string): string {
-  return crypto.createHash("sha256").update(otp).digest("hex");
-}
-
-/**
- * Generate JWT token for sales user
- */
-function generateSalesUserToken(
-  userId: number,
-  phone: string,
-  email: string
-): string {
-  return jwt.sign({ userId, phone, email, type: "sales_user" }, JWT_SECRET, {
-    expiresIn: "7d",
-  });
-}
-
-/**
- * Verify sales user JWT token
- */
-export function verifySalesUserToken(
-  token: string
-): { userId: number; phone: string; email: string; type: string } | null {
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as {
-      userId: number;
-      phone: string;
-      email: string;
-      type: string;
-    };
-    if (decoded.type !== "sales_user") {
-      return null;
-    }
-    return decoded;
-  } catch {
-    return null;
+  const secret = process.env.OTP_HASH_SECRET?.trim();
+  if (!secret || Buffer.byteLength(secret, "utf8") < 32) {
+    throw new Error(
+      "OTP_HASH_SECRET must contain at least 32 bytes of secret material"
+    );
   }
+  return crypto.createHmac("sha256", secret).update(otp).digest("hex");
 }
+
+const otpIssuedResponse = {
+  success: true,
+  message: "If an eligible account exists, a code has been sent",
+  expiresIn: OTP_EXPIRY_MINUTES * 60,
+};
 
 interface OrderFirmDetails {
   firmName: string;
@@ -78,10 +74,6 @@ interface OrderLineItem {
 }
 
 export class AakramanController {
-  /**
-   * Send OTP via SMS (MSG91)
-   * POST /api/aakraman/send-otp/sms
-   */
   async sendSmsOtp(req: Request, res: Response): Promise<void> {
     try {
       const { phone } = req.body;
@@ -93,7 +85,9 @@ export class AakramanController {
         return;
       }
 
-      // Check if user exists with this phone
+      const otp = generateOtp();
+      const otpHash = hashOtp(otp);
+
       const user = await prisma.user.findFirst({
         where: {
           phone,
@@ -103,19 +97,12 @@ export class AakramanController {
       });
 
       if (!user) {
-        res
-          .status(404)
-          .json({ error: "No sales user found with this phone number" });
+        res.json(otpIssuedResponse);
         return;
       }
 
-      // Generate OTP
-      const otp = generateOtp();
-      const otpHash = hashOtp(otp);
       const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
-      // Burn any code still outstanding for this user before minting another,
-      // so only the most recently sent one can be redeemed.
       const record = await prisma.$transaction(async tx => {
         await tx.salesUserOTP.updateMany({
           where: { userId: user.id, usedAt: null },
@@ -131,19 +118,16 @@ export class AakramanController {
         });
       });
 
-      // Send OTP via MSG91
       const sent = await msg91Service.sendOtp(phone, otp);
 
       if (!sent) {
-        // Burn the code rather than leave a live one nobody received, and say
-        // so without printing the code: logs are not a place to keep a
-        // credential that is still valid.
         await prisma.salesUserOTP.updateMany({
           where: { id: record.id, usedAt: null },
           data: { usedAt: new Date() },
         });
-        console.error("Aakraman SMS OTP delivery failed", {
-          otpId: record.id,
+        logWarn("aakraman_otp_delivery_failed", {
+          channel: "sms",
+          otpRecordId: record.id,
           userId: user.id,
         });
         res.status(503).json({
@@ -152,23 +136,12 @@ export class AakramanController {
         return;
       }
 
-      res.json({
-        success: true,
-        message: "OTP sent successfully",
-        expiresIn: OTP_EXPIRY_MINUTES * 60, // seconds
-        // For development - remove in production
-        ...(process.env.NODE_ENV === "development" && { devOtp: otp }),
-      });
+      res.json(otpIssuedResponse);
     } catch (error) {
-      console.error("Error sending SMS OTP:", error);
-      res.status(500).json({ error: "Failed to send OTP" });
+      handleError(error, res, "Send Aakraman SMS OTP");
     }
   }
 
-  /**
-   * Send OTP via email
-   * POST /api/aakraman/send-otp/email
-   */
   async sendEmailOtp(req: Request, res: Response): Promise<void> {
     try {
       const { email } = req.body;
@@ -178,27 +151,25 @@ export class AakramanController {
         return;
       }
 
-      // Check if user exists with this email
+      const normalizedEmail = email.trim().toLowerCase();
+      const otp = generateOtp();
+      const otpHash = hashOtp(otp);
+
       const user = await prisma.user.findFirst({
         where: {
-          email: email.toLowerCase(),
+          email: normalizedEmail,
           deletedAt: null,
           role: { in: ["SALES", "ADMIN"] },
         },
       });
 
       if (!user) {
-        res.status(404).json({ error: "No sales user found with this email" });
+        res.json(otpIssuedResponse);
         return;
       }
 
-      // Generate OTP
-      const otp = generateOtp();
-      const otpHash = hashOtp(otp);
       const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
-      // Burn any code still outstanding for this user before minting another,
-      // so only the most recently sent one can be redeemed.
       const record = await prisma.$transaction(async tx => {
         await tx.salesUserOTP.updateMany({
           where: { userId: user.id, usedAt: null },
@@ -214,7 +185,6 @@ export class AakramanController {
         });
       });
 
-      // Send the OTP by email
       const userName =
         [user.firstName, user.lastName].filter(Boolean).join(" ") || "User";
       const sent = await emailService.sendAakramanOtpEmail(
@@ -224,13 +194,13 @@ export class AakramanController {
       );
 
       if (!sent) {
-        // Same rule as the SMS path: burn the code, and never log its value.
         await prisma.salesUserOTP.updateMany({
           where: { id: record.id, usedAt: null },
           data: { usedAt: new Date() },
         });
-        console.error("Aakraman email OTP delivery failed", {
-          otpId: record.id,
+        logWarn("aakraman_otp_delivery_failed", {
+          channel: "email",
+          otpRecordId: record.id,
           userId: user.id,
         });
         res.status(503).json({
@@ -239,22 +209,12 @@ export class AakramanController {
         return;
       }
 
-      res.json({
-        success: true,
-        message: "OTP sent to your email",
-        expiresIn: OTP_EXPIRY_MINUTES * 60,
-        ...(process.env.NODE_ENV === "development" && { devOtp: otp }),
-      });
+      res.json(otpIssuedResponse);
     } catch (error) {
-      console.error("Error sending Email OTP:", error);
-      res.status(500).json({ error: "Failed to send OTP" });
+      handleError(error, res, "Send Aakraman email OTP");
     }
   }
 
-  /**
-   * Verify OTP and login
-   * POST /api/aakraman/verify-otp
-   */
   async verifyOtp(req: Request, res: Response): Promise<void> {
     try {
       const { phone, email, otp } = req.body;
@@ -269,7 +229,6 @@ export class AakramanController {
         return;
       }
 
-      // Find user by phone or email
       let user;
       if (phone) {
         user = await prisma.user.findFirst({
@@ -282,7 +241,7 @@ export class AakramanController {
       } else {
         user = await prisma.user.findFirst({
           where: {
-            email: email.toLowerCase(),
+            email: String(email).trim().toLowerCase(),
             deletedAt: null,
             role: { in: ["SALES", "ADMIN"] },
           },
@@ -290,11 +249,10 @@ export class AakramanController {
       }
 
       if (!user) {
-        res.status(404).json({ error: "User not found" });
+        res.status(401).json({ error: "Invalid or expired code" });
         return;
       }
 
-      // Find the latest valid OTP for this user
       const otpRecord = await prisma.salesUserOTP.findFirst({
         where: {
           userId: user.id,
@@ -306,41 +264,50 @@ export class AakramanController {
       });
 
       if (!otpRecord) {
-        res
-          .status(400)
-          .json({ error: "No valid OTP found. Please request a new one." });
+        res.status(401).json({ error: "Invalid or expired code" });
         return;
       }
 
-      // Verify OTP hash
       const inputOtpHash = hashOtp(otp);
 
-      if (inputOtpHash !== otpRecord.otpHash) {
-        // Increment attempts
-        await prisma.salesUserOTP.update({
-          where: { id: otpRecord.id },
-          data: { attempts: otpRecord.attempts + 1 },
-        });
+      const inputHashBuffer = Buffer.from(inputOtpHash, "hex");
+      const storedHashBuffer = Buffer.from(otpRecord.otpHash, "hex");
+      const matches =
+        inputHashBuffer.length === storedHashBuffer.length &&
+        crypto.timingSafeEqual(inputHashBuffer, storedHashBuffer);
 
-        const remainingAttempts = MAX_OTP_ATTEMPTS - otpRecord.attempts - 1;
-        res.status(400).json({
-          error: "Invalid OTP",
-          remainingAttempts: Math.max(0, remainingAttempts),
+      if (!matches) {
+        await prisma.salesUserOTP.updateMany({
+          where: {
+            id: otpRecord.id,
+            usedAt: null,
+            attempts: { lt: MAX_OTP_ATTEMPTS },
+          },
+          data: { attempts: { increment: 1 } },
         });
+        res.status(401).json({ error: "Invalid or expired code" });
         return;
       }
 
-      // Mark OTP as used
-      await prisma.salesUserOTP.update({
-        where: { id: otpRecord.id },
+      const claimed = await prisma.salesUserOTP.updateMany({
+        where: {
+          id: otpRecord.id,
+          usedAt: null,
+          expiresAt: { gt: new Date() },
+          attempts: { lt: MAX_OTP_ATTEMPTS },
+        },
         data: { usedAt: new Date() },
       });
+      if (claimed.count !== 1) {
+        res.status(401).json({ error: "Invalid or expired code" });
+        return;
+      }
 
-      // Generate JWT token
-      const token = generateSalesUserToken(
+      const token = generateAakramanToken(
         user.id,
         user.phone || "",
-        user.email
+        user.email,
+        user.sessionVersion
       );
 
       res.json({
@@ -358,18 +325,13 @@ export class AakramanController {
         },
       });
     } catch (error) {
-      console.error("Error verifying OTP:", error);
-      res.status(500).json({ error: "Failed to verify OTP" });
+      handleError(error, res, "Verify Aakraman OTP");
     }
   }
 
-  /**
-   * Get current user info
-   * GET /api/aakraman/me
-   */
   async getCurrentUser(req: Request, res: Response): Promise<void> {
     try {
-      const userId = (req as any).salesUser?.userId;
+      const userId = req.salesUser?.userId;
 
       if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
@@ -396,18 +358,13 @@ export class AakramanController {
 
       res.json({ user });
     } catch (error) {
-      console.error("Error getting current user:", error);
-      res.status(500).json({ error: "Failed to get user info" });
+      handleError(error, res, "Get Aakraman user");
     }
   }
 
-  /**
-   * Create order from sales user
-   * POST /api/aakraman/orders
-   */
   async createOrder(req: Request, res: Response): Promise<void> {
     try {
-      const salesUserId = (req as any).salesUser?.userId;
+      const salesUserId = req.salesUser?.userId;
 
       if (!salesUserId) {
         res.status(401).json({ error: "Unauthorized" });
@@ -419,7 +376,6 @@ export class AakramanController {
         lineItems: OrderLineItem[];
       };
 
-      // Validate firm details
       if (!firmDetails) {
         res.status(400).json({ error: "Firm details are required" });
         return;
@@ -452,64 +408,24 @@ export class AakramanController {
         return;
       }
 
-      // Validate line items
       if (!lineItems || !Array.isArray(lineItems) || lineItems.length === 0) {
         res.status(400).json({ error: "Line items are required" });
         return;
       }
 
-      // Build order line items
-      const orderLineItems: {
-        productId: number;
-        quantity: number;
-        unitPrice: number;
-        totalPrice: number;
-      }[] = [];
+      const priced = await resolveOrderLines(lineItems);
 
-      let totalAmount = 0;
-
-      for (const item of lineItems) {
-        if (item.quantity <= 0) continue;
-
-        const product = await prisma.product.findUnique({
-          where: { id: item.productId },
-        });
-
-        if (!product) {
-          res
-            .status(400)
-            .json({ error: `Product with ID ${item.productId} not found` });
-          return;
-        }
-
-        // Product doesn't have a price field - pricing is handled through PriceBookEntry
-        // For now, default to 0. TODO: Fetch price from PriceBookEntry if priceBookId is provided
-        const unitPrice = 0;
-        const itemTotal = unitPrice * item.quantity;
-        totalAmount += itemTotal;
-
-        orderLineItems.push({
-          productId: item.productId,
-          quantity: item.quantity,
-          unitPrice,
-          totalPrice: itemTotal,
-        });
-      }
-
-      if (orderLineItems.length === 0) {
-        res.status(400).json({ error: "No valid items in order" });
-        return;
-      }
-
-      // Create order
       const order = await prisma.$transaction(async tx => {
-        const orderNumber = `AKR-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        const orderNumber = await nextDocumentNumber(
+          tx,
+          SEQUENCE_KEYS.AAKRAMAN_ORDER
+        );
 
         const newOrder = await tx.order.create({
           data: {
             salesUserId,
             orderNumber,
-            totalAmount: totalAmount || null,
+            totalAmount: priced.totalAmount,
             firmName,
             ownerFirstName,
             ownerLastName,
@@ -520,13 +436,13 @@ export class AakramanController {
             pincode: pincode || null,
             gst: gst || null,
             lineItems: {
-              create: orderLineItems,
+              create: priced.lines,
             },
           },
           include: {
             lineItems: {
               include: {
-                product: true,
+                product: { select: ORDER_PRODUCT_SELECT },
               },
             },
             salesUser: {
@@ -552,62 +468,60 @@ export class AakramanController {
         data: order,
       });
     } catch (error) {
-      console.error("Error creating order:", error);
-      res.status(500).json({ error: "Failed to create order" });
+      if (error instanceof OrderPricingError) {
+        res.status(422).json({ error: error.message });
+        return;
+      }
+      handleError(error, res, "Create Aakraman order");
     }
   }
 
-  /**
-   * Get products for ordering (active products only)
-   * GET /api/aakraman/products
-   */
   async getProducts(req: Request, res: Response): Promise<void> {
     try {
       const { search, categoryId } = req.query;
 
-      const where: any = { active: true };
-
+      let parsedCategoryId: number | undefined;
       if (categoryId) {
-        where.categoryId = Number(categoryId);
+        const value = Number(categoryId);
+        if (!Number.isSafeInteger(value) || value <= 0) {
+          res.status(400).json({ error: "Category ID is invalid" });
+          return;
+        }
+        parsedCategoryId = value;
       }
 
-      if (search && typeof search === "string") {
-        where.OR = [
-          { name: { contains: search, mode: "insensitive" } },
-          { code: { contains: search, mode: "insensitive" } },
-          { description: { contains: search, mode: "insensitive" } },
-        ];
+      if (search !== undefined && typeof search !== "string") {
+        res.status(400).json({ error: "Search query is invalid" });
+        return;
       }
-
-      const products = await prisma.product.findMany({
-        where,
-        include: {
-          category: true,
-        },
-        orderBy: [{ category: { name: "asc" } }, { name: "asc" }],
+      const pricedProducts = await getOrderCatalogueProducts({
+        categoryId: parsedCategoryId,
+        search: typeof search === "string" ? search : undefined,
       });
 
       const categories = await prisma.productCategory.findMany({
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          createdAt: true,
+          updatedAt: true,
+        },
         orderBy: { name: "asc" },
       });
 
       res.json({
-        products,
+        products: pricedProducts,
         categories,
       });
     } catch (error) {
-      console.error("Error getting products:", error);
-      res.status(500).json({ error: "Failed to get products" });
+      handleError(error, res, "Get Aakraman products");
     }
   }
 
-  /**
-   * Get orders for current sales user
-   * GET /api/aakraman/orders
-   */
   async getMyOrders(req: Request, res: Response): Promise<void> {
     try {
-      const salesUserId = (req as any).salesUser?.userId;
+      const salesUserId = req.salesUser?.userId;
 
       if (!salesUserId) {
         res.status(401).json({ error: "Unauthorized" });
@@ -619,7 +533,7 @@ export class AakramanController {
         include: {
           lineItems: {
             include: {
-              product: true,
+              product: { select: ORDER_PRODUCT_SELECT },
             },
           },
         },
@@ -628,72 +542,108 @@ export class AakramanController {
 
       res.json({ orders });
     } catch (error) {
-      console.error("Error getting orders:", error);
-      res.status(500).json({ error: "Failed to get orders" });
+      handleError(error, res, "Get Aakraman orders");
     }
   }
 
-  /**
-   * Get all orders (admin only)
-   * GET /api/aakraman/admin/orders
-   */
   async getAllOrders(req: Request, res: Response): Promise<void> {
     try {
-      // Extract and validate pagination parameters
-      const pageParam = req.query.page as string;
-      const limitParam = req.query.limit as string;
-
-      // Validate page parameter
-      const page = Math.max(1, parseInt(pageParam) || 1);
-
-      // Validate limit parameter with custom support
-      const requestedLimit = parseInt(limitParam);
+      const page =
+        req.query.page === undefined
+          ? 1
+          : parseBoundedInteger(req.query.page, 1, 1_000_000);
       const limit =
-        requestedLimit >= 1 && requestedLimit <= 100 ? requestedLimit : 10;
+        req.query.limit === undefined
+          ? 10
+          : parseBoundedInteger(req.query.limit, 1, 100);
+      if (page === null || limit === null) {
+        handleValidationError(
+          res,
+          "page must be positive and limit must be between 1 and 100",
+          undefined,
+          "Get all Aakraman orders"
+        );
+        return;
+      }
 
-      // Calculate pagination offset
       const skip = (page - 1) * limit;
 
       const { region, state, city, salesUserId, productId, search } = req.query;
 
-      const where: any = {
-        salesUserId: { not: null }, // Only aakraman orders
-        archived: false, // Filter out archived orders
+      const where: Prisma.OrderWhereInput = {
+        salesUserId: { not: null },
+        archived: false,
       };
 
-      // Apply filters
       if (region) {
-        where.salesUser = { region: region as string };
+        if (
+          typeof region !== "string" ||
+          !Object.values(Region).includes(region as Region)
+        ) {
+          handleValidationError(
+            res,
+            "Invalid region",
+            "region",
+            "Get all Aakraman orders"
+          );
+          return;
+        }
+        where.salesUser = { region: region as Region };
       }
       if (state) {
-        where.state = { equals: state as string, mode: "insensitive" };
+        if (typeof state !== "string" || state.trim().length > 100) {
+          handleValidationError(res, "Invalid state", "state");
+          return;
+        }
+        where.state = { equals: state.trim(), mode: "insensitive" };
       }
       if (city) {
-        where.city = { contains: city as string, mode: "insensitive" };
+        if (typeof city !== "string" || city.trim().length > 100) {
+          handleValidationError(res, "Invalid city", "city");
+          return;
+        }
+        where.city = { contains: city.trim(), mode: "insensitive" };
       }
       if (salesUserId) {
-        where.salesUserId = Number(salesUserId);
+        const id = parsePositiveInteger(salesUserId);
+        if (id === null) {
+          handleValidationError(res, "Invalid sales user ID", "salesUserId");
+          return;
+        }
+        where.salesUserId = id;
       }
       if (productId) {
+        const id = parsePositiveInteger(productId);
+        if (id === null) {
+          handleValidationError(res, "Invalid product ID", "productId");
+          return;
+        }
         where.lineItems = {
-          some: { productId: Number(productId) },
+          some: { productId: id },
         };
       }
-      if (search && typeof search === "string") {
+      if (search !== undefined) {
+        if (
+          typeof search !== "string" ||
+          !search.trim() ||
+          search.trim().length > 200
+        ) {
+          handleValidationError(res, "Invalid search query", "search");
+          return;
+        }
+        const term = search.trim();
         where.OR = [
-          { orderNumber: { contains: search, mode: "insensitive" } },
-          { firmName: { contains: search, mode: "insensitive" } },
-          { ownerFirstName: { contains: search, mode: "insensitive" } },
-          { ownerLastName: { contains: search, mode: "insensitive" } },
-          { contactNumber: { contains: search, mode: "insensitive" } },
-          { email: { contains: search, mode: "insensitive" } },
+          { orderNumber: { contains: term, mode: "insensitive" } },
+          { firmName: { contains: term, mode: "insensitive" } },
+          { ownerFirstName: { contains: term, mode: "insensitive" } },
+          { ownerLastName: { contains: term, mode: "insensitive" } },
+          { contactNumber: { contains: term, mode: "insensitive" } },
+          { email: { contains: term, mode: "insensitive" } },
         ];
       }
 
-      // Execute count query with filters
       const totalItems = await prisma.order.count({ where });
 
-      // Execute paginated query with filters
       const orders = await prisma.order.findMany({
         where,
         skip,
@@ -701,7 +651,7 @@ export class AakramanController {
         include: {
           lineItems: {
             include: {
-              product: true,
+              product: { select: ORDER_PRODUCT_SELECT },
             },
           },
           salesUser: {
@@ -718,12 +668,10 @@ export class AakramanController {
         orderBy: { createdAt: "desc" },
       });
 
-      // Calculate pagination metadata
       const totalPages = Math.ceil(totalItems / limit);
       const hasNextPage = page < totalPages;
       const hasPreviousPage = page > 1;
 
-      // Return standardized pagination response
       res.json({
         data: orders,
         pagination: {
@@ -736,25 +684,24 @@ export class AakramanController {
         },
       });
     } catch (error) {
-      console.error("Error getting all orders:", error);
-      res.status(500).json({ error: "Failed to get orders" });
+      handleError(error, res, "Get all Aakraman orders");
     }
   }
 
-  /**
-   * Get order by ID (admin only)
-   * GET /api/aakraman/admin/orders/:id
-   */
   async getOrderById(req: Request, res: Response): Promise<void> {
     try {
-      const { id } = req.params;
+      const id = parsePositiveInteger(req.params.id);
+      if (id === null) {
+        handleValidationError(res, "Invalid order ID", "id");
+        return;
+      }
 
       const order = await prisma.order.findUnique({
-        where: { id: Number(id) },
+        where: { id },
         include: {
           lineItems: {
             include: {
-              product: true,
+              product: { select: ORDER_PRODUCT_SELECT },
             },
           },
           salesUser: {
@@ -777,20 +724,18 @@ export class AakramanController {
 
       res.json({ order });
     } catch (error) {
-      console.error("Error getting order:", error);
-      res.status(500).json({ error: "Failed to get order" });
+      handleError(error, res, "Get Aakraman order");
     }
   }
 
-  /**
-   * Update order (admin only)
-   * PUT /api/aakraman/admin/orders/:id
-   */
   async updateOrder(req: Request, res: Response): Promise<void> {
     try {
-      const { id } = req.params;
+      const id = parsePositiveInteger(req.params.id);
+      if (id === null) {
+        handleValidationError(res, "Invalid order ID", "id");
+        return;
+      }
       const {
-        status,
         firmName,
         ownerFirstName,
         ownerLastName,
@@ -801,23 +746,62 @@ export class AakramanController {
         pincode,
       } = req.body;
 
+      const fields = {
+        firmName: { value: firmName, maximum: 255 },
+        ownerFirstName: { value: ownerFirstName, maximum: 100 },
+        ownerLastName: { value: ownerLastName, maximum: 100 },
+        contactNumber: { value: contactNumber, maximum: 32 },
+        email: { value: email, maximum: 254 },
+        city: { value: city, maximum: 100 },
+        state: { value: state, maximum: 100 },
+        pincode: { value: pincode, maximum: 6 },
+      } as const;
+      if (Object.values(fields).every(field => field.value === undefined)) {
+        handleValidationError(res, "At least one order field is required");
+        return;
+      }
+      const data: Prisma.OrderUpdateInput = {};
+      for (const [key, field] of Object.entries(fields)) {
+        if (field.value === undefined) continue;
+        if (
+          field.value !== null &&
+          (typeof field.value !== "string" ||
+            field.value.trim().length > field.maximum)
+        ) {
+          handleValidationError(res, `Invalid ${key}`, key);
+          return;
+        }
+        data[key as keyof typeof fields] =
+          typeof field.value === "string" ? field.value.trim() || null : null;
+      }
+      if (typeof email === "string" && email.trim() && !isValidEmail(email)) {
+        handleValidationError(res, "Invalid email address", "email");
+        return;
+      }
+      if (
+        typeof contactNumber === "string" &&
+        contactNumber.trim() &&
+        !/^[0-9+().\-\s]+$/.test(contactNumber.trim())
+      ) {
+        handleValidationError(res, "Invalid contact number", "contactNumber");
+        return;
+      }
+      if (
+        typeof pincode === "string" &&
+        pincode.trim() &&
+        !/^\d{6}$/.test(pincode.trim())
+      ) {
+        handleValidationError(res, "Pincode must contain 6 digits", "pincode");
+        return;
+      }
+
       const order = await prisma.order.update({
-        where: { id: Number(id) },
-        data: {
-          ...(status && { status }),
-          ...(firmName && { firmName }),
-          ...(ownerFirstName && { ownerFirstName }),
-          ...(ownerLastName && { ownerLastName }),
-          ...(contactNumber && { contactNumber }),
-          ...(email !== undefined && { email }),
-          ...(city && { city }),
-          ...(state && { state }),
-          ...(pincode !== undefined && { pincode }),
-        },
+        where: { id },
+        data,
         include: {
           lineItems: {
             include: {
-              product: true,
+              product: { select: ORDER_PRODUCT_SELECT },
             },
           },
           salesUser: {
@@ -835,15 +819,10 @@ export class AakramanController {
 
       res.json({ order });
     } catch (error) {
-      console.error("Error updating order:", error);
-      res.status(500).json({ error: "Failed to update order" });
+      handleError(error, res, "Update Aakraman order");
     }
   }
 
-  /**
-   * Get sales users list (for filter dropdown)
-   * GET /api/aakraman/admin/sales-users
-   */
   async getSalesUsers(req: Request, res: Response): Promise<void> {
     try {
       const users = await prisma.user.findMany({
@@ -864,22 +843,21 @@ export class AakramanController {
 
       res.json({ users });
     } catch (error) {
-      console.error("Error getting sales users:", error);
-      res.status(500).json({ error: "Failed to get sales users" });
+      handleError(error, res, "Get Aakraman sales users");
     }
   }
 
-  /**
-   * Archive an order (ADMIN only)
-   * POST /api/aakraman/admin/orders/:id/archive
-   */
   async archiveOrder(req: Request, res: Response): Promise<void> {
     try {
-      const { id } = req.params;
-      const userId = (req as any).user?.id;
+      const id = parsePositiveInteger(req.params.id);
+      const userId = req.user?.id;
+      if (id === null || !userId) {
+        handleValidationError(res, "Invalid order or user ID", "id");
+        return;
+      }
 
       const order = await prisma.order.update({
-        where: { id: Number(id) },
+        where: { id },
         data: {
           archived: true,
           archivedAt: new Date(),
@@ -888,7 +866,7 @@ export class AakramanController {
         include: {
           lineItems: {
             include: {
-              product: true,
+              product: { select: ORDER_PRODUCT_SELECT },
             },
           },
           salesUser: {
@@ -910,21 +888,20 @@ export class AakramanController {
         order,
       });
     } catch (error) {
-      console.error("Error archiving order:", error);
-      res.status(500).json({ error: "Failed to archive order" });
+      handleError(error, res, "Archive Aakraman order");
     }
   }
 
-  /**
-   * Unarchive an order (ADMIN only)
-   * POST /api/aakraman/admin/orders/:id/unarchive
-   */
   async unarchiveOrder(req: Request, res: Response): Promise<void> {
     try {
-      const { id } = req.params;
+      const id = parsePositiveInteger(req.params.id);
+      if (id === null) {
+        handleValidationError(res, "Invalid order ID", "id");
+        return;
+      }
 
       const order = await prisma.order.update({
-        where: { id: Number(id) },
+        where: { id },
         data: {
           archived: false,
           archivedAt: null,
@@ -933,7 +910,7 @@ export class AakramanController {
         include: {
           lineItems: {
             include: {
-              product: true,
+              product: { select: ORDER_PRODUCT_SELECT },
             },
           },
           salesUser: {
@@ -955,8 +932,7 @@ export class AakramanController {
         order,
       });
     } catch (error) {
-      console.error("Error unarchiving order:", error);
-      res.status(500).json({ error: "Failed to unarchive order" });
+      handleError(error, res, "Unarchive Aakraman order");
     }
   }
 }

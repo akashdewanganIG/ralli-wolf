@@ -1,6 +1,3 @@
-// Brevo API Type Definitions
-// Based on Brevo API documentation: https://developers.brevo.com/docs/getting-started
-
 export interface BrevoContact {
   email: string;
   attributes?: {
@@ -11,21 +8,26 @@ export interface BrevoContact {
     LOCATION?: string;
     SOURCE?: string;
     LEAD_SCORE?: number;
-    [key: string]: any;
+    [key: string]: unknown;
   };
   listIds?: number[];
   updateEnabled?: boolean;
+  getId?: boolean;
 }
 
 export interface BrevoContactResponse {
   id: number;
   email: string;
-  attributes: Record<string, any>;
+  attributes: Record<string, unknown>;
   emailBlacklisted: boolean;
   smsBlacklisted: boolean;
   createdAt: string;
   modifiedAt: string;
   listIds: number[];
+}
+
+export interface BrevoCreateContactResponse {
+  id: number;
 }
 
 export interface BrevoCampaignStats {
@@ -103,27 +105,6 @@ export interface BrevoCampaignStatistics {
   statsByDomain?: Record<string, BrevoCampaignStats>;
   mirrorClick?: number;
   remaining?: number;
-  // Legacy fields for backward compatibility
-  delivered?: number;
-  sent?: number;
-  processing?: number;
-  bounces?: number;
-  hardBounces?: number;
-  softBounces?: number;
-  clicks?: number;
-  uniqueClicks?: number;
-  opens?: number;
-  uniqueOpens?: number;
-  spamReports?: number;
-  unsubscriptions?: number;
-  deliveredPercentage?: number;
-  sentPercentage?: number;
-  processingPercentage?: number;
-  bouncePercentage?: number;
-  openPercentage?: number;
-  clickPercentage?: number;
-  spamPercentage?: number;
-  unsubscriptionPercentage?: number;
 }
 
 export interface BrevoCampaign {
@@ -188,7 +169,7 @@ export interface BrevoSendEmailRequest {
     name: string;
   }>;
   headers?: Record<string, string>;
-  params?: Record<string, any>;
+  params?: Record<string, unknown>;
   tags?: string[];
 }
 
@@ -196,93 +177,41 @@ export interface BrevoSendEmailResponse {
   messageId: string;
 }
 
-export interface BrevoWebhookEvent {
-  event:
-    | "sent"
-    | "delivered"
-    | "opened"
-    | "clicked"
-    | "bounced"
-    | "unsubscribed"
-    | "spam";
+export interface BrevoAccountDetails {
+  organization_id: string;
+  user_id: number;
+  enterprise: boolean;
+  companyName: string;
   email: string;
-  id: number;
-  date: string;
-  "message-id": string;
-  ts_event: number;
-  ts_click: number;
-  tag?: string;
-  link?: string;
-  from?: string;
-  subject?: string;
-  campaign_id?: number;
-  template_id?: number;
-  ts_unsub?: number;
-  ts_spam?: number;
-  ts_bounce?: number;
-  reason?: string;
-  bounce_type?: "hard" | "soft";
-  url?: string;
-  ip?: string;
-  user_agent?: string;
-  geo?: {
-    country: string;
-    region: string;
-    city: string;
-  };
-}
-
-export interface BrevoWebhookPayload {
-  event: BrevoWebhookEvent;
-}
-
-export interface BrevoAccountStats {
-  plan: {
+  firstName: string;
+  lastName: string;
+  plan: Array<{
     type: string;
     creditsType: string;
     credits: number;
-  };
-  emailCredits: number;
-  smsCredits: number;
-  statistics: {
-    totalSent: number;
-    totalDelivered: number;
-    totalOpened: number;
-    totalClicked: number;
-    totalBounced: number;
-    totalUnsubscribed: number;
-    totalSpam: number;
-  };
+  }>;
+}
+
+export interface BrevoAggregatedEmailStats {
+  requests: number;
+  delivered: number;
+  opens: number;
+  clicks: number;
+  hardBounces: number;
+  softBounces: number;
+  blocked: number;
+  invalid: number;
+  spamReports: number;
+  uniqueClicks: number;
+  uniqueOpens: number;
+  unsubscribed: number;
+  range?: string;
 }
 
 export interface BrevoErrorResponse {
   code: string;
   message: string;
-  details?: any;
-}
-
-// Engagement scoring configuration
-export interface EngagementScoreConfig {
-  email_delivered: number;
-  email_opened: number;
-  email_clicked: number;
-  email_bounced: number;
-  email_unsubscribed: number;
-  email_spam: number;
-}
-
-export const DEFAULT_ENGAGEMENT_SCORES: EngagementScoreConfig = {
-  email_delivered: 2,
-  email_opened: 5,
-  email_clicked: 10,
-  email_bounced: -5,
-  email_unsubscribed: -10,
-  email_spam: -15,
-};
-
-// Request/Response types for our API endpoints
-export interface SyncLeadsRequest {
-  leadIds: number[];
+  details?: unknown;
 }
 
 export interface SyncLeadsResponse {
@@ -301,11 +230,6 @@ export interface SyncLeadsResponse {
     successful: number;
     failed: number;
   };
-}
-
-export interface SendCampaignRequest {
-  campaignId: number;
-  leadIds: number[];
 }
 
 export interface SendCampaignResponse {
@@ -328,7 +252,7 @@ export interface SendCampaignResponse {
 
 export interface BrevoAnalyticsResponse {
   totalCampaigns: number;
-  activeCampaigns: number;
+  sentCampaigns: number;
   totalSent: number;
   totalDelivered: number;
   totalOpened: number;
@@ -354,23 +278,10 @@ export interface BrevoUpdateCampaignRequest {
   recipients?: {
     listIds: number[];
   };
-  replyTo?: string; // Brevo API expects a string (email), not an object
+  replyTo?: string;
   previewText?: string;
   htmlContent?: string;
   textContent?: string;
   scheduledAt?: string;
   type?: "classic" | "trigger";
-  [key: string]: any;
-}
-
-export interface BrevoUpdateCampaignStatusRequest {
-  status:
-    | "suspended"
-    | "archive"
-    | "darchive"
-    | "sent"
-    | "queued"
-    | "replicate"
-    | "replicateTemplate"
-    | "draft";
 }

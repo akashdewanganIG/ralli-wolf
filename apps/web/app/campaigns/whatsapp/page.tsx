@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { CampaignTable, Campaign } from "@/components/campaign-table";
@@ -12,6 +12,7 @@ import { Alert } from "@repo/ui/components/ui/alert";
 import { TablePageSkeleton } from "@/components/skeletons";
 import { DEFAULT_PAGE_SIZE } from "@/components/data-table";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 
 const CreateCampaignModal = dynamic(
   () =>
@@ -21,26 +22,10 @@ const CreateCampaignModal = dynamic(
   { ssr: false }
 );
 
-function paginateArray<T>(
-  array: T[],
-  page: number,
-  limit: number
-): { data: T[]; totalPages: number; totalCount: number } {
-  const startIndex = (page - 1) * limit;
-  const endIndex = startIndex + limit;
-  const paginatedData = array.slice(startIndex, endIndex);
-  const totalPages = Math.ceil(array.length / limit);
-
-  return {
-    data: paginatedData,
-    totalPages,
-    totalCount: array.length,
-  };
-}
-
 function getStatusFromDeliveryStats(stats: {
   total: number;
   pending: number;
+  processing?: number;
   queued: number;
   sent: number;
   delivered: number;
@@ -51,7 +36,7 @@ function getStatusFromDeliveryStats(stats: {
   if (stats.pending === stats.total) return "Pending";
   if (stats.failed === stats.total) return "Failed";
   if (stats.delivered > 0 || stats.read > 0 || stats.sent > 0) return "Sent";
-  if (stats.queued > 0) return "Sending";
+  if (stats.queued > 0 || (stats.processing ?? 0) > 0) return "Sending";
   return "Active";
 }
 
@@ -68,22 +53,25 @@ export default function WhatsappCampaignsPage() {
   const [editCampaignId, setEditCampaignId] = useState<number | undefined>(
     undefined
   );
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const debouncedSearch = useDebouncedValue(searchQuery, 300);
 
-  const loadCampaigns = async () => {
+  const loadCampaigns = useCallback(async () => {
     try {
       setLoading(true);
       setLoadError(null);
-      const data = await whatsappService.listCampaigns();
-      const mapped: Campaign[] = data.map((c: any) => {
-        const stats = c.deliveryStats || {
-          total: 0,
-          pending: 0,
-          queued: 0,
-          sent: 0,
-          delivered: 0,
-          read: 0,
-          failed: 0,
-        };
+      const response = await whatsappService.listCampaigns({
+        skip: (currentPage - 1) * itemsPerPage,
+        take: itemsPerPage,
+        search: debouncedSearch.trim() || undefined,
+        status: filters.status?.trim().toLowerCase() || undefined,
+        startDate: filters.startDate?.toISOString().slice(0, 10),
+        createdFrom: filters.createdFrom?.toISOString().slice(0, 10),
+        createdTo: filters.createdTo?.toISOString().slice(0, 10),
+      });
+      const mapped: Campaign[] = response.data.map(c => {
+        const stats = c.deliveryStats;
         const status = getStatusFromDeliveryStats(stats);
         const effectiveStartDate = c.scheduledAt || c.startDate || c.createdAt;
 
@@ -92,10 +80,10 @@ export default function WhatsappCampaignsPage() {
           name: c.name || "Untitled Campaign",
           channel: "WhatsApp",
           status,
-          // For drafts, hide the start time in the table; it will show as "-" in the UI.
+
           startDate: status === "Draft" ? undefined : effectiveStartDate,
           startDateRaw: effectiveStartDate,
-          endDate: c.endDate,
+          endDate: c.endDate ?? undefined,
           createdAt: c.createdAt,
           createdBy:
             c.creator?.firstName || c.creator?.lastName
@@ -112,8 +100,15 @@ export default function WhatsappCampaignsPage() {
         };
       });
       setCampaigns(mapped);
+      setTotalCount(response.pagination.total);
+      setTotalPages(response.pagination.pages);
+      if (
+        response.pagination.pages > 0 &&
+        currentPage > response.pagination.pages
+      ) {
+        setCurrentPage(response.pagination.pages);
+      }
     } catch (error) {
-      console.error("Failed to load campaigns:", error);
       setLoadError(
         error instanceof Error
           ? error.message
@@ -122,49 +117,23 @@ export default function WhatsappCampaignsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [
+    currentPage,
+    debouncedSearch,
+    filters.createdFrom,
+    filters.createdTo,
+    filters.startDate,
+    filters.status,
+    itemsPerPage,
+  ]);
 
   useEffect(() => {
-    loadCampaigns();
-  }, []);
+    void loadCampaigns();
+  }, [loadCampaigns]);
 
   const handleCampaignClick = (campaign: Campaign) => {
     router.push(`/campaigns/whatsapp/${campaign.id}`);
   };
-
-  const filteredCampaigns = useMemo(() => {
-    let filtered = campaigns;
-
-    if (searchQuery) {
-      filtered = filtered.filter(
-        campaign =>
-          campaign.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          campaign.createdBy.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
-
-    // Status filter
-    if (filters.status && filters.status.trim() !== "") {
-      const filterStatus = filters.status.toLowerCase().trim();
-      filtered = filtered.filter(campaign => {
-        const campaignStatus = campaign.status?.toLowerCase().trim() || "";
-        return campaignStatus === filterStatus;
-      });
-    }
-
-    if (
-      currentPage > 1 &&
-      filtered.length <= (currentPage - 1) * itemsPerPage
-    ) {
-      setCurrentPage(1);
-    }
-
-    return filtered;
-  }, [campaigns, searchQuery, filters, currentPage, itemsPerPage]);
-
-  const paginatedData = useMemo(() => {
-    return paginateArray(filteredCampaigns, currentPage, itemsPerPage);
-  }, [filteredCampaigns, currentPage, itemsPerPage]);
 
   const handleItemsPerPageChange = (value: number) => {
     setItemsPerPage(value);
@@ -173,7 +142,7 @@ export default function WhatsappCampaignsPage() {
 
   const handleCreateSuccess = () => {
     loadCampaigns();
-    setEditCampaignId(undefined); // Reset edit state after success
+    setEditCampaignId(undefined);
   };
 
   const handleEditClick = (campaign: Campaign) => {
@@ -184,7 +153,7 @@ export default function WhatsappCampaignsPage() {
   const handleModalOpenChange = (open: boolean) => {
     setIsModalOpen(open);
     if (!open) {
-      setEditCampaignId(undefined); // Reset edit state when modal closes
+      setEditCampaignId(undefined);
     }
   };
 
@@ -207,7 +176,7 @@ export default function WhatsappCampaignsPage() {
           {loadError}
         </Alert>
       ) : null}
-      {!loadError && campaigns.length === 0 ? (
+      {!loadError && totalCount === 0 ? (
         <div className="rounded-md border p-8 text-center text-muted-foreground">
           No WhatsApp campaigns yet.{" "}
           <button
@@ -222,15 +191,23 @@ export default function WhatsappCampaignsPage() {
       ) : null}
       {!loadError ? (
         <CampaignTable
-          campaigns={paginatedData.data}
+          campaigns={campaigns}
           title="WhatsApp Campaigns"
           subtitle="Message campaigns you have sent or scheduled on WhatsApp."
           searchQuery={searchQuery}
           filters={filters}
           channelFilter={"WhatsApp"}
+          statusOptions={[
+            { value: "Draft", label: "Draft" },
+            { value: "Pending", label: "Pending" },
+            { value: "Sending", label: "Sending" },
+            { value: "Sent", label: "Sent" },
+            { value: "Failed", label: "Failed" },
+            { value: "Active", label: "Active" },
+          ]}
           currentPage={currentPage}
-          totalPages={paginatedData.totalPages}
-          totalCount={paginatedData.totalCount}
+          totalPages={totalPages}
+          totalCount={totalCount}
           itemsPerPage={itemsPerPage}
           onSearchChange={value => {
             setSearchQuery(value);

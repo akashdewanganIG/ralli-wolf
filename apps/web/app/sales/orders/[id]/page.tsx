@@ -2,9 +2,9 @@
 
 import type { TableColumn } from "@/components/data-table";
 import { DataTable } from "@/components/data-table";
-import { RoleGuard } from "@/components/guards/RoleGuard";
+import { RoleGuard } from "@/components/guards/role-guard";
 import { DetailPageSkeleton } from "@/components/skeletons";
-import { useSalesOrderDetail } from "@/hooks/useSalesOrders";
+import { useSalesOrderDetail } from "@/hooks/use-sales-orders";
 import { salesOrderService } from "@/lib/api/services";
 import type { SalesOrderLineItem } from "@/lib/api/types";
 import { toast } from "@/lib/toast";
@@ -200,12 +200,9 @@ function OrderDetailContent() {
         />
 
         <TabsContents>
-          {/* ── Details Tab ─────────────────────────────────────────────── */}
           <TabsContent value="details">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              {/* Left column — main info */}
               <div className="lg:col-span-2 space-y-4">
-                {/* Order Information */}
                 <DetailCard
                   title="Order Information"
                   className="bg-surface border-border"
@@ -279,7 +276,6 @@ function OrderDetailContent() {
                   </div>
                 </DetailCard>
 
-                {/* Financial Summary */}
                 <DetailCard
                   title="Financial Summary"
                   className="bg-surface border-border"
@@ -328,7 +324,6 @@ function OrderDetailContent() {
                   </div>
                 </DetailCard>
 
-                {/* Customer */}
                 <DetailCard
                   title="Customer"
                   className="bg-surface border-border"
@@ -393,7 +388,6 @@ function OrderDetailContent() {
                   </div>
                 </DetailCard>
 
-                {/* Billing & Shipping Addresses */}
                 {(order.billingName || order.shippingName) && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {order.billingName && (
@@ -489,7 +483,6 @@ function OrderDetailContent() {
                   </div>
                 )}
 
-                {/* Terms & Notes */}
                 {(order.paymentTerms || order.deliveryTerms || order.notes) && (
                   <DetailCard
                     title="Terms & Notes"
@@ -546,7 +539,6 @@ function OrderDetailContent() {
                 )}
               </div>
 
-              {/* Right column — owner / system info */}
               <div className="space-y-4">
                 <DetailCard title="Owner" className="bg-surface border-border">
                   <div className="space-y-3">
@@ -637,7 +629,6 @@ function OrderDetailContent() {
             </div>
           </TabsContent>
 
-          {/* ── Products Tab ─────────────────────────────────────────────── */}
           <TabsContent value="products">
             <DataTable<SalesOrderLineItem>
               data={order.lineItems}
@@ -655,7 +646,7 @@ function OrderDetailContent() {
 
 export default function OrderDetailPage() {
   return (
-    <RoleGuard allowedRoles={["ADMIN", "ADMIN", "SALES"]}>
+    <RoleGuard allowedRoles={["ADMIN", "SALES"]}>
       <NuqsAdapter>
         <OrderDetailContent />
       </NuqsAdapter>

@@ -1,6 +1,6 @@
 "use client";
 
-import logo from "@/app/assets/images/logos/logo_v1.png";
+import logo from "@/app/assets/images/logos/logo-v1.png";
 import {
   type AnalyticsEvent,
   type BrevoCampaign,
@@ -31,14 +31,18 @@ import {
 } from "@repo/ui/icons";
 import React from "react";
 import { Campaign } from "./campaign-table";
-import { WhatsAppPreview } from "./whatsapp/whatsapp-preview";
+import {
+  type TemplateComponent,
+  WhatsAppPreview,
+} from "./whatsapp/whatsapp-preview";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
+import { normalizeBrevoCampaignStats } from "@/lib/brevo";
 
 interface CampaignDetailPageProps {
   campaign: Campaign;
   brevoCampaign?: BrevoCampaign;
-  template?: MessageTemplate; // WhatsApp template
-  messageParams?: Record<string, any>; // Message parameters with DB column values
+  template?: MessageTemplate;
+  messageParams?: Record<string, unknown>;
   onBack: () => void;
   onEdit?: () => void;
   onRefresh?: () => void | Promise<void>;
@@ -56,10 +60,49 @@ interface StatCardProps {
   subValue?: string;
 }
 
+function escapeHtml(value: string | number): string {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function safeReportFileName(value: string): string {
+  const withoutControls = Array.from(value.normalize("NFKC"), character =>
+    character.codePointAt(0)! < 32 ? "_" : character
+  ).join("");
+  const safe = withoutControls
+    .replace(/[<>:"/\\|?*]/g, "_")
+    .replace(/[. ]+$/g, "")
+    .slice(0, 100);
+  return safe || "campaign";
+}
+
+function renderReportRows(rows: Array<Array<string | number>>): string {
+  return rows
+    .map(
+      (row, rowIndex) =>
+        `<tr>${row
+          .map(cell =>
+            rowIndex === 0
+              ? `<th>${escapeHtml(cell)}</th>`
+              : `<td>${escapeHtml(cell)}</td>`
+          )
+          .join("")}</tr>`
+    )
+    .join("");
+}
+
+function csvCell(value: string | number): string {
+  const text = String(value);
+  const formulaSafe = /^[=+\-@]/.test(text) ? `'${text}` : text;
+  return `"${formulaSafe.replaceAll('"', '""')}"`;
+}
+
 const StatCard: React.FC<StatCardProps> = ({ label, value, subValue }) => {
-  // Determine color for rates
   const getRateColor = (subValueText: string, labelText: string) => {
-    // Extract percentage number from text
     const match = subValueText.match(/([\d.]+)%/);
     if (!match || !match[1]) return "text-muted-foreground";
 
@@ -67,7 +110,6 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, subValue }) => {
     const lowerLabel = (labelText || "").toLowerCase();
     const lowerSubValue = subValueText.toLowerCase();
 
-    // Bad metrics - red for high values
     if (
       lowerLabel.includes("unsubscribe") ||
       lowerLabel.includes("spam") ||
@@ -81,7 +123,6 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, subValue }) => {
       return "text-success-foreground";
     }
 
-    // Good metrics - green for high values (check both label and subValue)
     if (
       lowerLabel.includes("delivery") ||
       lowerLabel.includes("delivered") ||
@@ -106,8 +147,6 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, subValue }) => {
 
   return (
     <div className="relative h-full w-full min-w-0 overflow-hidden rounded-lg border bg-surface p-4 shadow-sm">
-      {/* Glossy overlay effect */}
-
       <div className="relative z-10">
         <div className="mb-1 text-sm leading-5 text-muted-foreground">
           {label}
@@ -151,91 +190,41 @@ export function CampaignDetailPage({
 }: CampaignDetailPageProps) {
   const isWhatsApp = campaign.channel === "WhatsApp";
 
-  // Calculate statistics from Brevo campaign data or use defaults
-  // Prioritize globalStats if available, otherwise fall back to legacy statistics structure
-  const globalStats = brevoCampaign?.statistics?.globalStats;
-  const legacyStats = brevoCampaign?.statistics;
-  const safeRate = (num: number, den: number) =>
-    den > 0 ? Number(((num / den) * 100).toFixed(1)) : 0;
-
-  // Use globalStats fields if available, otherwise fall back to legacy fields
-  const sent = globalStats?.sent || (legacyStats as any)?.sent || 0;
-  const delivered =
-    globalStats?.delivered || (legacyStats as any)?.delivered || 0;
-  const opens =
-    globalStats?.uniqueViews ||
-    (legacyStats as any)?.uniqueOpens ||
-    (legacyStats as any)?.opens ||
-    0;
-  const clicks =
-    globalStats?.uniqueClicks ||
-    (legacyStats as any)?.uniqueClicks ||
-    (legacyStats as any)?.clicks ||
-    0;
-  const unsubscribes =
-    globalStats?.unsubscriptions || (legacyStats as any)?.unsubscriptions || 0;
-  const spamReports =
-    globalStats?.complaints || (legacyStats as any)?.spamReports || 0;
-  const hardBounces =
-    globalStats?.hardBounces || (legacyStats as any)?.hardBounces || 0;
-  const softBounces =
-    globalStats?.softBounces || (legacyStats as any)?.softBounces || 0;
-  const processing =
-    globalStats?.deferred || (legacyStats as any)?.processing || 0;
-  const totalOpens =
-    globalStats?.viewed ||
-    (legacyStats as any)?.opens ||
-    (legacyStats as any)?.uniqueOpens ||
-    0;
-  const totalClicks =
-    globalStats?.clickers ||
-    (legacyStats as any)?.clicks ||
-    (legacyStats as any)?.uniqueClicks ||
-    0;
-  const appleMPPOpens = globalStats?.appleMppOpens || 0;
+  const stats = brevoCampaign
+    ? normalizeBrevoCampaignStats(brevoCampaign)
+    : null;
 
   const emailStats = {
-    delivered: delivered,
-    deliveryRate:
-      (legacyStats as any)?.deliveredPercentage ?? safeRate(delivered, sent),
-    opens: opens,
-    openRate:
-      globalStats?.opensRate ??
-      (legacyStats as any)?.openPercentage ??
-      safeRate(opens, delivered || sent),
-    clicks: clicks,
-    clickThroughRate:
-      (legacyStats as any)?.clickPercentage ??
-      safeRate(clicks, delivered || sent),
-    unsubscribes: unsubscribes,
-    unsubscribeRate:
-      (legacyStats as any)?.unsubscriptionPercentage ??
-      safeRate(unsubscribes, delivered || sent),
-    sentTo: sent,
-    deliveredCount: delivered,
-    inProcessing: processing,
-    softBounces: softBounces,
-    hardBounces: hardBounces,
-    totalOpens: totalOpens,
-    appleMPPOpens: appleMPPOpens,
-    totalClicks: totalClicks,
-    clickToOpenRate: safeRate(clicks, opens),
-    spamComplaints: spamReports,
-    spamComplaintRate:
-      (legacyStats as any)?.spamPercentage ??
-      safeRate(spamReports, delivered || sent),
+    delivered: stats?.delivered ?? 0,
+    deliveryRate: stats?.deliveryRate ?? 0,
+    opens: stats?.uniqueOpens ?? 0,
+    openRate: stats?.openRate ?? 0,
+    clicks: stats?.uniqueClicks ?? 0,
+    clickThroughRate: stats?.clickRate ?? 0,
+    unsubscribes: stats?.unsubscribes ?? 0,
+    unsubscribeRate: stats?.unsubscribeRate ?? 0,
+    sentTo: stats?.sent ?? 0,
+    deliveredCount: stats?.delivered ?? 0,
+    inProcessing: stats?.deferred ?? 0,
+    softBounces: stats?.softBounces ?? 0,
+    hardBounces: stats?.hardBounces ?? 0,
+    totalOpens: stats?.totalOpens ?? 0,
+    appleMPPOpens: stats?.appleMppOpens ?? 0,
+    totalClicks: stats?.totalClicks ?? 0,
+    clickToOpenRate: stats?.clickToOpenRate ?? 0,
+    spamComplaints: stats?.complaints ?? 0,
+    spamComplaintRate: stats?.spamRate ?? 0,
   };
 
-  // Export functions for WhatsApp campaigns
   const exportWhatsAppStats = (format: "pdf" | "excel" | "csv") => {
     const kpi = campaign.deliveryStats || {
       total: deliveries.length,
-      pending: deliveries.filter(x => x.status === "pending").length,
-      queued: deliveries.filter(x => x.status === "queued").length,
-      sent: deliveries.filter(x => x.status === "sent").length,
-      delivered: deliveries.filter(x => x.status === "delivered").length,
-      read: deliveries.filter(x => x.status === "read").length,
-      failed: deliveries.filter(x => x.status === "failed").length,
+      pending: deliveries.filter(x => x.status === "PENDING").length,
+      queued: deliveries.filter(x => x.status === "QUEUED").length,
+      sent: deliveries.filter(x => x.status === "SENT").length,
+      delivered: deliveries.filter(x => x.status === "DELIVERED").length,
+      read: deliveries.filter(x => x.status === "READ").length,
+      failed: deliveries.filter(x => x.status === "FAILED").length,
     };
 
     const stats = [
@@ -280,26 +269,29 @@ export function CampaignDetailPage({
           : "0%",
       ],
     ];
+    const fileName = safeReportFileName(campaign.name);
+    const reportRows = renderReportRows(stats);
 
     if (format === "csv") {
-      const csvContent = stats.map(row => row.join(",")).join("\n");
+      const csvContent = stats
+        .map(row => row.map(csvCell).join(","))
+        .join("\r\n");
       const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const link = document.createElement("a");
       const objectUrl = URL.createObjectURL(blob);
       link.href = objectUrl;
-      link.download = `${campaign.name}_report.csv`;
+      link.download = `${fileName}_report.csv`;
       link.click();
       URL.revokeObjectURL(objectUrl);
     } else if (format === "excel") {
-      // Create a simple HTML table for Excel
       const tableHtml = `
         <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
         <head><meta charset="UTF-8"></head>
         <body>
-          <h1>${campaign.name}</h1>
+          <h1>${escapeHtml(campaign.name)}</h1>
           <p>Campaign Report - ${new Date().toLocaleDateString()}</p>
           <table border="1">
-            ${stats.map((row, i) => `<tr>${row.map(cell => (i === 0 ? `<th>${cell}</th>` : `<td>${cell}</td>`)).join("")}</tr>`).join("")}
+            ${reportRows}
           </table>
         </body>
         </html>
@@ -308,17 +300,17 @@ export function CampaignDetailPage({
       const link = document.createElement("a");
       const objectUrl = URL.createObjectURL(blob);
       link.href = objectUrl;
-      link.download = `${campaign.name}_report.xls`;
+      link.download = `${fileName}_report.xls`;
       link.click();
       URL.revokeObjectURL(objectUrl);
     } else if (format === "pdf") {
-      // Create a printable HTML and trigger print
       const printWindow = window.open("", "_blank");
       if (printWindow) {
+        printWindow.opener = null;
         printWindow.document.write(`
           <html>
           <head>
-            <title>${campaign.name} - Campaign Report</title>
+            <title>${escapeHtml(campaign.name)} - Campaign Report</title>
             <style>
               body { font-family: Arial, sans-serif; padding: 40px; }
               h1 { color: #333; }
@@ -331,12 +323,12 @@ export function CampaignDetailPage({
           </head>
           <body>
             <div class="header">
-              <h1>${campaign.name}</h1>
+              <h1>${escapeHtml(campaign.name)}</h1>
               <p class="date">Report generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>
-              <p>Channel: WhatsApp | Status: ${campaign.status}</p>
+              <p>Channel: WhatsApp | Status: ${escapeHtml(campaign.status)}</p>
             </div>
             <table>
-              ${stats.map((row, i) => `<tr>${row.map(cell => (i === 0 ? `<th>${cell}</th>` : `<td>${cell}</td>`)).join("")}</tr>`).join("")}
+              ${reportRows}
             </table>
           </body>
           </html>
@@ -357,50 +349,66 @@ export function CampaignDetailPage({
     );
   };
 
-  // Helper function to extract components from template
-  const extractComponentsArray = (raw: any): any[] => {
-    if (!raw) return [];
-    if (Array.isArray(raw)) return raw;
-    if (Array.isArray(raw.components)) return raw.components;
-    if (Array.isArray(raw.template?.components)) return raw.template.components;
-    if (Array.isArray(raw.payload?.template?.components))
-      return raw.payload.template.components;
+  type JsonRecord = Record<string, unknown>;
+  const asRecord = (value: unknown): JsonRecord | null =>
+    typeof value === "object" && value !== null && !Array.isArray(value)
+      ? (value as JsonRecord)
+      : null;
+  const asRecords = (value: unknown): JsonRecord[] =>
+    Array.isArray(value)
+      ? value.map(asRecord).filter((item): item is JsonRecord => item !== null)
+      : [];
+  const asText = (value: unknown): string | undefined =>
+    typeof value === "string" && value.trim() ? value : undefined;
+
+  const extractComponentsArray = (raw: unknown): JsonRecord[] => {
+    const direct = asRecords(raw);
+    if (direct.length) return direct;
+    const root = asRecord(raw);
+    if (!root) return [];
+    const components = asRecords(root.components);
+    if (components.length) return components;
+    const templateRecord = asRecord(root.template);
+    const templateComponents = asRecords(templateRecord?.components);
+    if (templateComponents.length) return templateComponents;
+    const payloadTemplate = asRecord(asRecord(root.payload)?.template);
+    return asRecords(payloadTemplate?.components);
+  };
+
+  const getButtonList = (component: JsonRecord): JsonRecord[] => {
+    for (const key of ["buttons", "buttonList", "button"] as const) {
+      const buttons = asRecords(component[key]);
+      if (buttons.length) return buttons;
+    }
     return [];
   };
 
-  // Helper function to get button list
-  const getButtonList = (component: any): any[] => {
-    if (Array.isArray(component?.buttons)) return component.buttons;
-    if (Array.isArray(component?.buttonList)) return component.buttonList;
-    if (Array.isArray(component?.button)) return component.button;
-    return [];
-  };
-
-  // Helper function to build preview components with DB column placeholders
-  const buildPreviewComponents = () => {
+  const buildPreviewComponents = (): TemplateComponent[] => {
     if (!template) return [];
 
-    const components = extractComponentsArray(
-      (template as any)?.componentsJson ?? (template as any)?.components ?? null
-    );
+    const components = extractComponentsArray(template.components);
+    const preview: TemplateComponent[] = [];
 
-    return components.map((component: any) => {
-      const type = String(
-        component.type || component.component_type || ""
+    for (const component of components) {
+      const type = (
+        asText(component.type) ??
+        asText(component.component_type) ??
+        ""
       ).toUpperCase();
 
       if (type === "HEADER") {
-        const format = String(
-          component.format || component.format_type || ""
+        const format = (
+          asText(component.format) ??
+          asText(component.format_type) ??
+          ""
         ).toUpperCase();
-        let headerText = component.text || "";
+        let headerText = asText(component.text) ?? "";
 
-        // Show DB column placeholders instead of actual values
         if (format === "TEXT" && headerText && messageParams) {
           Object.keys(messageParams).forEach(key => {
             if (key.startsWith("header_")) {
               const num = key.replace("header_", "");
-              // Replace with DB column reference if it's a placeholder like {{name}}, {{email}}, etc.
+
               const paramValue = messageParams[key];
               if (
                 typeof paramValue === "string" &&
@@ -416,20 +424,19 @@ export function CampaignDetailPage({
           });
         }
 
-        return {
-          type: "HEADER" as const,
-          format: format,
+        preview.push({
+          type: "HEADER",
+          format,
           text: headerText || undefined,
-        };
+        });
       } else if (type === "BODY") {
-        let bodyText = component.text || "";
+        let bodyText = asText(component.text) ?? "";
 
-        // Show DB column placeholders instead of actual values
         if (messageParams) {
           Object.keys(messageParams).forEach(key => {
             if (key.startsWith("body_")) {
               const num = key.replace("body_", "");
-              // Replace with DB column reference
+
               const paramValue = messageParams[key];
               if (
                 typeof paramValue === "string" &&
@@ -445,57 +452,57 @@ export function CampaignDetailPage({
           });
         }
 
-        return {
-          type: "BODY" as const,
+        preview.push({
+          type: "BODY",
           text: bodyText,
-        };
+        });
       } else if (type === "FOOTER") {
-        return {
-          type: "FOOTER" as const,
-          text: component.text || undefined,
-        };
+        preview.push({
+          type: "FOOTER",
+          text: asText(component.text),
+        });
       } else if (type === "BUTTONS" || type === "BUTTON") {
         const buttons = getButtonList(component);
-        return {
-          type: "BUTTONS" as const,
-          buttons: buttons.map((btn: any, idx: number) => {
-            const btnType = String(
-              btn.sub_type || btn.type || ""
+        preview.push({
+          type: "BUTTONS",
+          buttons: buttons.map((button, index) => {
+            const buttonType = (
+              asText(button.sub_type) ??
+              asText(button.type) ??
+              ""
             ).toUpperCase();
-            const buttonKey = `button_${idx + 1}`;
-            const buttonValue = messageParams?.[buttonKey];
+            const buttonKey = `button_${index + 1}`;
+            const configuredValue = asText(messageParams?.[buttonKey]);
 
             return {
               type:
-                btnType === "VISIT_WEBSITE"
+                buttonType === "VISIT_WEBSITE"
                   ? "URL"
-                  : btnType === "CALL_PHONE_NUMBER"
+                  : buttonType === "CALL_PHONE_NUMBER"
                     ? "PHONE_NUMBER"
-                    : btnType === "COPY_CODE"
+                    : buttonType === "COPY_CODE"
                       ? "COPY_CODE"
                       : "QUICK_REPLY",
-              text: btn.text || `Button ${idx + 1}`,
-              url: buttonValue || btn.url,
-              phone_number: btn.phone_number,
+              text: asText(button.text) ?? `Button ${index + 1}`,
+              url: configuredValue ?? asText(button.url),
+              phone_number: asText(button.phone_number),
             };
           }),
-        };
+        });
       }
-
-      return component;
-    });
+    }
+    return preview;
   };
 
-  // Render WhatsApp campaign
   if (isWhatsApp) {
     const kpi = campaign.deliveryStats || {
       total: deliveries.length,
-      pending: deliveries.filter(x => x.status === "pending").length,
-      queued: deliveries.filter(x => x.status === "queued").length,
-      sent: deliveries.filter(x => x.status === "sent").length,
-      delivered: deliveries.filter(x => x.status === "delivered").length,
-      read: deliveries.filter(x => x.status === "read").length,
-      failed: deliveries.filter(x => x.status === "failed").length,
+      pending: deliveries.filter(x => x.status === "PENDING").length,
+      queued: deliveries.filter(x => x.status === "QUEUED").length,
+      sent: deliveries.filter(x => x.status === "SENT").length,
+      delivered: deliveries.filter(x => x.status === "DELIVERED").length,
+      read: deliveries.filter(x => x.status === "READ").length,
+      failed: deliveries.filter(x => x.status === "FAILED").length,
     };
     return (
       <PageShell>
@@ -582,7 +589,6 @@ export function CampaignDetailPage({
                 <StatCard label="Failed" value={kpi.failed} />
               </div>
 
-              {/* Message Preview */}
               {template && (
                 <div className="mt-4">
                   <h2 className="text-xl font-semibold mb-4 max-w-sm">
@@ -603,21 +609,14 @@ export function CampaignDetailPage({
     );
   }
 
-  // Handler for PDF download
   const handleDownloadPDF = async () => {
     if (!brevoCampaign) return;
 
     try {
-      // Convert logo to base64 data URL
       let logoDataUrl: string | undefined;
       try {
-        // Get the logo path from Next.js static import
-        const logoPath =
-          typeof logo === "string"
-            ? logo
-            : (logo as any).src || (logo as any).default?.src || String(logo);
+        const logoPath = typeof logo === "string" ? logo : logo.src;
 
-        // Fetch the image and convert to base64
         const response = await fetch(logoPath);
         if (!response.ok) throw new Error("Failed to fetch logo");
 
@@ -628,9 +627,8 @@ export function CampaignDetailPage({
           reader.onerror = reject;
           reader.readAsDataURL(blob);
         });
-      } catch (logoError) {
-        console.warn("Could not load logo for PDF:", logoError);
-        // Continue without logo - PDF will still be generated
+      } catch {
+        logoDataUrl = undefined;
       }
 
       await generateCampaignPDF(
@@ -642,15 +640,13 @@ export function CampaignDetailPage({
         logoDataUrl
       );
       toast.success("Campaign PDF downloaded");
-    } catch (error) {
-      console.error("Failed to generate PDF:", error);
+    } catch {
       toast.error("Failed to generate PDF", {
         description: "Please try again.",
       });
     }
   };
 
-  // Render Email campaign
   return (
     <PageShell>
       <PageHeader
@@ -691,11 +687,8 @@ export function CampaignDetailPage({
         }
       />
 
-      {/* Campaign Info */}
       <div className="space-y-4">
         <div className="relative bg-surface rounded-lg border p-4 shadow-lg overflow-hidden">
-          {/* Glossy overlay effect */}
-
           <div className="relative z-10">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="space-y-1">
@@ -731,7 +724,6 @@ export function CampaignDetailPage({
           </div>
         </div>
 
-        {/* Refresh Button */}
         {onRefresh && (
           <div className="flex justify-start mt-4">
             <Button
@@ -750,7 +742,6 @@ export function CampaignDetailPage({
         )}
       </div>
 
-      {/* Campaign Performance */}
       <div className="space-y-4">
         <h2 className="text-xl font-semibold">Campaign Performance</h2>
         <div className="grid grid-cols-2 items-stretch gap-4 lg:grid-cols-4">
@@ -777,7 +768,6 @@ export function CampaignDetailPage({
         </div>
       </div>
 
-      {/* Deliverability Details */}
       <HorizontalSection title="Deliverability Details">
         <StatCard label="Sent to" value={emailStats.sentTo} />
         <StatCard
@@ -790,7 +780,6 @@ export function CampaignDetailPage({
         <StatCard label="Hard Bounces" value={emailStats.hardBounces} />
       </HorizontalSection>
 
-      {/* Opens Details */}
       <HorizontalSection title="Opens Details">
         <StatCard
           label="Opens"
@@ -803,7 +792,6 @@ export function CampaignDetailPage({
         <div></div>
       </HorizontalSection>
 
-      {/* Clicks Details */}
       <HorizontalSection title="Clicks Details">
         <StatCard
           label="Click-through Rate"
@@ -818,7 +806,6 @@ export function CampaignDetailPage({
         <div></div>
       </HorizontalSection>
 
-      {/* Unsubscribers Details */}
       <HorizontalSection title="Unsubscribers Details">
         <StatCard label="Unsubscribers" value={emailStats.unsubscribes} />
         <StatCard

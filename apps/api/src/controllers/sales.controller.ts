@@ -1,29 +1,21 @@
 import { Request, Response } from "express";
 import { prisma } from "@repo/db";
-import { LeadStatus } from "@prisma/client";
+import { LeadSource, LeadStatus, Prisma } from "@prisma/client";
 import {
   handleError,
   handleUnauthorizedError,
   handleForbiddenError,
   handleValidationError,
-} from "../utils/errorHandler.js";
-import { buildFullName } from "../utils/nameHelpers.js";
+} from "../utils/error-handler.js";
+import { buildFullName } from "../utils/name-helpers.js";
+import {
+  parseBoundedInteger,
+  parsePositiveInteger,
+} from "../utils/validators.js";
 
-/**
- * Sales Controller
- * Handles all sales-specific operations
- * Sales users can only:
- * 1. View leads assigned to them
- * 2. Qualify or Disqualify leads
- * 3. Add remarks to leads
- */
 export class SalesController {
-  /**
-   * Get all leads assigned to the current sales user
-   */
   async getMyLeads(req: Request, res: Response) {
     try {
-      // Ensure user is authenticated
       if (!req.user) {
         return handleUnauthorizedError(
           res,
@@ -34,107 +26,110 @@ export class SalesController {
 
       const userId = req.user.id;
 
-      // Parse query parameters for pagination
-      const page = parseInt(req.query.page as string) || 1;
-      const limit = parseInt(req.query.limit as string) || 10;
+      const page =
+        req.query.page === undefined
+          ? 1
+          : parseBoundedInteger(req.query.page, 1, 1_000_000);
+      const limit =
+        req.query.limit === undefined
+          ? 10
+          : parseBoundedInteger(req.query.limit, 1, 100);
+      if (page === null || limit === null) {
+        return handleValidationError(
+          res,
+          "page must be positive and limit must be between 1 and 100",
+          undefined,
+          "Get my leads"
+        );
+      }
       const skip = (page - 1) * limit;
 
-      // Parse filters
       const status = req.query.status as string | undefined;
       const source = req.query.source as string | undefined;
 
-      // Build lead where clause for filtering
-      const leadWhereClause: any = {
+      const leadWhereClause: Prisma.LeadWhereInput = {
         ownerId: userId,
         deletedAt: null,
+        enquiries: { some: { status: "UNRESOLVED" } },
       };
 
       if (status) {
-        leadWhereClause.status = status;
+        if (!Object.values(LeadStatus).includes(status as LeadStatus)) {
+          return handleValidationError(
+            res,
+            "Invalid lead status",
+            "status",
+            "Get my leads"
+          );
+        }
+        leadWhereClause.status = status as LeadStatus;
       }
 
       if (source) {
-        leadWhereClause.source = source;
+        if (!Object.values(LeadSource).includes(source as LeadSource)) {
+          return handleValidationError(
+            res,
+            "Invalid lead source",
+            "source",
+            "Get my leads"
+          );
+        }
+        leadWhereClause.source = source as LeadSource;
       }
 
-      // Get leads with unresolved enquiries
-      const leadsWithEnquiries = await prisma.enquiry.findMany({
-        where: {
-          status: "UNRESOLVED",
-          lead: leadWhereClause,
-        },
-        include: {
-          lead: {
-            include: {
-              owner: {
-                select: {
-                  id: true,
-                  firstName: true,
-                  lastName: true,
-                  email: true,
-                  role: true,
-                },
+      const [leads, total] = await Promise.all([
+        prisma.lead.findMany({
+          where: leadWhereClause,
+          skip,
+          take: limit,
+          orderBy: { createdAt: "desc" },
+          include: {
+            owner: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                role: true,
               },
-              remarks: {
-                include: {
-                  user: {
-                    select: {
-                      id: true,
-                      firstName: true,
-                      lastName: true,
-                      email: true,
-                    },
+            },
+            remarks: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    email: true,
                   },
                 },
-                orderBy: {
-                  createdAt: "desc",
+              },
+              orderBy: {
+                createdAt: "desc",
+              },
+              take: 100,
+            },
+            enquiries: {
+              where: {
+                status: "UNRESOLVED",
+              },
+              include: {
+                landingPageCampaign: {
+                  select: {
+                    id: true,
+                    name: true,
+                    uniqueId: true,
+                  },
                 },
               },
-              enquiries: {
-                where: {
-                  status: "UNRESOLVED",
-                },
-                orderBy: {
-                  enquiryCreatedAt: "desc",
-                },
+              orderBy: {
+                enquiryCreatedAt: "desc",
               },
             },
           },
-          landingPageCampaign: {
-            select: {
-              id: true,
-              name: true,
-              uniqueId: true,
-            },
-          },
-        },
-        orderBy: {
-          enquiryCreatedAt: "desc",
-        },
-        skip,
-        take: limit,
-      });
-
-      // Get unique leads (in case a lead has multiple enquiries)
-      const uniqueLeadsMap = new Map<number, any>();
-      leadsWithEnquiries.forEach((enquiry: any) => {
-        if (!uniqueLeadsMap.has(enquiry.lead.id)) {
-          uniqueLeadsMap.set(enquiry.lead.id, enquiry.lead);
-        }
-      });
-      const leads = Array.from(uniqueLeadsMap.values());
-
-      // Get total count
-      const total = await prisma.lead.count({
-        where: {
-          ...leadWhereClause,
-          enquiries: {
-            some: {
-              status: "UNRESOLVED",
-            },
-          },
-        },
-      });
+        }),
+        prisma.lead.count({ where: leadWhereClause }),
+      ]);
 
       res.json({
         leads,
@@ -150,9 +145,6 @@ export class SalesController {
     }
   }
 
-  /**
-   * Get a specific lead (only if assigned to this sales user)
-   */
   async getLeadById(req: Request, res: Response) {
     try {
       if (!req.user) {
@@ -163,11 +155,10 @@ export class SalesController {
         );
       }
 
-      const idParam = req.params.id;
-      const leadId = parseInt(idParam as string);
+      const leadId = parsePositiveInteger(req.params.id);
       const userId = req.user.id;
 
-      if (isNaN(leadId)) {
+      if (leadId === null) {
         return handleValidationError(
           res,
           "Invalid lead ID",
@@ -179,8 +170,8 @@ export class SalesController {
       const lead = await prisma.lead.findFirst({
         where: {
           id: leadId,
-          ownerId: userId, // Ensure lead is assigned to this user
-          deletedAt: null, // Exclude deleted leads
+          ownerId: userId,
+          deletedAt: null,
         },
         include: {
           owner: {
@@ -238,9 +229,6 @@ export class SalesController {
     }
   }
 
-  /**
-   * Qualify a lead (change status to QUALIFIED)
-   */
   async qualifyLead(req: Request, res: Response) {
     try {
       if (!req.user) {
@@ -251,11 +239,10 @@ export class SalesController {
         );
       }
 
-      const idParam = req.params.id;
-      const leadId = parseInt(idParam as string);
+      const leadId = parsePositiveInteger(req.params.id);
       const userId = req.user.id;
 
-      if (isNaN(leadId)) {
+      if (leadId === null) {
         return handleValidationError(
           res,
           "Invalid lead ID",
@@ -264,7 +251,6 @@ export class SalesController {
         );
       }
 
-      // Check if lead exists and is assigned to this user
       const existingLead = await prisma.lead.findFirst({
         where: {
           id: leadId,
@@ -281,7 +267,6 @@ export class SalesController {
         );
       }
 
-      // Update lead status to QUALIFIED
       const updatedLead = await prisma.lead.update({
         where: { id: leadId },
         data: {
@@ -309,9 +294,6 @@ export class SalesController {
     }
   }
 
-  /**
-   * Disqualify a lead (change status to UNQUALIFIED)
-   */
   async disqualifyLead(req: Request, res: Response) {
     try {
       if (!req.user) {
@@ -322,11 +304,10 @@ export class SalesController {
         );
       }
 
-      const idParam = req.params.id;
-      const leadId = parseInt(idParam as string);
+      const leadId = parsePositiveInteger(req.params.id);
       const userId = req.user.id;
 
-      if (isNaN(leadId)) {
+      if (leadId === null) {
         return handleValidationError(
           res,
           "Invalid lead ID",
@@ -335,7 +316,6 @@ export class SalesController {
         );
       }
 
-      // Check if lead exists and is assigned to this user
       const existingLead = await prisma.lead.findFirst({
         where: {
           id: leadId,
@@ -352,7 +332,6 @@ export class SalesController {
         );
       }
 
-      // Update lead status to UNQUALIFIED
       const updatedLead = await prisma.lead.update({
         where: { id: leadId },
         data: {
@@ -376,14 +355,10 @@ export class SalesController {
         lead: updatedLead,
       });
     } catch (error) {
-      console.error("Error disqualifying lead:", error);
       handleError(error, res, "Disqualify lead");
     }
   }
 
-  /**
-   * Add a remark/note to a lead
-   */
   async addRemark(req: Request, res: Response) {
     try {
       if (!req.user) {
@@ -394,12 +369,11 @@ export class SalesController {
         );
       }
 
-      const idParam = req.params.id;
-      const leadId = parseInt(idParam as string);
+      const leadId = parsePositiveInteger(req.params.id);
       const userId = req.user.id;
       const { remark } = req.body;
 
-      if (isNaN(leadId)) {
+      if (leadId === null) {
         return handleValidationError(
           res,
           "Invalid lead ID",
@@ -408,16 +382,19 @@ export class SalesController {
         );
       }
 
-      if (!remark || remark.trim().length === 0) {
+      if (
+        typeof remark !== "string" ||
+        remark.trim().length === 0 ||
+        remark.trim().length > 5000
+      ) {
         return handleValidationError(
           res,
-          "Remark cannot be empty",
+          "Remark must be between 1 and 5000 characters",
           "remark",
           "Add remark"
         );
       }
 
-      // Check if lead exists and is assigned to this user
       const existingLead = await prisma.lead.findFirst({
         where: {
           id: leadId,
@@ -434,7 +411,6 @@ export class SalesController {
         );
       }
 
-      // Create remark
       const newRemark = await prisma.leadRemark.create({
         data: {
           leadId,
@@ -462,9 +438,9 @@ export class SalesController {
         },
       });
 
-      const remarkLead = (newRemark as any).lead;
+      const { lead: remarkLead, ...remarkFields } = newRemark;
       const remarkResponse = {
-        ...newRemark,
+        ...remarkFields,
         lead: remarkLead
           ? {
               ...remarkLead,
@@ -478,14 +454,10 @@ export class SalesController {
         remark: remarkResponse,
       });
     } catch (error) {
-      console.error("Error adding remark:", error);
       handleError(error, res, "Add remark");
     }
   }
 
-  /**
-   * Get all remarks for a specific lead
-   */
   async getLeadRemarks(req: Request, res: Response) {
     try {
       if (!req.user) {
@@ -496,10 +468,10 @@ export class SalesController {
         );
       }
 
-      const leadId = parseInt(String(req.params.id));
+      const leadId = parsePositiveInteger(req.params.id);
       const userId = req.user.id;
 
-      if (isNaN(leadId)) {
+      if (leadId === null) {
         return handleValidationError(
           res,
           "Invalid lead ID",
@@ -508,7 +480,6 @@ export class SalesController {
         );
       }
 
-      // Check if lead exists and is assigned to this user
       const existingLead = await prisma.lead.findFirst({
         where: {
           id: leadId,
@@ -525,7 +496,6 @@ export class SalesController {
         );
       }
 
-      // Get all remarks for this lead
       const remarks = await prisma.leadRemark.findMany({
         where: { leadId },
         include: {
@@ -541,18 +511,15 @@ export class SalesController {
         orderBy: {
           createdAt: "desc",
         },
+        take: 200,
       });
 
       res.json({ remarks });
     } catch (error) {
-      console.error("Error fetching remarks:", error);
       handleError(error, res, "Get lead remarks");
     }
   }
 
-  /**
-   * Resolve an enquiry
-   */
   async resolveEnquiry(req: Request, res: Response) {
     try {
       if (!req.user) {
@@ -563,10 +530,10 @@ export class SalesController {
         );
       }
 
-      const enquiryId = parseInt(String(req.params.id));
+      const enquiryId = parsePositiveInteger(req.params.id);
       const userId = req.user.id;
 
-      if (isNaN(enquiryId)) {
+      if (enquiryId === null) {
         return handleValidationError(
           res,
           "Invalid enquiry ID",
@@ -575,7 +542,6 @@ export class SalesController {
         );
       }
 
-      // Check if enquiry exists and belongs to a lead assigned to this user
       const existingEnquiry = await prisma.enquiry.findFirst({
         where: {
           id: enquiryId,
@@ -594,7 +560,6 @@ export class SalesController {
         );
       }
 
-      // Update enquiry status to RESOLVED
       const updatedEnquiry = await prisma.enquiry.update({
         where: { id: enquiryId },
         data: {
@@ -627,14 +592,10 @@ export class SalesController {
         enquiry: updatedEnquiry,
       });
     } catch (error) {
-      console.error("Error resolving enquiry:", error);
       handleError(error, res, "Resolve enquiry");
     }
   }
 
-  /**
-   * Get statistics for the sales user's leads
-   */
   async getMyStats(req: Request, res: Response) {
     try {
       if (!req.user) {
@@ -647,7 +608,6 @@ export class SalesController {
 
       const userId = req.user.id;
 
-      // Get counts by status (excluding deleted leads)
       const [
         totalLeads,
         qualifiedLeads,
@@ -723,7 +683,6 @@ export class SalesController {
         },
       });
     } catch (error) {
-      console.error("Error fetching stats:", error);
       handleError(error, res, "Get my stats");
     }
   }

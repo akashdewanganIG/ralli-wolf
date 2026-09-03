@@ -2,7 +2,7 @@
 
 import type { TableColumn } from "@/components/data-table";
 import { DataTable } from "@/components/data-table";
-import { RoleGuard, useIsAdmin } from "@/components/guards/RoleGuard";
+import { RoleGuard, useIsAdmin } from "@/components/guards/role-guard";
 import { AddOpportunityLineItemDialog } from "@/components/opportunities/add-opportunity-line-item-dialog";
 import {
   LEAD_SOURCES,
@@ -21,8 +21,8 @@ import {
   useUpdateOpportunity,
   useUpdateOpportunityLineItem,
   useUpdateOpportunityStage,
-} from "@/hooks/useOpportunities";
-import { usePricebooksWithPagination } from "@/hooks/usePricebooks";
+} from "@/hooks/use-opportunities";
+import { usePricebooksWithPagination } from "@/hooks/use-pricebooks";
 import type { OpportunityLineItem } from "@/lib/api/types";
 import { toast } from "@/lib/toast";
 import {
@@ -33,6 +33,7 @@ import {
   DetailCard,
   DetailPageHeader,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -79,13 +80,6 @@ function buildFullName(firstName: string, lastName: string) {
   return [firstName, lastName].filter(Boolean).join(" ") || "N/A";
 }
 
-/**
- * Opportunity stage → tone.
- *
- * A stage is a position in a pipeline, not a verdict, so the early ones stay
- * neutral; only negotiation (at risk) and the two closed outcomes carry a
- * colour.
- */
 const STAGE_TONE: Record<string, TagTone> = {
   PROSPECT: "neutral",
   QUALIFICATION: "neutral",
@@ -97,7 +91,6 @@ const STAGE_TONE: Record<string, TagTone> = {
   CLOSED_LOST: "danger",
 };
 
-// Stages without CLOSED_LOST for the stepper
 const STEPS_WITHOUT_CLOSED_LOST = [
   "PROSPECT",
   "QUALIFICATION",
@@ -126,16 +119,13 @@ function ProductLineItemsTable({
   const { data: pricebooks } = usePricebooksWithPagination();
   const isAdmin = useIsAdmin();
 
-  // Add line item dialog state
   const [addOpen, setAddOpen] = React.useState(false);
 
-  // Edit modal state
   const [editItem, setEditItem] = React.useState<OpportunityLineItem | null>(
     null
   );
   const [editOpen, setEditOpen] = React.useState(false);
 
-  // Delete confirmation state
   const [deleteItem, setDeleteItem] =
     React.useState<OpportunityLineItem | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
@@ -144,7 +134,6 @@ function ProductLineItemsTable({
   const [editDiscount, setEditDiscount] = React.useState(0);
   const [editDescription, setEditDescription] = React.useState("");
 
-  // Pricebook dialog state
   const [showChangePriceBookConfirm, setShowChangePriceBookConfirm] =
     React.useState(false);
   const [priceBookDialogOpen, setPriceBookDialogOpen] = React.useState(false);
@@ -188,20 +177,16 @@ function ProductLineItemsTable({
     setPriceBookDialogOpen(true);
   };
 
-  // Called when user clicks OK in the selection dialog
   const handlePriceBookSelectionNext = () => {
     if (!selectedPriceBookId) return;
     if (priceBook) {
-      // Already has a pricebook — close selection, show warning
       setPriceBookDialogOpen(false);
       setShowChangePriceBookConfirm(true);
     } else {
-      // No existing pricebook — save directly, no warning needed
       handleSavePriceBook();
     }
   };
 
-  // Final save — called after warning confirmation (or directly when adding for the first time)
   const handleSavePriceBook = () => {
     if (!selectedPriceBookId) return;
     updateOpportunity.mutate(
@@ -229,7 +214,6 @@ function ProductLineItemsTable({
     );
   };
 
-  // Calculated preview values for edit modal
   const unitPricePreview = editListPrice * (1 - editDiscount / 100);
   const totalPricePreview = editQuantity * unitPricePreview;
 
@@ -353,62 +337,63 @@ function ProductLineItemsTable({
         )}
       />
 
-      {/* Edit Line Item Modal */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg gap-0 overflow-hidden">
           <DialogHeader>
             <DialogTitle>
               Edit Line Item — {editItem?.product?.name}
             </DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-2">
-            <div className="space-y-1.5">
-              <Label>Quantity</Label>
-              <Input
-                type="number"
-                min={1}
-                value={editQuantity}
-                onChange={e => setEditQuantity(Number(e.target.value))}
-              />
+          <DialogBody>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Quantity</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={editQuantity}
+                  onChange={e => setEditQuantity(Number(e.target.value))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>List Price ($)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={editListPrice}
+                  onChange={e => setEditListPrice(Number(e.target.value))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Discount (%)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="0.01"
+                  value={editDiscount}
+                  onChange={e => setEditDiscount(Number(e.target.value))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Unit Price ($)</Label>
+                <Input value={unitPricePreview.toFixed(2)} disabled />
+              </div>
+              <div className="col-span-2 space-y-1.5">
+                <Label>Total Price ($)</Label>
+                <Input value={totalPricePreview.toFixed(2)} disabled />
+              </div>
+              <div className="col-span-2 space-y-1.5">
+                <Label>Description</Label>
+                <Textarea
+                  value={editDescription}
+                  onChange={e => setEditDescription(e.target.value)}
+                  className="min-h-[5rem]"
+                />
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label>List Price ($)</Label>
-              <Input
-                type="number"
-                min={0}
-                step="0.01"
-                value={editListPrice}
-                onChange={e => setEditListPrice(Number(e.target.value))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Discount (%)</Label>
-              <Input
-                type="number"
-                min={0}
-                max={100}
-                step="0.01"
-                value={editDiscount}
-                onChange={e => setEditDiscount(Number(e.target.value))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Unit Price ($)</Label>
-              <Input value={unitPricePreview.toFixed(2)} disabled />
-            </div>
-            <div className="col-span-2 space-y-1.5">
-              <Label>Total Price ($)</Label>
-              <Input value={totalPricePreview.toFixed(2)} disabled />
-            </div>
-            <div className="col-span-2 space-y-1.5">
-              <Label>Description</Label>
-              <Textarea
-                value={editDescription}
-                onChange={e => setEditDescription(e.target.value)}
-                className="min-h-[5rem]"
-              />
-            </div>
-          </div>
+          </DialogBody>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)}>
               Cancel
@@ -423,7 +408,6 @@ function ProductLineItemsTable({
         </DialogContent>
       </Dialog>
 
-      {/* Warning confirmation — shown after pricebook is selected, before saving */}
       <ConfirmationDialog
         open={showChangePriceBookConfirm}
         onOpenChange={open => {
@@ -438,7 +422,6 @@ function ProductLineItemsTable({
         variant="destructive"
       />
 
-      {/* Confirmation dialog for deleting a line item */}
       <ConfirmationDialog
         open={showDeleteConfirm}
         onOpenChange={open => {
@@ -454,7 +437,6 @@ function ProductLineItemsTable({
         isLoading={deleteLineItem.isPending}
       />
 
-      {/* Pricebook selection dialog */}
       <Dialog
         open={priceBookDialogOpen}
         onOpenChange={open => {
@@ -462,13 +444,13 @@ function ProductLineItemsTable({
           if (!open) setSelectedPriceBookId("");
         }}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md gap-0 overflow-hidden">
           <DialogHeader>
             <DialogTitle>
               {priceBook ? "Change Pricebook" : "Add Pricebook"}
             </DialogTitle>
           </DialogHeader>
-          <div className="py-2 space-y-1.5">
+          <DialogBody className="space-y-1.5">
             <Label>Select Pricebook</Label>
             <Select
               value={selectedPriceBookId}
@@ -485,7 +467,7 @@ function ProductLineItemsTable({
                 ))}
               </SelectContent>
             </Select>
-          </div>
+          </DialogBody>
           <DialogFooter>
             <Button
               variant="outline"
@@ -506,7 +488,6 @@ function ProductLineItemsTable({
         </DialogContent>
       </Dialog>
 
-      {/* Add Line Item dialog */}
       <AddOpportunityLineItemDialog
         open={addOpen}
         onOpenChange={setAddOpen}
@@ -531,7 +512,6 @@ function OpportunityDetailContent() {
 
   const opportunity = response?.data;
 
-  // ── Stepper state ──────────────────────────────────────────────────────────
   const currentStageIndex = opportunity
     ? Math.max(0, STEPS_WITHOUT_CLOSED_LOST.indexOf(opportunity.stage))
     : 0;
@@ -548,22 +528,18 @@ function OpportunityDetailContent() {
     updateStage.mutate({ id: opportunity.id, stage });
   }, [opportunity, selectedStageIndex, hasStageChanged, updateStage]);
 
-  // ── Tab state ──────────────────────────────────────────────────────────────
   const [tab, setTab] = useQueryState(
     "tab",
     parseAsString.withDefault("details")
   );
 
-  // ── Quotes: fetch from API (GET /api/opportunities/:id/quotes)
   const { data: quotesResponse } = useOpportunityQuotes(id, {
     page: 1,
     limit: 50,
   });
 
-  // ── Create Quote dialog ─────────────────────────────────────────────────────
   const [createQuoteOpen, setCreateQuoteOpen] = React.useState(false);
 
-  // ── Inline edit state ──────────────────────────────────────────────────────
   const [isEditing, setIsEditing] = React.useState(false);
   const [editName, setEditName] = React.useState("");
   const [editCloseDate, setEditCloseDate] = React.useState("");
@@ -640,7 +616,6 @@ function OpportunityDetailContent() {
     updateOpportunity,
   ]);
 
-  // ── Delete handler ────────────────────────────────────────────────────────
   const handleDeleteConfirm = async () => {
     try {
       await deleteOpportunity.mutateAsync(id);
@@ -651,7 +626,6 @@ function OpportunityDetailContent() {
     }
   };
 
-  // ── Loading / error states ─────────────────────────────────────────────────
   if (isLoading) {
     return <DetailPageSkeleton />;
   }
@@ -670,7 +644,6 @@ function OpportunityDetailContent() {
     );
   }
 
-  // Map GET /api/opportunities/:id/quotes response to Quote type for QuotesTable
   const relatedQuotes: Quote[] = (quotesResponse?.data ?? []).map(q => ({
     id: String(q.id),
     quoteNumber: q.quoteNumber,
@@ -693,7 +666,6 @@ function OpportunityDetailContent() {
     accountName: opportunity.account.name,
   }));
 
-  // Header actions for the Opportunity Information card
   const cardHeaderActions = isEditing ? (
     <div className="flex items-center gap-2">
       <Button
@@ -727,7 +699,6 @@ function OpportunityDetailContent() {
         onBack={() => router.push("/sales/opportunities")}
       />
 
-      {/* Stage stepper */}
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
           <Stepper
@@ -771,7 +742,6 @@ function OpportunityDetailContent() {
         <TabsContents>
           <TabsContent value="details">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              {/* Main info card */}
               <div className="lg:col-span-2 space-y-4">
                 <DetailCard
                   title="Opportunity Information"
@@ -779,7 +749,6 @@ function OpportunityDetailContent() {
                   headerActions={cardHeaderActions}
                 >
                   <InfoGrid columns={2}>
-                    {/* Opportunity Name */}
                     <InfoField
                       label="Opportunity Name"
                       value={isEditing ? editName : opportunity.name}
@@ -787,7 +756,6 @@ function OpportunityDetailContent() {
                       onChange={setEditName}
                     />
 
-                    {/* Stage — read-only here; stepper above handles edits */}
                     <div className="space-y-1.5">
                       <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
                         Stage
@@ -797,7 +765,6 @@ function OpportunityDetailContent() {
                       </Tag>
                     </div>
 
-                    {/* Type */}
                     {isEditing ? (
                       <div className="space-y-1.5">
                         <Label className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
@@ -821,7 +788,6 @@ function OpportunityDetailContent() {
                       <InfoField label="Type" value={opportunity.type || ""} />
                     )}
 
-                    {/* Lead Source */}
                     {isEditing ? (
                       <div className="space-y-1.5">
                         <Label className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
@@ -851,7 +817,6 @@ function OpportunityDetailContent() {
                       />
                     )}
 
-                    {/* Close Date */}
                     {isEditing ? (
                       <div className="space-y-1.5">
                         <Label className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
@@ -877,7 +842,6 @@ function OpportunityDetailContent() {
                       />
                     )}
 
-                    {/* Next Step */}
                     <InfoField
                       label="Next Step"
                       value={
@@ -887,7 +851,6 @@ function OpportunityDetailContent() {
                       onChange={setEditNextStep}
                     />
 
-                    {/* Amount — read-only */}
                     <InfoField
                       label="Amount"
                       value={
@@ -897,13 +860,11 @@ function OpportunityDetailContent() {
                       }
                     />
 
-                    {/* Account — read-only */}
                     <InfoField
                       label="Account"
                       value={`${opportunity.account.name} (ID: ${opportunity.account.id})`}
                     />
 
-                    {/* Contact — read-only */}
                     <InfoField
                       label="Contact"
                       value={
@@ -913,7 +874,6 @@ function OpportunityDetailContent() {
                       }
                     />
 
-                    {/* Description — read-only (not in PATCH) */}
                     <div className="col-span-2 space-y-1.5 pt-4 mt-4 border-t border-border">
                       <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
                         Description
@@ -928,7 +888,6 @@ function OpportunityDetailContent() {
                 </DetailCard>
               </div>
 
-              {/* System info card */}
               <div className="h-full">
                 <DetailCard
                   title="System Information"
@@ -1009,7 +968,7 @@ function OpportunityDetailContent() {
 
 export default function OpportunityDetailPage() {
   return (
-    <RoleGuard allowedRoles={["ADMIN", "ADMIN", "SALES"]}>
+    <RoleGuard allowedRoles={["ADMIN", "SALES"]}>
       <NuqsAdapter>
         <OpportunityDetailContent />
       </NuqsAdapter>

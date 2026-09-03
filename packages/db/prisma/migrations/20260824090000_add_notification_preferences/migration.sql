@@ -1,4 +1,4 @@
--- One row per user per notification type, written only when a default is changed.
+
 CREATE TABLE "notification_preferences" (
     "id" SERIAL NOT NULL,
     "user_id" INTEGER NOT NULL,

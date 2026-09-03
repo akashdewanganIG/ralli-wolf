@@ -3,6 +3,7 @@
 import { Button } from "@repo/ui/components/ui/button";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -37,9 +38,11 @@ interface CampaignFilterProps {
   onCreatedToChange: (date: Date | null) => void;
   onClearFilters: () => void;
   onApplyFilters?: (filters: CampaignFilterValues) => void;
+  statusOptions?: ReadonlyArray<{ value: string; label: string }>;
+  showDateFilters?: boolean;
 }
 
-const statusOptions = [
+const DEFAULT_STATUS_OPTIONS = [
   { value: "Draft", label: "Draft" },
   { value: "Sent", label: "Sent" },
   { value: "Scheduled", label: "Scheduled" },
@@ -50,7 +53,6 @@ const statusOptions = [
   { value: "Cancelled", label: "Cancelled" },
 ];
 
-// Helper function to check if filters are active
 export const hasActiveFilters = (filters: CampaignFilterValues): boolean => {
   return Object.values(filters).some(value => {
     return value !== undefined && value !== null && value !== "";
@@ -65,13 +67,14 @@ export const CampaignFilter: React.FC<CampaignFilterProps> = ({
   onCreatedToChange,
   onClearFilters,
   onApplyFilters,
+  statusOptions = DEFAULT_STATUS_OPTIONS,
+  showDateFilters = true,
 }) => {
   const [open, setOpen] = useState(false);
   const [localFilters, setLocalFilters] =
     useState<CampaignFilterValues>(filters);
   const hasActive = hasActiveFilters(filters);
 
-  // Sync local filters with props when dialog opens or filters change
   useEffect(() => {
     if (open) {
       setLocalFilters(filters);
@@ -86,7 +89,6 @@ export const CampaignFilter: React.FC<CampaignFilterProps> = ({
   };
 
   const handleApplyFilters = () => {
-    // Clean up empty values
     const cleanedFilters: CampaignFilterValues = {
       ...(localFilters.status && localFilters.status.trim() !== ""
         ? { status: localFilters.status }
@@ -98,11 +100,9 @@ export const CampaignFilter: React.FC<CampaignFilterProps> = ({
       ...(localFilters.createdTo ? { createdTo: localFilters.createdTo } : {}),
     };
 
-    // If onApplyFilters is provided, use it to apply all filters at once
     if (onApplyFilters) {
       onApplyFilters(cleanedFilters);
     } else {
-      // Otherwise, apply filters individually (backward compatibility)
       onStatusChange(localFilters.status ?? "");
       onStartDateChange(localFilters.startDate ?? null);
       onCreatedFromChange(localFilters.createdFrom ?? null);
@@ -125,13 +125,11 @@ export const CampaignFilter: React.FC<CampaignFilterProps> = ({
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-[31.25rem]">
+        <DialogContent className="gap-0 overflow-hidden sm:max-w-[31.25rem]">
           <DialogHeader>
             <DialogTitle>Filter Campaigns</DialogTitle>
           </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            {/* Status Filter */}
+          <DialogBody className="space-y-3">
             <div className="space-y-2">
               <Label htmlFor="status">Status</Label>
               <Select
@@ -157,73 +155,77 @@ export const CampaignFilter: React.FC<CampaignFilterProps> = ({
               </Select>
             </div>
 
-            {/* Starting Date */}
-            <div className="space-y-2">
-              <Label htmlFor="startDate">Starting Date</Label>
-              <Input
-                id="startDate"
-                type="date"
-                value={
-                  localFilters.startDate
-                    ? localFilters.startDate.toISOString().split("T")[0]
-                    : ""
-                }
-                onChange={e =>
-                  setLocalFilters({
-                    ...localFilters,
-                    startDate: e.target.value ? new Date(e.target.value) : null,
-                  })
-                }
-                className="w-full"
-              />
-            </div>
+            {showDateFilters && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="startDate">Starting Date</Label>
+                  <Input
+                    id="startDate"
+                    type="date"
+                    value={
+                      localFilters.startDate
+                        ? localFilters.startDate.toISOString().split("T")[0]
+                        : ""
+                    }
+                    onChange={e =>
+                      setLocalFilters({
+                        ...localFilters,
+                        startDate: e.target.value
+                          ? new Date(e.target.value)
+                          : null,
+                      })
+                    }
+                    className="w-full"
+                  />
+                </div>
 
-            {/* Created From Date */}
-            <div className="space-y-2">
-              <Label htmlFor="createdFrom">Created From</Label>
-              <Input
-                id="createdFrom"
-                type="date"
-                value={
-                  localFilters.createdFrom
-                    ? localFilters.createdFrom.toISOString().split("T")[0]
-                    : ""
-                }
-                onChange={e =>
-                  setLocalFilters({
-                    ...localFilters,
-                    createdFrom: e.target.value
-                      ? new Date(e.target.value)
-                      : null,
-                  })
-                }
-                className="w-full"
-              />
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="createdFrom">Created From</Label>
+                  <Input
+                    id="createdFrom"
+                    type="date"
+                    value={
+                      localFilters.createdFrom
+                        ? localFilters.createdFrom.toISOString().split("T")[0]
+                        : ""
+                    }
+                    onChange={e =>
+                      setLocalFilters({
+                        ...localFilters,
+                        createdFrom: e.target.value
+                          ? new Date(e.target.value)
+                          : null,
+                      })
+                    }
+                    className="w-full"
+                  />
+                </div>
 
-            {/* Created To Date */}
-            <div className="space-y-2">
-              <Label htmlFor="createdTo">Created To</Label>
-              <Input
-                id="createdTo"
-                type="date"
-                value={
-                  localFilters.createdTo
-                    ? localFilters.createdTo.toISOString().split("T")[0]
-                    : ""
-                }
-                onChange={e =>
-                  setLocalFilters({
-                    ...localFilters,
-                    createdTo: e.target.value ? new Date(e.target.value) : null,
-                  })
-                }
-                className="w-full"
-              />
-            </div>
-          </div>
+                <div className="space-y-2">
+                  <Label htmlFor="createdTo">Created To</Label>
+                  <Input
+                    id="createdTo"
+                    type="date"
+                    value={
+                      localFilters.createdTo
+                        ? localFilters.createdTo.toISOString().split("T")[0]
+                        : ""
+                    }
+                    onChange={e =>
+                      setLocalFilters({
+                        ...localFilters,
+                        createdTo: e.target.value
+                          ? new Date(e.target.value)
+                          : null,
+                      })
+                    }
+                    className="w-full"
+                  />
+                </div>
+              </>
+            )}
+          </DialogBody>
 
-          {/* Action Buttons */}
           <DialogFooter>
             <Button variant="outline" onClick={handleClear}>
               Clear Filters

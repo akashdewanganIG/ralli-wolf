@@ -38,7 +38,6 @@ const METHOD_COPY: Record<
   },
 };
 
-/** Shared width for the action column, so every row ends the same way. */
 const ACTION_WIDTH = "w-24";
 
 function asApiError(error: unknown): ApiError | null {
@@ -47,7 +46,6 @@ function asApiError(error: unknown): ApiError | null {
     : null;
 }
 
-/** Turns a failure into copy that names the cause; never silently no-ops. */
 function reportFailure(error: unknown, fallbackTitle: string) {
   const apiError = asApiError(error);
   if (!apiError) {
@@ -58,8 +56,6 @@ function reportFailure(error: unknown, fallbackTitle: string) {
   }
   switch (apiError.code) {
     case "CONFLICT":
-      // Covers both "already enabled" and the two-method refusal; the server
-      // sends the specific sentence.
       toast.warning("Change not applied", { description: apiError.message });
       return;
     case "INVALID_OTP":
@@ -104,13 +100,6 @@ function reportFailure(error: unknown, fallbackTitle: string) {
   });
 }
 
-/**
- * One method: what it is, what it does, and what you can do about it.
- *
- * Flat, and deliberately without a state label. The button already says where
- * the method stands — "Turn off" only appears on something that is on — so a
- * badge beside it was the same fact twice, in the row's loudest element.
- */
 function MethodRow({
   status,
   actions,
@@ -147,7 +136,6 @@ export function AuthenticationMethods() {
   const [loading, setLoading] = useState(true);
   const [busyMethod, setBusyMethod] = useState<AuthMethodName | null>(null);
 
-  /** Which enrolment dialog is open, if any. */
   const [setupMethod, setSetupMethod] = useState<AuthMethodName | null>(null);
   const [enrolment, setEnrolment] = useState<TotpEnrolment | null>(null);
   const [resendIn, setResendIn] = useState(0);
@@ -184,7 +172,6 @@ export function AuthenticationMethods() {
   const atMinimum = !!summary && summary.activeCount <= summary.minimumRequired;
   const [passwordOpen, setPasswordOpen] = useState(false);
 
-  // ------------------------------------------------------------ actions --
   const closeSetup = () => {
     setSetupMethod(null);
     setEnrolment(null);
@@ -194,7 +181,6 @@ export function AuthenticationMethods() {
   const startTotp = async () => {
     setBusyMethod("totp");
     try {
-      // Only open the dialog once there is a QR to show in it.
       setEnrolment(await authService.startTotpSetup());
       setSetupMethod("totp");
     } catch (error) {
@@ -207,7 +193,6 @@ export function AuthenticationMethods() {
   const confirmTotp = async (code: string) => {
     setBusyMethod("totp");
     try {
-      // Only trust the server's word that the method is now active.
       setSummary(await authService.verifyTotpSetup(code));
       closeSetup();
       toast.success("Authenticator app enabled", {
@@ -256,7 +241,9 @@ export function AuthenticationMethods() {
   const setPassword = async (newPassword: string) => {
     setBusyMethod("password");
     try {
-      setSummary(await authService.setAuthPassword(newPassword));
+      const updated = await authService.setAuthPassword(newPassword);
+      const { sessionToken: _sessionToken, ...summary } = updated;
+      setSummary(summary);
       setPasswordOpen(false);
       toast.success("Password sign-in turned on", {
         description: "Your next sign-in will start with this password.",
@@ -269,9 +256,6 @@ export function AuthenticationMethods() {
   };
 
   const disable = async (method: AuthMethodName) => {
-    // The server refuses this too, but it is a rule the user can be told about
-    // before spending a round-trip on it. The banner that used to state it
-    // standing is gone: a warning that is always on screen stops being read.
     if (atMinimum) {
       toast.warning("Keep at least one way to sign in", {
         description: `${METHOD_COPY[method].title} is the only method left on your account. Set another one up first, then turn this one off.`,
@@ -287,7 +271,7 @@ export function AuthenticationMethods() {
       });
     } catch (error) {
       reportFailure(error, "Could not turn that method off");
-      // The server returns the authoritative state with its refusal.
+
       void load();
     } finally {
       setBusyMethod(null);
@@ -314,12 +298,6 @@ export function AuthenticationMethods() {
   const email = byMethod.get("email");
   const totp = byMethod.get("totp");
 
-  /**
-   * The one control every optional method shows, in whichever state it is.
-   *
-   * Fixed width, so "Set up" and "Turn off" are the same size and the column
-   * of actions has one straight left edge instead of ragging with the label.
-   */
   const methodAction = (
     status: AuthMethodStatus | undefined,
     onSetUp: () => void

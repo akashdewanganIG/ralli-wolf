@@ -7,29 +7,23 @@ import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { Skeleton, SkeletonRegion } from "@repo/ui/components/ui/skeleton";
 import { Tag } from "@repo/ui/components/ui/tag";
 
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   ErrorBanner,
   PageHeader,
   Panel,
   StatCard,
 } from "@/components/supply-chain/shared";
-import { useCapacityLoad } from "@/hooks/useFinance";
-import type { CapacityRow } from "@/lib/api/financeServices";
+import { useCapacityLoad } from "@/hooks/use-finance";
+import type { CapacityRow } from "@/lib/api/finance-services";
 
 const WINDOWS = [7, 14, 30] as const;
 
-/** A short day label — the header of the load grid has no room for more. */
 function dayLabel(iso: string) {
   const d = new Date(iso);
   return `${d.getDate()}/${d.getMonth() + 1}`;
 }
 
-/**
- * One work centre's load across the window. A cell is a day: the fuller it is,
- * the darker it reads, and anything past 100% is called out in the accent
- * colour, because that is the day someone has to move work off.
- */
 function LoadRow({ row }: { row: CapacityRow }) {
   return (
     <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3 last:border-b-0">
@@ -58,9 +52,7 @@ function LoadRow({ row }: { row: CapacityRow }) {
             style={
               day.overloaded || day.utilisationPercent === 0
                 ? undefined
-                : // Below 100%, the bar is only as tall as the day is full —
-                  // but a day with any work on it never reads as empty.
-                  {
+                : {
                     background: `linear-gradient(to top, var(--color-success) ${Math.max(day.utilisationPercent, 12)}%, var(--color-surface-secondary) ${Math.max(day.utilisationPercent, 12)}%)`,
                   }
             }

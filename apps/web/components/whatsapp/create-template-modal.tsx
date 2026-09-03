@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { Checkbox } from "@repo/ui/components/ui/checkbox";
 import { Input } from "@repo/ui/components/ui/input";
 import { Textarea } from "@repo/ui/components/ui/textarea";
 import { whatsappService } from "@/lib/api/services";
+import type { WhatsAppCreateTemplatePayload } from "@/lib/api/types";
 import { Button, SelectField } from "@repo/ui";
 import { toast } from "@/lib/toast";
 import {
@@ -21,7 +22,10 @@ import {
   MapPin,
   AlertCircle,
 } from "@repo/ui/icons";
-import { WhatsAppPreview } from "./whatsapp-preview";
+import {
+  WhatsAppPreview,
+  type TemplateComponent as PreviewTemplateComponent,
+} from "./whatsapp-preview";
 
 type HeaderFormat =
   | "NONE"
@@ -32,7 +36,7 @@ type HeaderFormat =
   | "LOCATION";
 type ButtonType = "QUICK_REPLY" | "URL" | "PHONE_NUMBER" | "COPY_CODE" | "OTP";
 
-type TemplateButton = {
+type TemplateButton = Record<string, unknown> & {
   type: ButtonType;
   text?: string;
   url?: string;
@@ -41,7 +45,7 @@ type TemplateButton = {
   example?: string[];
 };
 
-type TemplateComponent = {
+type ApiTemplateComponent = Record<string, unknown> & {
   type: "HEADER" | "BODY" | "FOOTER" | "BUTTONS";
   format?: string;
   text?: string;
@@ -66,6 +70,16 @@ type TemplateFormError = {
   details?: string[];
 };
 
+type JsonRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is JsonRecord {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
 const AUTH_TEMPLATE_DEFAULT_BODY =
   "{{1}} is your verification code. Pls do not share this with anyone.";
 const AUTH_TEMPLATE_SAMPLE_VALUE = "123456";
@@ -77,7 +91,6 @@ const WHATSAPP_TEXT_ONLY_MVP =
 const ALLOW_UTILITY_TEMPLATES =
   process.env.NEXT_PUBLIC_ALLOW_UTILITY_TEMPLATES === "true";
 
-// Comprehensive language list with codes
 const LANGUAGES = [
   { code: "af", name: "Afrikaans" },
   { code: "sq", name: "Albanian" },
@@ -164,7 +177,6 @@ export function CreateTemplateModal({
   >("MARKETING");
   const [ttl, setTtl] = useState<number | undefined>(undefined);
 
-  // Handle category change
   const handleCategoryChange = (
     newCategory: "MARKETING" | "UTILITY" | "AUTHENTICATION"
   ) => {
@@ -176,7 +188,6 @@ export function CreateTemplateModal({
     }
     setCategory(newCategory);
 
-    // Auto-configure for AUTHENTICATION
     if (newCategory === "AUTHENTICATION") {
       handleBodyTextChange(AUTH_TEMPLATE_DEFAULT_BODY);
       setHeaderFormat("NONE");
@@ -194,16 +205,10 @@ export function CreateTemplateModal({
     setButtons([]);
   };
 
-  useEffect(() => {
-    if (!ALLOW_AUTH_TEMPLATES && category === "AUTHENTICATION") {
-      setCategory("MARKETING");
-    }
-  }, [category]);
   const [loading, setLoading] = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [formError, setFormError] = useState<TemplateFormError | null>(null);
 
-  // Header state
   const [headerFormat, setHeaderFormat] = useState<HeaderFormat>("NONE");
   const [headerText, setHeaderText] = useState("");
   const [headerMediaHandle, setHeaderMediaHandle] = useState("");
@@ -211,16 +216,13 @@ export function CreateTemplateModal({
   const [headerSampleText, setHeaderSampleText] = useState("");
   const [headerVariableCount, setHeaderVariableCount] = useState(0);
 
-  // Body state
   const [bodyText, setBodyText] = useState("");
   const [bodySamples, setBodySamples] = useState<string[]>([]);
   const [bodyVariableCount, setBodyVariableCount] = useState(0);
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Footer state
   const [footerText, setFooterText] = useState("");
 
-  // Buttons state
   const [buttons, setButtons] = useState<TemplateButton[]>([]);
   const [codeExpirationMinutes, setCodeExpirationMinutes] = useState<
     number | undefined
@@ -229,13 +231,11 @@ export function CreateTemplateModal({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Count variables in text
   const countVariables = (text: string): number => {
     const matches = text.match(/\{\{\d+\}\}/g);
     return matches ? matches.length : 0;
   };
 
-  // Update variable counts when text changes
   const handleHeaderTextChange = (text: string) => {
     setHeaderText(text);
     const count = countVariables(text);
@@ -249,14 +249,13 @@ export function CreateTemplateModal({
     setBodyText(text);
     const count = countVariables(text);
     setBodyVariableCount(count);
-    // Adjust samples array
+
     const newSamples = [...bodySamples];
     while (newSamples.length < count) newSamples.push("");
     while (newSamples.length > count) newSamples.pop();
     setBodySamples(newSamples);
   };
 
-  // Insert formatting at cursor
   const insertFormatting = (format: string) => {
     const textarea = bodyTextareaRef.current;
     if (!textarea) return;
@@ -297,27 +296,23 @@ export function CreateTemplateModal({
       bodyText.substring(0, start) + newText + bodyText.substring(end);
     handleBodyTextChange(updatedText);
 
-    // Set cursor position after update
     setTimeout(() => {
       textarea.focus();
       textarea.setSelectionRange(start + cursorOffset, start + cursorOffset);
     }, 0);
   };
 
-  // Add variable to header
   const addHeaderVariable = () => {
     const varNum = headerVariableCount + 1;
     handleHeaderTextChange(headerText + `{{${varNum}}}`);
   };
 
-  // Handle media upload for sample (required for template approval)
   const handleMediaUpload = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Validate file type based on header format
     const validTypes: Record<string, string[]> = {
       IMAGE: ["image/jpeg", "image/png", "image/webp"],
       VIDEO: ["video/mp4", "video/3gpp"],
@@ -355,8 +350,10 @@ export function CreateTemplateModal({
           setHeaderMediaHandle(uploadResult.headerHandle);
           setHeaderMediaFileName(file.name);
           toast.success("Sample media uploaded for approval");
-        } catch (error: any) {
-          toast.error("Failed to upload: " + error.message);
+        } catch (error: unknown) {
+          toast.error(
+            "Failed to upload: " + errorMessage(error, "Unknown error")
+          );
         } finally {
           setUploadingMedia(false);
         }
@@ -366,15 +363,13 @@ export function CreateTemplateModal({
         setUploadingMedia(false);
       };
       reader.readAsDataURL(file);
-    } catch (error: any) {
-      toast.error("Failed to upload: " + error.message);
+    } catch (error: unknown) {
+      toast.error("Failed to upload: " + errorMessage(error, "Unknown error"));
       setUploadingMedia(false);
     }
   };
 
-  // Button management
   const addButton = (type: ButtonType) => {
-    // Check limits
     const phoneCount = buttons.filter(b => b.type === "PHONE_NUMBER").length;
     const urlCount = buttons.filter(b => b.type === "URL").length;
 
@@ -409,10 +404,9 @@ export function CreateTemplateModal({
     setButtons(buttons.filter((_, i) => i !== index));
   };
 
-  // Build components for API
-  const buildComponents = (): TemplateComponent[] => {
+  const buildComponents = (): ApiTemplateComponent[] => {
     if (category === "AUTHENTICATION") {
-      const components: TemplateComponent[] = [
+      const components: ApiTemplateComponent[] = [
         {
           type: "BODY",
           add_security_recommendation: securityRecommendation || null,
@@ -434,11 +428,10 @@ export function CreateTemplateModal({
       return components;
     }
 
-    const components: TemplateComponent[] = [];
+    const components: ApiTemplateComponent[] = [];
 
-    // Header
     if (headerFormat !== "NONE") {
-      const headerComponent: TemplateComponent = {
+      const headerComponent: ApiTemplateComponent = {
         type: "HEADER",
         format: headerFormat,
       };
@@ -454,17 +447,15 @@ export function CreateTemplateModal({
         ["IMAGE", "VIDEO", "DOCUMENT"].includes(headerFormat) &&
         headerMediaHandle
       ) {
-        // For media headers, include the uploaded sample's header_handle
         headerComponent.example = {
           header_handle: [headerMediaHandle],
         };
       }
-      // LOCATION doesn't need additional fields
 
       components.push(headerComponent);
     }
 
-    const bodyComponent: TemplateComponent = {
+    const bodyComponent: ApiTemplateComponent = {
       type: "BODY",
       text: bodyText,
     };
@@ -484,7 +475,6 @@ export function CreateTemplateModal({
     }
     components.push(bodyComponent);
 
-    // Footer
     if (footerText.trim()) {
       components.push({
         type: "FOOTER",
@@ -492,18 +482,17 @@ export function CreateTemplateModal({
       });
     }
 
-    // Buttons
     if (buttons.length > 0) {
       components.push({
         type: "BUTTONS",
         buttons: buttons.map(btn => {
-          const button: any = {
+          const button: TemplateButton = {
             type: btn.type,
             text: btn.text,
           };
           if (btn.type === "URL") {
             button.url = btn.url;
-            // Add example if URL has variables
+
             if (btn.url?.includes("{{")) {
               button.example = [btn.url.replace(/\{\{\d+\}\}/g, "example")];
             }
@@ -525,9 +514,8 @@ export function CreateTemplateModal({
     return components;
   };
 
-  // Build preview components (simplified for preview)
-  const buildPreviewComponents = () => {
-    const components: any[] = [];
+  const buildPreviewComponents = (): PreviewTemplateComponent[] => {
+    const components: PreviewTemplateComponent[] = [];
 
     if (category === "AUTHENTICATION") {
       components.push({
@@ -536,7 +524,7 @@ export function CreateTemplateModal({
       });
       components.push({
         type: "BUTTONS",
-        buttons: [{ type: "OTP", text: "Copy code" }],
+        buttons: [{ type: "COPY_CODE", text: "Copy code" }],
       });
       return components;
     }
@@ -560,7 +548,12 @@ export function CreateTemplateModal({
     if (buttons.length > 0) {
       components.push({
         type: "BUTTONS",
-        buttons: buttons.map(b => ({ type: b.type, text: b.text || "Button" })),
+        buttons: buttons.map(button => ({
+          type: button.type === "OTP" ? "COPY_CODE" : button.type,
+          text: button.text || "Button",
+          url: button.url,
+          phone_number: button.phone_number,
+        })),
       });
     }
 
@@ -585,7 +578,6 @@ export function CreateTemplateModal({
       return;
     }
 
-    // Validate TTL
     if (ttl !== undefined && (ttl < 30 || ttl > 900)) {
       const errorState = { title: "TTL must be between 30 and 900 seconds" };
       setFormError(errorState);
@@ -608,7 +600,6 @@ export function CreateTemplateModal({
       }
     }
 
-    // Check if media header requires sample upload
     if (
       ["IMAGE", "VIDEO", "DOCUMENT"].includes(headerFormat) &&
       !headerMediaHandle
@@ -623,7 +614,7 @@ export function CreateTemplateModal({
 
     setLoading(true);
     try {
-      const payload: any = {
+      const payload: WhatsAppCreateTemplatePayload = {
         accountId,
         template_name: templateName,
         language,
@@ -643,7 +634,7 @@ export function CreateTemplateModal({
       toast.success("Template created successfully");
       setFormError(null);
       onSuccess();
-    } catch (error: any) {
+    } catch (error: unknown) {
       const structuredError = buildTemplateFormError(error);
       setFormError(structuredError);
       toast.error(structuredError.title);
@@ -652,7 +643,6 @@ export function CreateTemplateModal({
     }
   };
 
-  // Get button counts for display
   const phoneButtonCount = buttons.filter(
     b => b.type === "PHONE_NUMBER"
   ).length;
@@ -672,14 +662,12 @@ export function CreateTemplateModal({
     <div
       className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-overlay p-4 backdrop-blur-[1px]"
       onClick={e => {
-        // Prevent closing when clicking on the overlay
         e.stopPropagation();
       }}
     >
       <div
         className="flex max-h-[calc(100svh-2rem)] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-xl shadow-slate-950/10"
         onClick={e => {
-          // Prevent clicks inside the modal from propagating to overlay
           e.stopPropagation();
         }}
       >
@@ -695,515 +683,521 @@ export function CreateTemplateModal({
           </button>
         </div>
 
-        <div className="flex flex-1 overflow-hidden">
-          {/* Form Section */}
+        <div className="flex min-h-0 flex-1 overflow-hidden">
           <form
             onSubmit={handleCreateTemplate}
-            className="flex-1 p-4 space-y-4 overflow-y-auto"
+            className="flex min-h-0 flex-1 flex-col overflow-hidden"
           >
-            {formError && (
-              <div className="border border-error-border bg-error-surface text-error-foreground rounded p-4 text-sm space-y-2">
-                <div className="flex items-center gap-2 font-medium">
-                  <AlertCircle className="h-4 w-4" />
-                  <span>{formError.title}</span>
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 sm:p-5">
+              {formError && (
+                <div className="border border-error-border bg-error-surface text-error-foreground rounded p-4 text-sm space-y-2">
+                  <div className="flex items-center gap-2 font-medium">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>{formError.title}</span>
+                  </div>
+                  {formError.details && formError.details.length > 0 && (
+                    <ul className="list-disc pl-5 space-y-1">
+                      {formError.details.map(detail => (
+                        <li key={detail}>{detail}</li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
-                {formError.details && formError.details.length > 0 && (
-                  <ul className="list-disc pl-5 space-y-1">
-                    {formError.details.map(detail => (
-                      <li key={detail}>{detail}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
+              )}
 
-            {/* Basic Info */}
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Template Name *
-                </label>
-                <Input
-                  type="text"
-                  value={templateName}
-                  onChange={e =>
-                    setTemplateName(
-                      e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_")
-                    )
-                  }
-                  placeholder="e.g., welcome_message"
-                  required
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Use lowercase letters, numbers, and underscores only
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-2">
-                    Category *
-                  </label>
-                  <SelectField
-                    value={category}
-                    onChange={e => handleCategoryChange(e.target.value as any)}
-                  >
-                    <option value="MARKETING">Marketing</option>
-                    {ALLOW_UTILITY_TEMPLATES && (
-                      <option value="UTILITY">Utility</option>
-                    )}
-                    {ALLOW_AUTH_TEMPLATES && (
-                      <option value="AUTHENTICATION">Authentication</option>
-                    )}
-                  </SelectField>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Language *
-                  </label>
-                  <SelectField
-                    value={language}
-                    onChange={e => setLanguage(e.target.value)}
-                  >
-                    {LANGUAGES.map(lang => (
-                      <option key={lang.code} value={lang.code}>
-                        {lang.name}
-                      </option>
-                    ))}
-                  </SelectField>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    TTL (seconds)
+                    Template Name *
                   </label>
                   <Input
-                    type="number"
-                    value={ttl || ""}
+                    type="text"
+                    value={templateName}
                     onChange={e =>
-                      setTtl(
-                        e.target.value ? Number(e.target.value) : undefined
+                      setTemplateName(
+                        e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_")
                       )
                     }
-                    placeholder="30-900"
-                    min={30}
-                    max={900}
+                    placeholder="e.g., welcome_message"
+                    required
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    How long Meta retries sending if undelivered (Default: 30
-                    Days)
+                    Use lowercase letters, numbers, and underscores only
                   </p>
                 </div>
-              </div>
-            </div>
 
-            {/* Header */}
-            {category !== "AUTHENTICATION" && (
-              <div className="border rounded p-4 space-y-3">
-                <div className="flex justify-between items-center">
-                  <h3 className="font-medium">Header</h3>
-                  <SelectField
-                    className="w-full sm:w-40"
-                    value={headerFormat}
-                    onChange={e => {
-                      const value = e.target.value as HeaderFormat;
-                      // MVP flag check: only allow text headers when flag is true
-                      if (
-                        WHATSAPP_TEXT_ONLY_MVP &&
-                        value !== "NONE" &&
-                        value !== "TEXT"
-                      ) {
-                        toast.error(
-                          "Only text headers are supported in MVP mode. Media and location headers will be available when MVP mode is disabled."
-                        );
-                        return;
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Category *
+                    </label>
+                    <SelectField
+                      value={category}
+                      onChange={event => {
+                        const value = event.target.value;
+                        if (
+                          value === "MARKETING" ||
+                          value === "UTILITY" ||
+                          value === "AUTHENTICATION"
+                        ) {
+                          handleCategoryChange(value);
+                        }
+                      }}
+                    >
+                      <option value="MARKETING">Marketing</option>
+                      {ALLOW_UTILITY_TEMPLATES && (
+                        <option value="UTILITY">Utility</option>
+                      )}
+                      {ALLOW_AUTH_TEMPLATES && (
+                        <option value="AUTHENTICATION">Authentication</option>
+                      )}
+                    </SelectField>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Language *
+                    </label>
+                    <SelectField
+                      value={language}
+                      onChange={e => setLanguage(e.target.value)}
+                    >
+                      {LANGUAGES.map(lang => (
+                        <option key={lang.code} value={lang.code}>
+                          {lang.name}
+                        </option>
+                      ))}
+                    </SelectField>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      TTL (seconds)
+                    </label>
+                    <Input
+                      type="number"
+                      value={ttl || ""}
+                      onChange={e =>
+                        setTtl(
+                          e.target.value ? Number(e.target.value) : undefined
+                        )
                       }
-                      setHeaderFormat(value);
-                      setHeaderText("");
-                      setHeaderMediaHandle("");
-                      setHeaderMediaFileName("");
-                      setHeaderSampleText("");
-                      setHeaderVariableCount(0);
-                    }}
-                  >
-                    <option value="NONE">None</option>
-                    <option value="TEXT">Text</option>
-                    {!WHATSAPP_TEXT_ONLY_MVP && (
-                      <>
-                        <option value="IMAGE">Image</option>
-                        <option value="VIDEO">Video</option>
-                        <option value="DOCUMENT">Document</option>
-                        <option value="LOCATION">Location</option>
-                      </>
-                    )}
-                  </SelectField>
+                      placeholder="30-900"
+                      min={30}
+                      max={900}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      How long Meta retries sending if undelivered (Default: 30
+                      Days)
+                    </p>
+                  </div>
                 </div>
+              </div>
 
-                {headerFormat === "TEXT" && (
-                  <div className="space-y-2">
-                    <div className="flex gap-2">
-                      <Input
-                        type="text"
-                        className="flex-1"
-                        value={headerText}
-                        onChange={e => handleHeaderTextChange(e.target.value)}
-                        placeholder="Header text (max 60 characters)"
-                        maxLength={60}
+              {category !== "AUTHENTICATION" && (
+                <div className="border rounded p-4 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h3 className="font-medium">Header</h3>
+                    <SelectField
+                      className="w-full sm:w-40"
+                      value={headerFormat}
+                      onChange={e => {
+                        const value = e.target.value as HeaderFormat;
+
+                        if (
+                          WHATSAPP_TEXT_ONLY_MVP &&
+                          value !== "NONE" &&
+                          value !== "TEXT"
+                        ) {
+                          toast.error(
+                            "Only text headers are supported in MVP mode. Media and location headers will be available when MVP mode is disabled."
+                          );
+                          return;
+                        }
+                        setHeaderFormat(value);
+                        setHeaderText("");
+                        setHeaderMediaHandle("");
+                        setHeaderMediaFileName("");
+                        setHeaderSampleText("");
+                        setHeaderVariableCount(0);
+                      }}
+                    >
+                      <option value="NONE">None</option>
+                      <option value="TEXT">Text</option>
+                      {!WHATSAPP_TEXT_ONLY_MVP && (
+                        <>
+                          <option value="IMAGE">Image</option>
+                          <option value="VIDEO">Video</option>
+                          <option value="DOCUMENT">Document</option>
+                          <option value="LOCATION">Location</option>
+                        </>
+                      )}
+                    </SelectField>
+                  </div>
+
+                  {headerFormat === "TEXT" && (
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <Input
+                          type="text"
+                          className="flex-1"
+                          value={headerText}
+                          onChange={e => handleHeaderTextChange(e.target.value)}
+                          placeholder="Header text (max 60 characters)"
+                          maxLength={60}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={addHeaderVariable}
+                        >
+                          <Plus className="h-4 w-4 mr-1" />
+                          Variable
+                        </Button>
+                      </div>
+                      {headerVariableCount > 0 && (
+                        <Input
+                          type="text"
+                          className="bg-surface-elevated"
+                          value={headerSampleText}
+                          onChange={e => setHeaderSampleText(e.target.value)}
+                          placeholder="Sample value for header variable"
+                        />
+                      )}
+                    </div>
+                  )}
+
+                  {["IMAGE", "VIDEO", "DOCUMENT"].includes(headerFormat) && (
+                    <div className="space-y-3">
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        className="hidden"
+                        accept={
+                          headerFormat === "IMAGE"
+                            ? "image/jpeg,image/png,image/webp"
+                            : headerFormat === "VIDEO"
+                              ? "video/mp4,video/3gpp"
+                              : "application/pdf,.doc,.docx"
+                        }
+                        onChange={handleMediaUpload}
                       />
+
+                      <div
+                        className={`p-3 rounded ${
+                          headerFormat === "IMAGE"
+                            ? "bg-info-surface"
+                            : headerFormat === "VIDEO"
+                              ? "bg-surface-secondary"
+                              : "bg-warning-surface"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          {headerFormat === "IMAGE" && (
+                            <Image className="h-5 w-5 text-info" />
+                          )}
+                          {headerFormat === "VIDEO" && (
+                            <Video className="h-5 w-5 text-muted-foreground" />
+                          )}
+                          {headerFormat === "DOCUMENT" && (
+                            <FileText className="h-5 w-5 text-warning" />
+                          )}
+                          <span className="text-sm font-medium">
+                            {headerFormat.charAt(0) +
+                              headerFormat.slice(1).toLowerCase()}{" "}
+                            Header
+                          </span>
+                        </div>
+                        <p className="text-xs text-text-secondary mb-3">
+                          Upload a sample {headerFormat.toLowerCase()} for Meta
+                          to review during approval. The actual{" "}
+                          {headerFormat.toLowerCase()} will be provided when
+                          sending messages.
+                        </p>
+
+                        {headerMediaHandle ? (
+                          <div className="flex items-center justify-between bg-surface p-2 rounded border">
+                            <span className="text-sm text-success-foreground truncate">
+                              {headerMediaFileName}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => fileInputRef.current?.click()}
+                              disabled={uploadingMedia}
+                            >
+                              Change
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={uploadingMedia}
+                            className="w-full"
+                          >
+                            {uploadingMedia
+                              ? "Uploading..."
+                              : `Upload Sample ${headerFormat.charAt(0) + headerFormat.slice(1).toLowerCase()}`}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {headerFormat === "LOCATION" && (
+                    <div className="flex items-center gap-2 text-sm text-text-secondary bg-success-surface p-3 rounded">
+                      <MapPin className="h-5 w-5 text-success" />
+                      <span>
+                        Location header - coordinates will be provided when
+                        sending messages
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {category === "AUTHENTICATION" ? (
+                <div className="border rounded p-4 space-y-3">
+                  <h3 className="font-medium">Authentication Settings</h3>
+                  <p className="text-sm text-text-secondary">
+                    WhatsApp automatically formats the OTP message body.
+                    Configure additional requirements below.
+                  </p>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Code Expiration (minutes)
+                    </label>
+                    <Input
+                      type="number"
+                      placeholder="Optional"
+                      min={1}
+                      max={90}
+                      value={codeExpirationMinutes ?? ""}
+                      onChange={e =>
+                        setCodeExpirationMinutes(
+                          e.target.value ? Number(e.target.value) : undefined
+                        )
+                      }
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Optional expiry hint shown to customers.
+                    </p>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={securityRecommendation}
+                      onCheckedChange={setSecurityRecommendation}
+                    />
+                    Add security recommendation
+                  </label>
+                </div>
+              ) : (
+                <div className="border rounded p-4 space-y-3">
+                  <h3 className="font-medium">Body *</h3>
+                  <div className="flex gap-1 mb-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => insertFormatting("bold")}
+                      title="Bold"
+                    >
+                      <Bold className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => insertFormatting("italic")}
+                      title="Italic"
+                    >
+                      <Italic className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => insertFormatting("strike")}
+                      title="Strikethrough"
+                    >
+                      <Strikethrough className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => insertFormatting("code")}
+                      title="Code"
+                    >
+                      <Code className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => insertFormatting("variable")}
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Variable
+                    </Button>
+                  </div>
+                  <Textarea
+                    ref={bodyTextareaRef}
+                    rows={4}
+                    value={bodyText}
+                    onChange={e => handleBodyTextChange(e.target.value)}
+                    placeholder="Enter message body. Use *bold*, _italic_, ~strike~, ```code```"
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Use {"{{1}}"}, {"{{2}}"} for variables. Format: *bold*,
+                    _italic_, ~strike~, ```code```
+                  </p>
+                  {bodyVariableCount > 0 && (
+                    <div className="space-y-2 bg-surface-elevated p-3 rounded">
+                      <p className="text-xs font-medium text-text-secondary">
+                        Sample values for variables:
+                      </p>
+                      {bodySamples.map((sample, idx) => (
+                        <Input
+                          key={idx}
+                          type="text"
+                          value={sample}
+                          onChange={e => {
+                            const updated = [...bodySamples];
+                            updated[idx] = e.target.value;
+                            setBodySamples(updated);
+                          }}
+                          placeholder={`Sample for {{${idx + 1}}}`}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {category !== "AUTHENTICATION" && (
+                <div className="border rounded p-4 space-y-3">
+                  <h3 className="font-medium">Footer</h3>
+                  <Input
+                    type="text"
+                    value={footerText}
+                    onChange={e => setFooterText(e.target.value)}
+                    placeholder="Footer text (optional, max 60 characters)"
+                    maxLength={60}
+                  />
+                </div>
+              )}
+
+              {category === "AUTHENTICATION" ? (
+                <div className="border rounded p-4 space-y-3">
+                  <h3 className="font-medium">Buttons</h3>
+                  <p className="text-sm text-text-secondary">
+                    The Copy Code button is included automatically for
+                    authentication templates.
+                  </p>
+                </div>
+              ) : (
+                <div className="border rounded p-4 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h3 className="font-medium">Buttons</h3>
+                    <div className="flex gap-2">
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={addHeaderVariable}
+                        onClick={() => addButton("QUICK_REPLY")}
                       >
                         <Plus className="h-4 w-4 mr-1" />
-                        Variable
+                        Quick Reply
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => addButton("PHONE_NUMBER")}
+                        disabled={phoneButtonCount >= 1}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Phone {phoneButtonCount >= 1 && "(max 1)"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => addButton("URL")}
+                        disabled={urlButtonCount >= 2}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        URL {urlButtonCount >= 2 && "(max 2)"}
                       </Button>
                     </div>
-                    {headerVariableCount > 0 && (
+                  </div>
+
+                  {buttons.length === 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      No buttons added. Click above to add buttons.
+                    </p>
+                  )}
+
+                  {buttons.map((button, index) => (
+                    <div key={index} className="border rounded p-3 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium capitalize">
+                          {button.type.replace("_", " ").toLowerCase()}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeButton(index)}
+                          className="text-destructive hover:text-error-foreground"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+
                       <Input
                         type="text"
-                        className="bg-surface-elevated"
-                        value={headerSampleText}
-                        onChange={e => setHeaderSampleText(e.target.value)}
-                        placeholder="Sample value for header variable"
+                        placeholder="Button text"
+                        value={button.text || ""}
+                        onChange={e =>
+                          updateButton(index, { text: e.target.value })
+                        }
                       />
-                    )}
-                  </div>
-                )}
 
-                {["IMAGE", "VIDEO", "DOCUMENT"].includes(headerFormat) && (
-                  <div className="space-y-3">
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      className="hidden"
-                      accept={
-                        headerFormat === "IMAGE"
-                          ? "image/jpeg,image/png,image/webp"
-                          : headerFormat === "VIDEO"
-                            ? "video/mp4,video/3gpp"
-                            : "application/pdf,.doc,.docx"
-                      }
-                      onChange={handleMediaUpload}
-                    />
+                      {button.type === "URL" && (
+                        <Input
+                          type="text"
+                          placeholder="https://example.com or https://example.com/{{1}}"
+                          value={button.url || ""}
+                          onChange={e =>
+                            updateButton(index, { url: e.target.value })
+                          }
+                        />
+                      )}
 
-                    <div
-                      className={`p-3 rounded ${
-                        headerFormat === "IMAGE"
-                          ? "bg-info-surface"
-                          : headerFormat === "VIDEO"
-                            ? "bg-surface-secondary"
-                            : "bg-warning-surface"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        {headerFormat === "IMAGE" && (
-                          <Image className="h-5 w-5 text-info" />
-                        )}
-                        {headerFormat === "VIDEO" && (
-                          <Video className="h-5 w-5 text-muted-foreground" />
-                        )}
-                        {headerFormat === "DOCUMENT" && (
-                          <FileText className="h-5 w-5 text-warning" />
-                        )}
-                        <span className="text-sm font-medium">
-                          {headerFormat.charAt(0) +
-                            headerFormat.slice(1).toLowerCase()}{" "}
-                          Header
-                        </span>
-                      </div>
-                      <p className="text-xs text-text-secondary mb-3">
-                        Upload a sample {headerFormat.toLowerCase()} for Meta to
-                        review during approval. The actual{" "}
-                        {headerFormat.toLowerCase()} will be provided when
-                        sending messages.
-                      </p>
-
-                      {headerMediaHandle ? (
-                        <div className="flex items-center justify-between bg-surface p-2 rounded border">
-                          <span className="text-sm text-success-foreground truncate">
-                            {headerMediaFileName}
-                          </span>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={uploadingMedia}
-                          >
-                            Change
-                          </Button>
-                        </div>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => fileInputRef.current?.click()}
-                          disabled={uploadingMedia}
-                          className="w-full"
-                        >
-                          {uploadingMedia
-                            ? "Uploading..."
-                            : `Upload Sample ${headerFormat.charAt(0) + headerFormat.slice(1).toLowerCase()}`}
-                        </Button>
+                      {button.type === "PHONE_NUMBER" && (
+                        <Input
+                          type="text"
+                          placeholder="+1234567890 (with country code)"
+                          value={button.phone_number || ""}
+                          onChange={e =>
+                            updateButton(index, {
+                              phone_number: e.target.value,
+                            })
+                          }
+                        />
                       )}
                     </div>
-                  </div>
-                )}
-
-                {headerFormat === "LOCATION" && (
-                  <div className="flex items-center gap-2 text-sm text-text-secondary bg-success-surface p-3 rounded">
-                    <MapPin className="h-5 w-5 text-success" />
-                    <span>
-                      Location header - coordinates will be provided when
-                      sending messages
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Body / Authentication settings */}
-            {category === "AUTHENTICATION" ? (
-              <div className="border rounded p-4 space-y-3">
-                <h3 className="font-medium">Authentication Settings</h3>
-                <p className="text-sm text-text-secondary">
-                  WhatsApp automatically formats the OTP message body. Configure
-                  additional requirements below.
-                </p>
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Code Expiration (minutes)
-                  </label>
-                  <Input
-                    type="number"
-                    placeholder="Optional"
-                    min={1}
-                    max={90}
-                    value={codeExpirationMinutes ?? ""}
-                    onChange={e =>
-                      setCodeExpirationMinutes(
-                        e.target.value ? Number(e.target.value) : undefined
-                      )
-                    }
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Optional expiry hint shown to customers.
-                  </p>
+                  ))}
                 </div>
-                <label className="flex items-center gap-2 text-sm">
-                  <Checkbox
-                    checked={securityRecommendation}
-                    onCheckedChange={setSecurityRecommendation}
-                  />
-                  Add security recommendation
-                </label>
-              </div>
-            ) : (
-              <div className="border rounded p-4 space-y-3">
-                <h3 className="font-medium">Body *</h3>
-                <div className="flex gap-1 mb-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => insertFormatting("bold")}
-                    title="Bold"
-                  >
-                    <Bold className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => insertFormatting("italic")}
-                    title="Italic"
-                  >
-                    <Italic className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => insertFormatting("strike")}
-                    title="Strikethrough"
-                  >
-                    <Strikethrough className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => insertFormatting("code")}
-                    title="Code"
-                  >
-                    <Code className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => insertFormatting("variable")}
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Variable
-                  </Button>
-                </div>
-                <Textarea
-                  ref={bodyTextareaRef}
-                  rows={4}
-                  value={bodyText}
-                  onChange={e => handleBodyTextChange(e.target.value)}
-                  placeholder="Enter message body. Use *bold*, _italic_, ~strike~, ```code```"
-                  required
-                />
-                <p className="text-xs text-muted-foreground">
-                  Use {"{{1}}"}, {"{{2}}"} for variables. Format: *bold*,
-                  _italic_, ~strike~, ```code```
-                </p>
-                {bodyVariableCount > 0 && (
-                  <div className="space-y-2 bg-surface-elevated p-3 rounded">
-                    <p className="text-xs font-medium text-text-secondary">
-                      Sample values for variables:
-                    </p>
-                    {bodySamples.map((sample, idx) => (
-                      <Input
-                        key={idx}
-                        type="text"
-                        value={sample}
-                        onChange={e => {
-                          const updated = [...bodySamples];
-                          updated[idx] = e.target.value;
-                          setBodySamples(updated);
-                        }}
-                        placeholder={`Sample for {{${idx + 1}}}`}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+              )}
+            </div>
 
-            {/* Footer */}
-            {category !== "AUTHENTICATION" && (
-              <div className="border rounded p-4 space-y-3">
-                <h3 className="font-medium">Footer</h3>
-                <Input
-                  type="text"
-                  value={footerText}
-                  onChange={e => setFooterText(e.target.value)}
-                  placeholder="Footer text (optional, max 60 characters)"
-                  maxLength={60}
-                />
-              </div>
-            )}
-
-            {/* Buttons */}
-            {category === "AUTHENTICATION" ? (
-              <div className="border rounded p-4 space-y-3">
-                <h3 className="font-medium">Buttons</h3>
-                <p className="text-sm text-text-secondary">
-                  The Copy Code button is included automatically for
-                  authentication templates.
-                </p>
-              </div>
-            ) : (
-              <div className="border rounded p-4 space-y-3">
-                <div className="flex justify-between items-center">
-                  <h3 className="font-medium">Buttons</h3>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => addButton("QUICK_REPLY")}
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      Quick Reply
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => addButton("PHONE_NUMBER")}
-                      disabled={phoneButtonCount >= 1}
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      Phone {phoneButtonCount >= 1 && "(max 1)"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => addButton("URL")}
-                      disabled={urlButtonCount >= 2}
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      URL {urlButtonCount >= 2 && "(max 2)"}
-                    </Button>
-                  </div>
-                </div>
-
-                {buttons.length === 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    No buttons added. Click above to add buttons.
-                  </p>
-                )}
-
-                {buttons.map((button, index) => (
-                  <div key={index} className="border rounded p-3 space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium capitalize">
-                        {button.type.replace("_", " ").toLowerCase()}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => removeButton(index)}
-                        className="text-destructive hover:text-error-foreground"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-
-                    <Input
-                      type="text"
-                      placeholder="Button text"
-                      value={button.text || ""}
-                      onChange={e =>
-                        updateButton(index, { text: e.target.value })
-                      }
-                    />
-
-                    {button.type === "URL" && (
-                      <Input
-                        type="text"
-                        placeholder="https://example.com or https://example.com/{{1}}"
-                        value={button.url || ""}
-                        onChange={e =>
-                          updateButton(index, { url: e.target.value })
-                        }
-                      />
-                    )}
-
-                    {button.type === "PHONE_NUMBER" && (
-                      <Input
-                        type="text"
-                        placeholder="+1234567890 (with country code)"
-                        value={button.phone_number || ""}
-                        onChange={e =>
-                          updateButton(index, { phone_number: e.target.value })
-                        }
-                      />
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Actions */}
-            <div className="flex justify-end gap-3 pt-4 border-t">
+            <div className="flex shrink-0 justify-end gap-2 border-t border-border bg-surface px-4 py-3 sm:px-5">
               <Button type="button" variant="outline" onClick={handleClose}>
                 Cancel
               </Button>
@@ -1213,7 +1207,6 @@ export function CreateTemplateModal({
             </div>
           </form>
 
-          {/* Preview Section */}
           <div className="w-80 border-l bg-surface-elevated p-4 overflow-y-auto hidden lg:block">
             <WhatsAppPreview
               components={buildPreviewComponents()}
@@ -1226,23 +1219,25 @@ export function CreateTemplateModal({
   );
 }
 
-function buildTemplateFormError(error: any): TemplateFormError {
+function buildTemplateFormError(error: unknown): TemplateFormError {
+  const errorRecord = isRecord(error) ? error : {};
   const defaultTitle =
-    typeof error?.message === "string" && error.message.trim().length
-      ? error.message.trim()
+    typeof errorRecord.message === "string" && errorRecord.message.trim().length
+      ? errorRecord.message.trim()
       : "Failed to create template";
 
   const details = new Set<string>();
-  if (error?.details && Array.isArray(error.details)) {
-    error.details.forEach((detail: string) => {
-      if (detail) details.add(detail);
+  if (Array.isArray(errorRecord.details)) {
+    errorRecord.details.forEach(detail => {
+      if (typeof detail === "string" && detail) details.add(detail);
     });
   }
 
-  const message = typeof error?.message === "string" ? error.message : "";
+  const message =
+    typeof errorRecord.message === "string" ? errorRecord.message : "";
   extractMsg91ErrorDetails(message).forEach(detail => details.add(detail));
 
-  if (!details.size && error?.status === 400) {
+  if (!details.size && errorRecord.status === 400) {
     details.add(
       "Double-check template fields for Meta/MSG91 validation requirements and try again."
     );
@@ -1278,7 +1273,7 @@ function extractMsg91ErrorDetails(rawMessage: string): string[] {
   return Array.from(details);
 }
 
-function parseTrailingJson(raw: string): any | null {
+function parseTrailingJson(raw: string): unknown | null {
   const match = raw.match(/\{[\s\S]+\}\s*$/);
   if (!match) return null;
   try {
@@ -1288,13 +1283,14 @@ function parseTrailingJson(raw: string): any | null {
   }
 }
 
-function normalizeErrorPayload(payload: any): string[] {
-  if (!payload) return [];
+function normalizeErrorPayload(payload: unknown): string[] {
+  if (!isRecord(payload)) return [];
   const details: string[] = [];
+  const data = isRecord(payload.data) ? payload.data : {};
   const candidates = [
     payload.errors,
     payload.error,
-    payload.data?.errors,
+    data.errors,
     payload.message,
   ];
 
@@ -1312,7 +1308,7 @@ function normalizeErrorPayload(payload: any): string[] {
       });
       return;
     }
-    if (typeof candidate === "object") {
+    if (isRecord(candidate)) {
       Object.values(candidate).forEach(value => {
         if (!value) return;
         if (typeof value === "string") {

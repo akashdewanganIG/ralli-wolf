@@ -8,22 +8,9 @@ import {
   useLeadsGeneratedOverTime,
   useConversionRate,
   useLeadSources,
-} from "../hooks/useDashboard";
+} from "../hooks/use-dashboard";
 import { ChartSkeleton } from "./skeletons";
 
-/**
- * Analytics cards for the operations dashboard.
- *
- * These deliberately pass no colours down. The chart components read the
- * `--chart-*` tokens, which are defined once per theme, so a series looks
- * right in light and dark without either being restated here. An earlier
- * version pinned brand red on the trend line and a six-hue accent palette on
- * the donuts, which overrode the token ramp at the call site — the charts kept
- * the old look no matter what the components did, and the near-white segment
- * ring vanished against a dark surface.
- */
-
-/** One card shell, so loading / error / loaded cannot drift apart. */
 function ChartCard({
   title,
   height,
@@ -73,15 +60,6 @@ type ChartInput = {
 
 const EMPTY: ChartInput = { labels: [], datasets: [] };
 
-/**
- * Keeps only the labels and the numbers.
- *
- * The API's dataset type carries `borderColor`/`backgroundColor`, which are a
- * leftover from when the palette was decided per request. Dropping them here is
- * what makes the `--chart-*` tokens authoritative — and it is a compile-time
- * guarantee rather than a convention, because the chart components never see a
- * colour to prefer.
- */
 function toChartInput(source?: {
   labels?: string[];
   datasets?: Array<{ label?: string; data?: number[] }>;

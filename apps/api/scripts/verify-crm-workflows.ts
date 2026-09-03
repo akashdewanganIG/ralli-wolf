@@ -17,14 +17,15 @@ async function main() {
   const user = await prisma.user.findFirst({
     where: {
       deletedAt: null,
-      email: { not: process.env.DEVELOPER_LOGIN_EMAIL },
       role: "ADMIN",
     },
     orderBy: { id: "asc" },
   });
   assert(user, "An active admin user is required for workflow verification");
   const headers = {
-    Authorization: `Bearer ${generateToken(user.id, user.email)}`,
+    Authorization: `Bearer ${generateToken(user.id, user.email, {
+      sessionVersion: user.sessionVersion,
+    })}`,
   };
   const get = async (path: string) => {
     const response = await fetch(`${apiUrl}${path}`, { headers });

@@ -4,7 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@repo/ui/components/ui/button";
 import { Input } from "@repo/ui/components/ui/input";
 
-import { useGlobalSettings, useUpdateGlobalSetting } from "@/hooks/useSettings";
+import {
+  useGlobalSettings,
+  useUpdateGlobalSetting,
+} from "@/hooks/use-settings";
 import { toast } from "@/lib/toast";
 import { Alert } from "@repo/ui/components/ui/alert";
 import { Skeleton } from "@/components/skeletons";
@@ -36,9 +39,6 @@ export default function DiscountThresholdSettings() {
     Number(inputValue) !== Number(settings.OPPORTUNITY_DISCOUNT_THRESHOLD);
 
   const handleSave = async () => {
-    // The constraint is reported as a toast rather than under the field, so it
-    // has to be raised here — and the button has to stay enabled while the
-    // value is invalid, or there would be nothing to press to find out why.
     if (validationMessage) {
       toast.error(validationMessage);
       return;
@@ -94,11 +94,7 @@ export default function DiscountThresholdSettings() {
             value={inputValue}
             onChange={event => setInputValue(event.target.value)}
             className="w-full pr-10"
-            // The panel heading names this control now that the field has no
-            // visible label of its own.
             aria-label="Manager approval threshold"
-            // The message moved to a toast, but the field still has to
-            // announce itself as invalid to a screen reader.
             aria-invalid={!!validationMessage}
             aria-describedby="discount-threshold-help"
           />
@@ -106,8 +102,7 @@ export default function DiscountThresholdSettings() {
             %
           </span>
         </div>
-        {/* The constraint stays visible whether or not the value breaks it —
-              a toast is transient, and this is what you need to type. */}
+
         <p
           id="discount-threshold-help"
           className="mt-1.5 text-xs text-muted-foreground"

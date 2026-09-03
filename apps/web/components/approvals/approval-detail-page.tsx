@@ -9,6 +9,7 @@ import {
   Label,
   Textarea,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -29,8 +30,8 @@ import {
   useApprovalById,
   useActionApproval,
   mapApiApprovalToApproval,
-} from "@/hooks/useApprovals";
-import { useAuth } from "../../contexts/AuthContext";
+} from "@/hooks/use-approvals";
+import { useAuth } from "../../contexts/auth-context";
 import { toast } from "@/lib/toast";
 import { DetailPageSkeleton } from "@/components/skeletons";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
@@ -167,7 +168,6 @@ export function ApprovalDetailPage({ approvalId }: ApprovalDetailPageProps) {
 
       <DetailCard title="Approval Details" className="bg-surface border-border">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Type */}
           <div className="flex items-start gap-3">
             <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
               <Tag className="h-3.5 w-3.5 text-muted-foreground" />
@@ -182,7 +182,6 @@ export function ApprovalDetailPage({ approvalId }: ApprovalDetailPageProps) {
             </div>
           </div>
 
-          {/* Record */}
           <div className="flex items-start gap-3">
             <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
               <Hash className="h-3.5 w-3.5 text-muted-foreground" />
@@ -197,7 +196,6 @@ export function ApprovalDetailPage({ approvalId }: ApprovalDetailPageProps) {
             </div>
           </div>
 
-          {/* Status */}
           <div className="flex items-start gap-3">
             <div
               className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${statusBg}`}
@@ -214,7 +212,6 @@ export function ApprovalDetailPage({ approvalId }: ApprovalDetailPageProps) {
             </div>
           </div>
 
-          {/* Assigned To */}
           <div className="flex items-start gap-3">
             <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary-surface">
               <User className="h-3.5 w-3.5 text-primary" />
@@ -229,7 +226,6 @@ export function ApprovalDetailPage({ approvalId }: ApprovalDetailPageProps) {
             </div>
           </div>
 
-          {/* Submitted By */}
           <div className="flex items-start gap-3">
             <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-info-surface">
               <User className="h-3.5 w-3.5 text-info" />
@@ -244,7 +240,6 @@ export function ApprovalDetailPage({ approvalId }: ApprovalDetailPageProps) {
             </div>
           </div>
 
-          {/* Submitted On */}
           <div className="flex items-start gap-3">
             <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-info-surface">
               <Calendar className="h-3.5 w-3.5 text-info" />
@@ -259,7 +254,6 @@ export function ApprovalDetailPage({ approvalId }: ApprovalDetailPageProps) {
             </div>
           </div>
 
-          {/* Completed On */}
           <div className="flex items-start gap-3">
             <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
               <Clock className="h-3.5 w-3.5 text-muted-foreground" />
@@ -276,7 +270,6 @@ export function ApprovalDetailPage({ approvalId }: ApprovalDetailPageProps) {
             </div>
           </div>
 
-          {/* Last Actor */}
           <div className="flex items-start gap-3">
             <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
               <User className="h-3.5 w-3.5 text-muted-foreground" />
@@ -291,7 +284,6 @@ export function ApprovalDetailPage({ approvalId }: ApprovalDetailPageProps) {
             </div>
           </div>
 
-          {/* View Record Link */}
           {detailHref && (
             <div className="flex items-start gap-3">
               <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-info-surface">
@@ -312,7 +304,6 @@ export function ApprovalDetailPage({ approvalId }: ApprovalDetailPageProps) {
           )}
         </div>
 
-        {/* Comment */}
         {approval.description && (
           <div className="mt-4 pt-4 border-t border-subtle flex items-start gap-3">
             <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary">
@@ -337,11 +328,11 @@ export function ApprovalDetailPage({ approvalId }: ApprovalDetailPageProps) {
           if (!open) setRejectComment("");
         }}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md gap-0 overflow-hidden">
           <DialogHeader>
             <DialogTitle>Reject Approval</DialogTitle>
           </DialogHeader>
-          <div className="space-y-2 py-2">
+          <DialogBody className="space-y-2">
             <Label>Reason (optional)</Label>
             <Textarea
               placeholder="Enter rejection reason..."
@@ -349,7 +340,7 @@ export function ApprovalDetailPage({ approvalId }: ApprovalDetailPageProps) {
               onChange={e => setRejectComment(e.target.value)}
               rows={3}
             />
-          </div>
+          </DialogBody>
           <DialogFooter>
             <Button
               variant="outline"

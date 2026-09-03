@@ -6,7 +6,6 @@ import {
   DetailPageHeader,
   DetailCard,
   ActivityItem,
-  QuickAction,
   Card,
   CardContent,
   CardHeader,
@@ -18,20 +17,12 @@ import {
   DeleteConfirmationDialog,
 } from "@repo/ui";
 import {
-  Select,
-  SelectTrigger,
-  SelectContent,
-  SelectItem,
-  SelectValue,
-} from "@repo/ui/components/ui/select";
-import {
   Edit,
   Trash2,
   ArrowRightLeft,
-  Mail,
-  MessageCircle,
   User,
   Building2,
+  Mail,
   Phone,
   Globe,
   Clock,
@@ -39,14 +30,14 @@ import {
 } from "@repo/ui/icons";
 import { toast } from "@/lib/toast";
 import { useRouter } from "next/navigation";
-import { useAnalyticsByLead } from "../hooks/useAnalytics";
-import { useLead, useDeleteLead, useConvertLead } from "../hooks/useLeads";
+import { useAnalyticsByLead } from "../hooks/use-analytics";
+import { useLead, useDeleteLead, useConvertLead } from "../hooks/use-leads";
 import { LeadStatus } from "../lib/api/types";
 import {
   formatAnalyticsDescription,
   formatAnalyticsTitle,
 } from "../lib/analytics-events";
-import EditLeadModal from "./EditLeadModal";
+import EditLeadModal from "./edit-lead-modal";
 import { KeywordSelect } from "./keyword-select";
 import { getLeadStatusConfig, getLeadSourceLabel } from "../lib/status-config";
 import { getLeadFullName } from "../lib/name";
@@ -60,27 +51,20 @@ import {
 import { displayPhone } from "../lib/phone-formatter";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { CategorySwitcher } from "@repo/ui/components/ui/category-switcher";
+import { roleHasPermission } from "@repo/db/permissions";
+import { useAuth } from "../contexts/auth-context";
 
 interface LeadDetailPageProps {
   leadId: number;
   onBack?: () => void;
-  onEdit?: () => void;
-  onDelete?: () => void;
-  onConvert?: () => void;
-  onSendEmail?: () => void;
-  onSendWhatsApp?: () => void;
 }
 
-export function LeadDetailPage({
-  leadId,
-  onBack,
-  onEdit,
-  onDelete,
-  onConvert,
-  onSendEmail,
-  onSendWhatsApp,
-}: LeadDetailPageProps) {
+export function LeadDetailPage({ leadId, onBack }: LeadDetailPageProps) {
   const router = useRouter();
+  const { user } = useAuth();
+  const canManage =
+    !!user &&
+    roleHasPermission(user.role || "", user.permissions, "leads.manage");
   const [accountContactTab, setAccountContactTab] = React.useState("accounts");
   const [showConvertDialog, setShowConvertDialog] = React.useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
@@ -88,7 +72,6 @@ export function LeadDetailPage({
     keywordIds: [] as number[],
   });
 
-  // API hooks - ALL hooks must be called in the same order every time
   const {
     data: lead,
     isLoading: leadLoading,
@@ -97,12 +80,9 @@ export function LeadDetailPage({
   const deleteLeadMutation = useDeleteLead();
   const convertLeadMutation = useConvertLead();
 
-  // Fetch contact and account if lead is converted
-  // Note: Account details are now included in the lead response from backend
   const contact = lead?.convertedToContact;
   const account = contact?.account;
 
-  // Analytics hooks
   const { data: analyticsEvents = [], isLoading: analyticsLoading } =
     useAnalyticsByLead(leadId);
 
@@ -137,17 +117,13 @@ export function LeadDetailPage({
 
   const handleConvertConfirm = async () => {
     try {
-      console.log("Converting lead:", { leadId, convertData });
-      const result = await convertLeadMutation.mutateAsync({
+      await convertLeadMutation.mutateAsync({
         id: leadId,
         data: convertData,
       });
-      console.log("Lead conversion successful:", result);
       setShowConvertDialog(false);
       toast.success("Lead converted to contact successfully!");
-      onConvert?.();
     } catch (error) {
-      console.error("Failed to convert lead:", error);
       toast.error(
         `Failed to convert lead: ${error instanceof Error ? error.message : "Unknown error"}`
       );
@@ -159,15 +135,12 @@ export function LeadDetailPage({
       await deleteLeadMutation.mutateAsync(leadId);
       setShowDeleteDialog(false);
       toast.success("Lead deleted successfully!");
-      onDelete?.();
-      // Navigate away to prevent refetching a deleted lead (404)
+
       router.push("/leads/lead-master");
     } catch (error) {
-      console.error("Failed to delete lead:", error);
-      // Don't close the dialog on error so user can try again
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";
-      // Check if it's a 404 error (lead already deleted)
+
       if (errorMessage.includes("404") || errorMessage.includes("not found")) {
         toast.error("Lead has already been deleted");
         setShowDeleteDialog(false);
@@ -178,30 +151,10 @@ export function LeadDetailPage({
     }
   };
 
-  const handleSendEmail = () => {
-    try {
-      onSendEmail?.();
-      toast.success("Email sent successfully!");
-    } catch (error) {
-      console.error("Failed to send email:", error);
-      toast.error("Failed to send email. Please try again.");
-    }
-  };
-
-  const handleSendWhatsApp = () => {
-    try {
-      onSendWhatsApp?.();
-      toast.success("WhatsApp message sent successfully!");
-    } catch (error) {
-      console.error("Failed to send WhatsApp message:", error);
-      toast.error("Failed to send WhatsApp message. Please try again.");
-    }
-  };
-
   const actions = React.useMemo(() => {
     const actionList = [];
 
-    if (onConvert && !lead?.convertedToContactId) {
+    if (canManage && !lead?.convertedToContactId) {
       actionList.push({
         label: convertLeadMutation.isPending ? "Converting..." : "Convert",
         icon: <ArrowRightLeft className="h-4 w-4" />,
@@ -211,7 +164,7 @@ export function LeadDetailPage({
       });
     }
 
-    if (onDelete) {
+    if (canManage) {
       actionList.push({
         label: deleteLeadMutation.isPending ? "Deleting..." : "Delete",
         icon: <Trash2 className="h-4 w-4" />,
@@ -224,13 +177,11 @@ export function LeadDetailPage({
     return actionList;
   }, [
     lead?.convertedToContactId,
-    onConvert,
-    onDelete,
+    canManage,
     convertLeadMutation.isPending,
     deleteLeadMutation.isPending,
   ]);
 
-  // Loading and error states - AFTER all hooks are called
   if (leadLoading) {
     return (
       <PageShell>
@@ -269,7 +220,6 @@ export function LeadDetailPage({
 
   const displayName = getLeadFullName(lead.firstName, lead.lastName);
 
-  // Get status with default to OPEN
   const currentStatus = lead.status || "OPEN";
   const statusConfig = getLeadStatusConfig(currentStatus as LeadStatus);
   const statusLabel = statusConfig.label;
@@ -285,13 +235,11 @@ export function LeadDetailPage({
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Main Content */}
         <div className="lg:col-span-2 space-y-4">
-          {/* Lead Details Card */}
           <DetailCard
             title="Lead Details"
             headerActions={
-              onEdit ? (
+              canManage ? (
                 <Button
                   variant="outline"
                   onClick={handleEdit}
@@ -434,25 +382,7 @@ export function LeadDetailPage({
             </div>
           </DetailCard>
 
-          {/* Activity Timeline Card */}
-          <DetailCard
-            title="Activity Timeline"
-            headerActions={
-              <>
-                <Select defaultValue="all" onValueChange={() => {}}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Activities</SelectItem>
-                    <SelectItem value="recent">Recent</SelectItem>
-                    <SelectItem value="emails">Emails</SelectItem>
-                    <SelectItem value="calls">Calls</SelectItem>
-                  </SelectContent>
-                </Select>
-              </>
-            }
-          >
+          <DetailCard title="Activity Timeline">
             <div className="max-h-[25rem] overflow-y-auto space-y-0">
               {analyticsLoading ? (
                 <ActivityFeedSkeleton items={3} />
@@ -475,9 +405,7 @@ export function LeadDetailPage({
           </DetailCard>
         </div>
 
-        {/* Sidebar */}
         <div className="space-y-4">
-          {/* Account & Contact Card */}
           <Card>
             <CardHeader>
               <div className="flex items-center justify-center">
@@ -537,7 +465,7 @@ export function LeadDetailPage({
                             </p>
                           </div>
                         </Link>
-                        {/* Keywords Display */}
+
                         {lead?.keywords && lead.keywords.length > 0 && (
                           <div className="flex flex-wrap gap-2 mt-3">
                             {lead.keywords.map(leadKeyword => (
@@ -614,7 +542,7 @@ export function LeadDetailPage({
                             </p>
                           </div>
                         </Link>
-                        {/* Keywords Display */}
+
                         {lead?.keywords && lead.keywords.length > 0 && (
                           <div className="flex flex-wrap gap-2 mt-3">
                             {lead.keywords.map(leadKeyword => (
@@ -656,29 +584,9 @@ export function LeadDetailPage({
               </Tabs>
             </CardContent>
           </Card>
-
-          {/* Quick Actions Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Quick Actions</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <QuickAction
-                icon={<Mail className="h-4 w-4" />}
-                label="Send Email"
-                onClick={handleSendEmail}
-              />
-              <QuickAction
-                icon={<MessageCircle className="h-4 w-4" />}
-                label="Send Whatsapp"
-                onClick={handleSendWhatsApp}
-              />
-            </CardContent>
-          </Card>
         </div>
       </div>
 
-      {/* Enhanced Convert Dialog */}
       {showConvertDialog && (
         <div className="fixed inset-0 bg-foreground bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-surface rounded-lg p-4 w-full max-w-md mx-4">
@@ -731,13 +639,12 @@ export function LeadDetailPage({
         isLoading={deleteLeadMutation.isPending}
         disabled={deleteLeadMutation.isPending}
       />
-      {/* Edit Lead Modal */}
+
       {lead && (
         <EditLeadModal
           open={showEditModal}
           onOpenChange={setShowEditModal}
           lead={lead}
-          onUpdated={() => onEdit?.()}
         />
       )}
     </div>

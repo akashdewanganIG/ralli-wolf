@@ -2,36 +2,46 @@ import { Request, Response } from "express";
 import { Prisma, WorkCenterType } from "@prisma/client";
 import { prisma } from "@repo/db";
 
-import { handleSupplyChainError } from "../utils/supplyChainHttp.js";
-import { toDecimal } from "../services/supplyChain/decimal.js";
+import {
+  requireNonNegative,
+  requirePercentage,
+  requirePositive,
+} from "../services/supplyChain/decimal.js";
 import { DomainError, NotFoundError } from "../services/supplyChain/errors.js";
+import {
+  parseBoundedInteger,
+  parsePositiveInteger,
+} from "../utils/validators.js";
+import {
+  handleSupplyChainError,
+  optionalString,
+  parseBoolean,
+  parseEnum,
+  parseInteger,
+  parseOptionalInteger,
+  requireString,
+} from "../utils/supply-chain-http.js";
 
-const parseId = (value: unknown) => {
-  const n = parseInt(String(value), 10);
-  return Number.isFinite(n) ? n : undefined;
-};
+const parseId = (value: unknown) => parsePositiveInteger(value) ?? undefined;
 
-/** Trim to a string, or null when the caller left the field empty. */
-const optionalText = (value: unknown) => {
-  if (value === undefined || value === null) return null;
-  const trimmed = String(value).trim();
-  return trimmed === "" ? null : trimmed;
-};
-
-/** Effective minutes a work centre can actually deliver in a day. */
 function effectiveCapacity(wc: {
   capacityMinutesPerDay: number;
   efficiencyPercent: Prisma.Decimal | number | string;
   parallelCapacity: number;
 }) {
-  const eff =
-    Number(toDecimal(wc.efficiencyPercent, "efficiencyPercent")) / 100;
+  const eff = Number(
+    requirePercentage(wc.efficiencyPercent, "efficiencyPercent")
+  );
+  if (wc.capacityMinutesPerDay <= 0 || wc.parallelCapacity <= 0) {
+    throw new DomainError("Work centre capacity must be greater than zero", {
+      code: "INVALID_WORK_CENTER_CAPACITY",
+    });
+  }
   return Math.round(
-    wc.capacityMinutesPerDay * eff * Math.max(wc.parallelCapacity, 1)
+    wc.capacityMinutesPerDay * (eff / 100) * wc.parallelCapacity
   );
 }
 
-/** Minutes one routing step needs for a given batch. */
 function operationMinutes(
   op: {
     setupMinutes: number;
@@ -39,16 +49,14 @@ function operationMinutes(
   },
   quantity: number
 ) {
-  const run = Number(toDecimal(op.runMinutesPerUnit, "runMinutesPerUnit"));
+  const run = Number(
+    requireNonNegative(op.runMinutesPerUnit, "runMinutesPerUnit")
+  );
   return Math.ceil(op.setupMinutes + run * quantity);
 }
 
 const dayKey = (d: Date) => d.toISOString().slice(0, 10);
 
-/**
- * Routing is part of what an active BOM freezes: an order already scheduled
- * against it has to stay reproducible. Same rule the components follow.
- */
 async function assertRoutingEditable(bomId: number) {
   const bom = await prisma.billOfMaterials.findUnique({
     where: { id: bomId },
@@ -64,7 +72,6 @@ async function assertRoutingEditable(bomId: number) {
   return bom;
 }
 
-/** Sequence numbers are unique per BOM; say so in words rather than P2002. */
 async function assertSequenceFree(
   bomId: number,
   sequence: number,
@@ -87,7 +94,6 @@ async function assertSequenceFree(
 }
 
 export class PlanningController {
-  /** Work centres, with their effective daily capacity resolved. */
   async listWorkCenters(req: Request, res: Response) {
     const operation = "List work centres";
     try {
@@ -129,29 +135,42 @@ export class PlanningController {
         parallelCapacity,
       } = req.body ?? {};
 
-      if (!code || !name)
-        throw new DomainError("A code and name are required.");
       const wh = parseId(warehouseId);
       if (!wh) throw new DomainError("A warehouse is required.");
 
       const created = await prisma.workCenter.create({
         data: {
-          code: String(code).trim().toUpperCase(),
-          name: String(name).trim(),
+          code: requireString(code, "code", 50).toUpperCase(),
+          name: requireString(name, "name", 200),
           warehouseId: wh,
-          type: (type as WorkCenterType) ?? "MACHINE",
-          description: description ?? null,
-          capacityMinutesPerDay: Number(capacityMinutesPerDay) || 480,
-          efficiencyPercent: efficiencyPercent ?? 85,
-          costPerHour: costPerHour ?? 0,
-          parallelCapacity: Number(parallelCapacity) || 1,
+          type:
+            parseEnum(WorkCenterType, type, "type") ?? WorkCenterType.MACHINE,
+          description: optionalString(description, "description"),
+          capacityMinutesPerDay:
+            parseOptionalInteger(
+              capacityMinutesPerDay,
+              "capacityMinutesPerDay",
+              1,
+              10_080
+            ) ?? 480,
+          efficiencyPercent: requirePercentage(
+            efficiencyPercent ?? 85,
+            "efficiencyPercent"
+          ),
+          costPerHour: requireNonNegative(costPerHour ?? 0, "costPerHour"),
+          parallelCapacity:
+            parseOptionalInteger(
+              parallelCapacity,
+              "parallelCapacity",
+              1,
+              1_000
+            ) ?? 1,
         },
         include: {
           warehouse: { select: { id: true, code: true, name: true } },
         },
       });
-      // Same shape the list returns, so a freshly created centre can be
-      // rendered by the same row component without a refetch.
+
       res.status(201).json({
         data: {
           ...created,
@@ -164,7 +183,6 @@ export class PlanningController {
     }
   }
 
-  /** The routing on one bill of materials. */
   async listBomOperations(req: Request, res: Response) {
     const operation = "List BOM operations";
     try {
@@ -204,18 +222,16 @@ export class PlanningController {
 
       const wc = parseId(workCenterId);
       if (!wc) throw new DomainError("A work centre is required.");
-      if (!name) throw new DomainError("An operation name is required.");
 
-      // Steps are numbered in tens so one can be slotted between two others
-      // later without renumbering the whole routing.
       const next =
-        parseId(sequence) ??
-        ((
-          await prisma.bomOperation.aggregate({
-            where: { bomId },
-            _max: { sequence: true },
-          })
-        )._max.sequence ?? 0) + 10;
+        sequence === undefined || sequence === null || sequence === ""
+          ? ((
+              await prisma.bomOperation.aggregate({
+                where: { bomId },
+                _max: { sequence: true },
+              })
+            )._max.sequence ?? 0) + 10
+          : parseInteger(sequence, "sequence", 1, 1_000_000);
       await assertSequenceFree(bomId, next);
 
       const created = await prisma.bomOperation.create({
@@ -223,11 +239,16 @@ export class PlanningController {
           bomId,
           workCenterId: wc,
           sequence: next,
-          name: String(name).trim(),
-          description: optionalText(description),
-          setupMinutes: Number(setupMinutes) || 0,
-          runMinutesPerUnit: runMinutesPerUnit ?? 0,
-          isBlocking: isBlocking !== false,
+          name: requireString(name, "name", 200),
+          description: optionalString(description, "description"),
+          setupMinutes:
+            parseOptionalInteger(setupMinutes, "setupMinutes", 0, 1_000_000) ??
+            0,
+          runMinutesPerUnit: requireNonNegative(
+            runMinutesPerUnit ?? 0,
+            "runMinutesPerUnit"
+          ),
+          isBlocking: parseBoolean(isBlocking, "isBlocking") ?? true,
         },
         include: {
           workCenter: {
@@ -241,7 +262,6 @@ export class PlanningController {
     }
   }
 
-  /** Change one routing step, while its BOM is still a draft. */
   async updateBomOperation(req: Request, res: Response) {
     const operation = "Update BOM operation";
     try {
@@ -255,8 +275,7 @@ export class PlanningController {
         where: { id: operationId },
         select: { id: true, bomId: true },
       });
-      // Checking the parent matches stops an id from one BOM being edited
-      // through another BOM's frozen-status check.
+
       if (!existing || existing.bomId !== bomId)
         throw new NotFoundError("Routing operation");
 
@@ -270,8 +289,13 @@ export class PlanningController {
         isBlocking,
       } = req.body ?? {};
 
-      const nextSequence = parseId(sequence);
-      if (nextSequence !== undefined) {
+      const nextSequence = parseOptionalInteger(
+        sequence,
+        "sequence",
+        1,
+        1_000_000
+      );
+      if (nextSequence !== null) {
         await assertSequenceFree(bomId, nextSequence, operationId);
       }
       const wc = workCenterId === undefined ? undefined : parseId(workCenterId);
@@ -282,19 +306,33 @@ export class PlanningController {
         where: { id: operationId },
         data: {
           ...(wc ? { workCenterId: wc } : {}),
-          ...(name !== undefined ? { name: String(name).trim() } : {}),
-          ...(description !== undefined
-            ? { description: optionalText(description) }
+          ...(name !== undefined
+            ? { name: requireString(name, "name", 200) }
             : {}),
-          ...(nextSequence !== undefined ? { sequence: nextSequence } : {}),
+          ...(description !== undefined
+            ? { description: optionalString(description, "description") }
+            : {}),
+          ...(nextSequence !== null ? { sequence: nextSequence } : {}),
           ...(setupMinutes !== undefined
-            ? { setupMinutes: Number(setupMinutes) || 0 }
+            ? {
+                setupMinutes: parseInteger(
+                  setupMinutes,
+                  "setupMinutes",
+                  0,
+                  1_000_000
+                ),
+              }
             : {}),
           ...(runMinutesPerUnit !== undefined
-            ? { runMinutesPerUnit: runMinutesPerUnit ?? 0 }
+            ? {
+                runMinutesPerUnit: requireNonNegative(
+                  runMinutesPerUnit,
+                  "runMinutesPerUnit"
+                ),
+              }
             : {}),
           ...(isBlocking !== undefined
-            ? { isBlocking: Boolean(isBlocking) }
+            ? { isBlocking: parseBoolean(isBlocking, "isBlocking") }
             : {}),
         },
         include: {
@@ -309,7 +347,6 @@ export class PlanningController {
     }
   }
 
-  /** Drop a routing step from a draft BOM. */
   async deleteBomOperation(req: Request, res: Response) {
     const operation = "Remove BOM operation";
     try {
@@ -333,14 +370,6 @@ export class PlanningController {
     }
   }
 
-  /**
-   * Schedules a production order across its BOM's routing.
-   *
-   * Each operation is laid out back to back from the order's planned start,
-   * because a blocking step cannot begin until the one before it finishes.
-   * The result is stored rather than recomputed, so the plan someone agreed to
-   * is the plan that is still there tomorrow.
-   */
   async scheduleOrder(req: Request, res: Response) {
     const operation = "Schedule production order";
     try {
@@ -379,14 +408,13 @@ export class PlanningController {
       }
 
       const quantity = Number(
-        toDecimal(order.plannedQuantity, "plannedQuantity")
+        requirePositive(order.plannedQuantity, "plannedQuantity")
       );
       let cursor = order.plannedStartDate
         ? new Date(order.plannedStartDate)
         : new Date();
 
       const result = await prisma.$transaction(async tx => {
-        // Rescheduling replaces the plan rather than appending to it.
         await tx.productionOrderOperation.deleteMany({
           where: { productionOrderId: id },
         });
@@ -411,11 +439,10 @@ export class PlanningController {
               include: { workCenter: { select: { code: true, name: true } } },
             })
           );
-          // A blocking step pushes the next one out; a parallel step does not.
+
           if (op.isBlocking) cursor = end;
         }
 
-        // The order's own window follows from its operations.
         const last = created[created.length - 1];
         await tx.productionOrder.update({
           where: { id },
@@ -439,7 +466,6 @@ export class PlanningController {
     }
   }
 
-  /** The scheduled operations on one production order. */
   async orderOperations(req: Request, res: Response) {
     const operation = "Production order operations";
     try {
@@ -460,20 +486,18 @@ export class PlanningController {
     }
   }
 
-  /**
-   * Capacity load per work centre per day.
-   *
-   * This is the question planning exists to answer: for each day in the
-   * horizon, how many minutes are committed against how many are available,
-   * and where does that tip over 100%.
-   */
   async capacityLoad(req: Request, res: Response) {
     const operation = "Capacity load";
     try {
-      const days = Math.min(
-        Math.max(parseInt(String(req.query.days ?? 14), 10) || 14, 1),
-        60
-      );
+      const days =
+        req.query.days === undefined
+          ? 14
+          : parseBoundedInteger(req.query.days, 1, 60);
+      if (days === null) {
+        throw new DomainError("days must be an integer between 1 and 60", {
+          code: "INVALID_PLANNING_HORIZON",
+        });
+      }
       const warehouseId = parseId(req.query.warehouseId);
       const from = new Date();
       from.setHours(0, 0, 0, 0);
@@ -562,10 +586,6 @@ export class PlanningController {
     }
   }
 
-  /**
-   * The planning board: orders that need scheduling, and those already
-   * scheduled, so a planner can see the queue in one place.
-   */
   async board(req: Request, res: Response) {
     const operation = "Planning board";
     try {
@@ -609,8 +629,7 @@ export class PlanningController {
           return {
             ...o,
             isScheduled: o.operations.length > 0,
-            // A BOM with no routing cannot be scheduled at all — surface that
-            // rather than letting the schedule button fail.
+
             canSchedule: (o.bom?._count.operations ?? 0) > 0,
             totalMinutes,
             totalHours: Math.round((totalMinutes / 60) * 10) / 10,

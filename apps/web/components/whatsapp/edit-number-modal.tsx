@@ -32,6 +32,7 @@ export function EditNumberModal({
 }: EditNumberModalProps) {
   const [displayName, setDisplayName] = useState(number.displayName);
   const [status, setStatus] = useState(number.status || "ACTIVE");
+  const [apiKey, setApiKey] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -47,6 +48,7 @@ export function EditNumberModal({
       await whatsappService.updateNumber(number.id, {
         displayName: displayName.trim(),
         status,
+        ...(apiKey.trim() && { apiKey: apiKey.trim() }),
       });
 
       toast.success("WhatsApp number updated successfully");
@@ -90,6 +92,20 @@ export function EditNumberModal({
           <option value="ACTIVE">Active</option>
           <option value="INACTIVE">Inactive</option>
         </SelectField>
+      </Field>
+
+      <Field
+        label="Rotate API key"
+        hint="Leave blank to keep the current encrypted credential"
+      >
+        <Input
+          type="password"
+          value={apiKey}
+          onChange={e => setApiKey(e.target.value)}
+          autoComplete="new-password"
+          maxLength={2048}
+          placeholder="New MSG91 API key"
+        />
       </Field>
     </FormDialog>
   );

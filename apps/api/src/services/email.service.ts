@@ -1,42 +1,37 @@
-/**
- * Application email.
- *
- * Transport only: every message body is rendered by the shared shell in
- * `emailTemplate.ts`, so this file decides what an email says and never how
- * it looks.
- *
- * Delivery goes through Resend, the same path as the sign-in codes and
- * security alerts. One provider means one sending domain, one reputation to
- * maintain, and one dashboard to look in when someone says an email never
- * arrived.
- */
 import {
   EMAIL_COLORS,
   EMAIL_FONT_STACKS,
   renderEmail,
   type EmailRow,
-} from "./emailTemplate.js";
-import { sendResendEmail, type ResendAttachment } from "./resendClient.js";
+} from "./email-template.js";
+import { sendResendEmail, type ResendAttachment } from "./resend-client.js";
+import { logError, logInfo } from "../utils/logger.js";
+
+const INDIAN_DATE_FORMATTER = new Intl.DateTimeFormat("en-IN", {
+  dateStyle: "medium",
+  timeZone: "Asia/Kolkata",
+});
 
 interface EmailOptions {
   to: string;
   subject: string;
-  /** Rendered HTML. A plain-text part is derived from it automatically. */
+
   body: string;
-  /** Retained for call-site compatibility; Resend takes the name from `from`. */
+
   name?: string;
   replyTo?: string;
   cc?: string[];
   bcc?: string[];
   attachments?: Record<string, { content: string; mime: string }>;
-  /** Groups the send in Resend's dashboard. */
+
   category?: string;
+
+  idempotencyKey?: string;
 }
 
-interface UserCreationEmailData {
+interface UserInvitationEmailData {
   name: string;
   email: string;
-  password: string;
   role: string;
 }
 
@@ -50,14 +45,6 @@ class EmailService {
       .replace(/'/g, "&#39;");
   }
 
-  /**
-   * Sends one message, reporting success as a boolean.
-   *
-   * Callers decide how much a failure matters — a lead-assignment notice can
-   * be dropped, a password-reset code cannot — so this never throws. It does
-   * always log, with Resend's message id on success and the reason on
-   * failure, because a send that vanishes without either is untraceable.
-   */
   async sendEmail(options: EmailOptions): Promise<boolean> {
     const attachments: ResendAttachment[] | undefined = options.attachments
       ? Object.entries(options.attachments).map(([filename, meta]) => ({
@@ -77,33 +64,26 @@ class EmailService {
         bcc: options.bcc,
         replyTo: options.replyTo,
         attachments,
+        idempotencyKey: options.idempotencyKey,
       });
-      console.log("Email sent", {
-        to: options.to,
-        subject: options.subject,
+      logInfo("email_dispatched", {
+        category: options.category ?? "application",
         messageId: id,
       });
       return true;
     } catch (error) {
-      console.error("Email delivery failed", {
-        to: options.to,
-        subject: options.subject,
-        error: error instanceof Error ? error.message : "Unknown Resend error",
+      logError("email_delivery_failed", error, {
+        category: options.category ?? "application",
       });
       return false;
     }
   }
-  /**
-   * Sends a newly created user their credentials.
-   *
-   * The password is deliberately in the metadata rows rather than the prose:
-   * it is a value to be copied, and the mono rows are where this shell puts
-   * values.
-   */
-  async sendUserCreationEmail(data: UserCreationEmailData): Promise<boolean> {
+
+  async sendUserInvitationEmail(
+    data: UserInvitationEmailData
+  ): Promise<boolean> {
     const rows: EmailRow[] = [
       { label: "Account ID", value: data.email },
-      { label: "Temporary password", value: data.password },
       { label: "Role", value: data.role },
     ];
 
@@ -112,10 +92,10 @@ class EmailService {
       eyebrow: "Account created",
       heading: "Your account is ready",
       paragraphs: [
-        `Hi ${data.name}, an administrator has created your Ralli Wolf Operations account. Sign in with the credentials below.`,
-        "Change your password as soon as you are in. It is temporary, and it should not be shared with anyone.",
+        `Hi ${data.name}, an administrator has created your Ralli Wolf Operations account.`,
+        'Open the sign-in page, choose "Forgot password", and use the one-time code sent to this address to set your private password.',
       ],
-      rowsLabel: "Your credentials",
+      rowsLabel: "Account details",
       rows,
       footer:
         "If you were not expecting this account, contact your system administrator.",
@@ -123,13 +103,12 @@ class EmailService {
 
     return await this.sendEmail({
       to: data.email,
-      subject: "Your Ralli Wolf Operations account details",
+      subject: "Set up your Ralli Wolf Operations account",
       body,
       name: data.name,
     });
   }
 
-  /** Sends the one-time code that authorises a password reset. */
   async sendPasswordResetOtpEmail(
     email: string,
     name: string,
@@ -156,12 +135,6 @@ class EmailService {
     });
   }
 
-  /**
-   * Tells a sales user that leads have landed in their queue.
-   *
-   * Says what landed and leaves it there. These emails carry no link back
-   * into the app by design.
-   */
   async sendLeadAssignmentNotificationEmail(
     email: string,
     name: string,
@@ -190,7 +163,6 @@ class EmailService {
     });
   }
 
-  /** Login code for the Aakraman order-booking flow. */
   async sendAakramanOtpEmail(
     email: string,
     name: string,
@@ -216,7 +188,6 @@ class EmailService {
     });
   }
 
-  /** Notifies an approver that something is waiting on their decision. */
   async sendApprovalRequestEmail(data: {
     approverName: string;
     approverEmail: string;
@@ -255,13 +226,6 @@ class EmailService {
     });
   }
 
-  /**
-   * Reports an approval decision back to whoever raised it.
-   *
-   * The shell carries one accent, so the outcome is stated in the copy and in
-   * a Decision row rather than being encoded in a colour the reader has to
-   * interpret.
-   */
   async sendApprovalActionEmail(data: {
     requesterName: string;
     requesterEmail: string;
@@ -306,22 +270,6 @@ class EmailService {
     });
   }
 
-  /**
-   * Sends an approved quote to the client.
-   *
-   * The line items and totals are the one body in this file that is genuinely
-   * structured rather than prose, so they go through the shell's `bodyHtml`
-   * slot. Everything interpolated into them is escaped here, which is the
-   * condition that slot comes with.
-   */
-  /**
-   * Sends a purchase order to the supplier.
-   *
-   * The only email in this file addressed to someone outside the business, so
-   * it states the order plainly and asks for one thing back: confirmation.
-   * Amounts are the ordered ones — this is the document the supplier will
-   * invoice against, so it must match what was approved.
-   */
   async sendPurchaseOrderEmail(data: {
     to: string;
     supplierName: string;
@@ -335,6 +283,7 @@ class EmailService {
     paymentTerms?: string | null;
     deliverTo?: string | null;
     notes?: string | null;
+    idempotencyKey?: string;
     lines: Array<{
       description: string;
       quantity: string;
@@ -409,6 +358,7 @@ ${rowsHtml}
       body,
       name: data.supplierName,
       category: "purchase_order",
+      idempotencyKey: data.idempotencyKey,
     });
   }
 
@@ -419,6 +369,11 @@ ${rowsHtml}
     message?: string;
     cc?: string[];
     bcc?: string[];
+    idempotencyKey?: string;
+    pdfAttachment: {
+      filename: string;
+      content: string;
+    };
     quote: {
       quoteNumber: string;
       name: string;
@@ -433,7 +388,6 @@ ${rowsHtml}
       paymentTerms?: string | null;
       deliveryTerms?: string | null;
       notes?: string | null;
-      pdfUrl: string;
       lineItems: Array<{
         productName: string;
         quantity: number;
@@ -493,7 +447,7 @@ ${rowsHtml}
     if (quote.validUntil) {
       rows.push({
         label: "Valid until",
-        value: new Date(quote.validUntil).toLocaleDateString("en-IN"),
+        value: INDIAN_DATE_FORMATTER.format(new Date(quote.validUntil)),
       });
     }
     if (quote.paymentTerms) {
@@ -505,13 +459,6 @@ ${rowsHtml}
     if (quote.notes) {
       rows.push({ label: "Notes", value: quote.notes });
     }
-    // The PDF address is given as a value rather than a link. It is the one
-    // thing in here the reader may need to fetch, so it is stated plainly and
-    // can be copied; nothing in these emails is clickable by design.
-    if (quote.pdfUrl) {
-      rows.push({ label: "Quote PDF", value: quote.pdfUrl });
-    }
-
     const body = renderEmail({
       preview: `Quote ${quote.quoteNumber} — ${money(quote.grandTotal)}`,
       eyebrow: "Quotation",
@@ -519,7 +466,7 @@ ${rowsHtml}
       paragraphs: [
         `Dear ${data.contactName},`,
         data.message ||
-          "Please find your quote below. The address of the full PDF is in the quote details underneath the totals.",
+          "Please find your quote below. The full PDF is attached to this message.",
       ],
       bodyHtml,
       rowsLabel: "Quote details",
@@ -536,9 +483,16 @@ ${rowsHtml}
       name: data.contactName,
       cc: data.cc,
       bcc: data.bcc,
+      attachments: {
+        [data.pdfAttachment.filename]: {
+          content: data.pdfAttachment.content,
+          mime: "application/pdf",
+        },
+      },
+      category: "quote",
+      idempotencyKey: data.idempotencyKey,
     });
   }
 }
 
-// Export singleton instance
 export const emailService = new EmailService();

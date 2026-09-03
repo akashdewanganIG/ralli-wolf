@@ -5,8 +5,8 @@ travels through them, and how the data model constrains what can be created
 before what.
 
 Diagrams are [Mermaid](https://mermaid.js.org/) and render inline on GitHub and
-in most Markdown viewers. For the order in which a *person* should use the
-application, see [USER_FLOWS.md](./USER_FLOWS.md).
+in most Markdown viewers. For the order in which a _person_ should use the
+application, see [user-flows.md](./user-flows.md).
 
 ---
 
@@ -53,7 +53,7 @@ flowchart LR
         S3["AWS S3<br/>media"]
     end
 
-    WEB -->|"REST + JWT cookie"| API
+WEB -->|"REST + HttpOnly session cookie"| API
     API -->|"Prisma"| PG
     JOBS --> PG
     API --> RESEND
@@ -66,12 +66,12 @@ flowchart LR
     style PG fill:#f5f5f5,stroke:#737373
 ```
 
-| Piece | Location | Responsibility |
-|---|---|---|
-| Web | `apps/web` | Next.js App Router UI. Holds no business rules; every mutation is an API call. |
-| API | `apps/api` | Express + Prisma. Owns validation, authorisation, document numbering and stock maths. |
-| Database | `packages/db` | Prisma schema, migrations and seeds. The single source of truth for shape. |
-| UI kit | `packages/ui` | Shared components, design tokens and icons. |
+| Piece    | Location      | Responsibility                                                                        |
+| -------- | ------------- | ------------------------------------------------------------------------------------- |
+| Web      | `apps/web`    | Next.js App Router UI. Holds no business rules; every mutation is an API call.        |
+| API      | `apps/api`    | Express + Prisma. Owns validation, authorisation, document numbering and stock maths. |
+| Database | `packages/db` | Prisma schema, migrations and seeds. The single source of truth for shape.            |
+| UI kit   | `packages/ui` | Shared components, design tokens and icons.                                           |
 
 ---
 
@@ -97,7 +97,7 @@ flowchart TD
 ```
 
 `packages/db` is imported by both apps, so a schema change ripples to both. Run
-`pnpm --filter @repo/db prisma:generate` after editing the schema.
+`npm run prisma:generate -w @repo/db` after editing the schema.
 
 ---
 
@@ -117,9 +117,10 @@ sequenceDiagram
 
     U->>P: clicks an action
     P->>Q: useMutation / useQuery
-    Q->>C: request + auth_token cookie
+    Q->>C: request
     C->>M: HTTP
-    M->>M: verify JWT, load user,<br/>check role
+    Note over C,M: Browser includes the HttpOnly<br/>staff-session cookie
+    M->>M: verify JWT, load user,<br/>check permission
     alt not authorised
         M-->>C: 401 / 403
         C-->>Q: error
@@ -149,33 +150,32 @@ Two rules worth knowing:
 
 ```mermaid
 flowchart TD
-    START([User opens the app]) --> HAS{auth_token<br/>cookie present?}
-    HAS -->|no| LOGIN[Login page]
-    HAS -->|yes| VERIFY[API verifies JWT]
+    START([User opens the app]) --> PROBE[GET /api/auth/me]
+    PROBE --> VALID{Valid HttpOnly session<br/>and active account?}
+    VALID -->|yes| APP([Permission-filtered application])
+    VALID -->|no| LOGIN[Sign-in]
 
-    LOGIN --> METHOD{Sign-in method}
-    METHOD -->|Password| PW[email + password]
-    METHOD -->|Email OTP| OTP[one-time code by email]
-    METHOD -->|Google / Microsoft / SSO| OAUTH[OAuth provider]
-
-    PW --> ISSUE[API issues JWT<br/>sets auth_token cookie]
-    OTP --> ISSUE
-    OAUTH --> ISSUE
-    ISSUE --> VERIFY
-
-    VERIFY --> VALID{Valid and<br/>account active?}
-    VALID -->|no| LOGIN
-    VALID -->|yes| ROLE{Role}
-
-    ROLE -->|SALES| SALESWS[Sales workspace only<br/>/sales/*]
-    ROLE -->|ADMIN / MANAGER| FULL[Full application]
-
-    SALESWS --> APP([Application])
-    FULL --> APP
+    LOGIN --> ENTRY{Enabled entry method}
+    ENTRY -->|Password| PW[Verify email + password]
+    ENTRY -->|Passwordless email| EMAILENTRY[Issue email challenge]
+    ENTRY -->|Passwordless TOTP| TOTPENTRY[Request authenticator code]
+    PW --> FACTOR{Preferred second factor}
+    FACTOR -->|Email| EMAILENTRY
+    FACTOR -->|Authenticator| TOTPENTRY
+    EMAILENTRY --> VERIFY[Verify one-time code]
+    TOTPENTRY --> VERIFY
+    VERIFY --> ISSUE[API sets Secure, HttpOnly,<br/>SameSite=Strict session cookie]
+    ISSUE --> APP
 ```
 
-Roles live on `User.role`. `SalesRouteGuard` confines `SALES` users to
-`/sales/*` plus a small allow-list; everything else is open to `ADMIN`.
+Roles live on `User.role`, while API routes enforce named capabilities from the
+shared permission catalogue. `ADMIN` receives every capability, `SALES`
+receives its defined defaults, and `CUSTOM` receives only explicitly assigned
+permissions. The web mirrors these checks for navigation and controls, but the
+API remains authoritative. Browser JavaScript never receives the staff JWT;
+CLI clients must explicitly request bearer mode with `X-Session-Mode: bearer`.
+Production web and API origins must use HTTPS and share a registrable domain;
+the strict cookie deliberately does not cross unrelated hosting domains.
 
 ---
 
@@ -277,7 +277,7 @@ flowchart TD
 
 ## Data model dependencies
 
-This is the part that answers *"do I create a warehouse first, or inventory?"*
+This is the part that answers _"do I create a warehouse first, or inventory?"_
 
 The arrows below are **required** foreign keys taken from
 `packages/db/prisma/schema.prisma`. A required FK is a hard constraint: the
@@ -350,26 +350,26 @@ flowchart LR
 
 **The ordering this forces**, derived directly from the schema:
 
-| # | Create | Because it requires |
-|---|---|---|
-| 1 | Warehouse | nothing |
-| 2 | WarehouseZone | Warehouse |
-| 3 | StorageBin | Warehouse **and** WarehouseZone |
-| 4 | ProductCategory | nothing |
-| 5 | Product | ProductCategory |
-| 6 | Supplier | nothing |
-| 7 | SupplierProduct | Supplier, Product |
-| 8 | PurchaseOrder | Supplier, Warehouse |
-| 9 | GoodsReceiptNote | Supplier, Warehouse |
-| 10 | QualityCheck | GoodsReceiptNote |
-| 11 | StockLot | Product, Warehouse |
-| 12 | **StockBalance** | Product, Warehouse, **StorageBin**, StockLot |
-| 13 | ReorderRule / StockAlert | Product, Warehouse |
-| 14 | BillOfMaterials | Product |
-| 15 | BomComponent | BillOfMaterials, Product |
-| 16 | ProductionOrder | Product, BillOfMaterials, Warehouse |
-| 17 | PickList | Warehouse |
-| 18 | PickTask | PickList, Product, StockLot, StorageBin |
+| #   | Create                   | Because it requires                          |
+| --- | ------------------------ | -------------------------------------------- |
+| 1   | Warehouse                | nothing                                      |
+| 2   | WarehouseZone            | Warehouse                                    |
+| 3   | StorageBin               | Warehouse **and** WarehouseZone              |
+| 4   | ProductCategory          | nothing                                      |
+| 5   | Product                  | ProductCategory                              |
+| 6   | Supplier                 | nothing                                      |
+| 7   | SupplierProduct          | Supplier, Product                            |
+| 8   | PurchaseOrder            | Supplier, Warehouse                          |
+| 9   | GoodsReceiptNote         | Supplier, Warehouse                          |
+| 10  | QualityCheck             | GoodsReceiptNote                             |
+| 11  | StockLot                 | Product, Warehouse                           |
+| 12  | **StockBalance**         | Product, Warehouse, **StorageBin**, StockLot |
+| 13  | ReorderRule / StockAlert | Product, Warehouse                           |
+| 14  | BillOfMaterials          | Product                                      |
+| 15  | BomComponent             | BillOfMaterials, Product                     |
+| 16  | ProductionOrder          | Product, BillOfMaterials, Warehouse          |
+| 17  | PickList                 | Warehouse                                    |
+| 18  | PickTask                 | PickList, Product, StockLot, StorageBin      |
 
 > **So: warehouse first, always.** Row 12 is the decisive one — a unit of stock
 > is recorded as a `StockBalance`, which requires a `StorageBin`, which requires
@@ -452,11 +452,11 @@ balance its payments do not justify.
 
 Three things the API refuses, each with a plain-language message:
 
-| Attempt | Response |
-|---|---|
-| Allocating more than an invoice's outstanding balance | `400` — *"SINV-… has 62619.20 outstanding; cannot apply 99999.00."* |
-| Settling a supplier invoice with an `INCOMING` payment | `400` — *"A supplier invoice can only be settled by an outgoing payment."* |
-| Paying an invoice in a different currency | `400` — the currencies must match |
+| Attempt                                                | Response                                                                   |
+| ------------------------------------------------------ | -------------------------------------------------------------------------- |
+| Allocating more than an invoice's outstanding balance  | `400` — _"SINV-… has 62619.20 outstanding; cannot apply 99999.00."_        |
+| Settling a supplier invoice with an `INCOMING` payment | `400` — _"A supplier invoice can only be settled by an outgoing payment."_ |
+| Paying an invoice in a different currency              | `400` — the currencies must match                                          |
 
 ### Two payments, one balance
 
@@ -504,7 +504,7 @@ modules.
 
 ## The planning spine
 
-A bill of materials says *what* a product is made of. A routing says *how* it
+A bill of materials says _what_ a product is made of. A routing says _how_ it
 gets made, and where. Scheduling turns that routing into dated work sitting on
 real machines.
 
@@ -572,19 +572,18 @@ flowchart LR
     WA --> SEND["Sends queued<br/>WhatsApp messages"]
 ```
 
-Intervals are overridable with `INVENTORY_ALERT_INTERVAL_MS` and
-`WHATSAPP_SCHEDULER_INTERVAL_MS`.
+These fixed service cadences are defined next to their scheduler logic.
 
 ---
 
 ## External services
 
-| Service | Used for | Required env | Behaviour when absent |
-|---|---|---|---|
-| Resend | **All** transactional email — sign-in codes, security alerts, account creation, password reset, approvals, notifications, quotes | `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | Sign-in codes fail closed (login returns 503); every other send is logged and skipped |
-| Brevo | Email **campaigns** (`/campaigns/email`) | Brevo API key | **The page cannot load.** It reads campaigns from Brevo, not from the local database |
-| MSG91 | WhatsApp templates and sending | Per-number credentials, stored AES-GCM encrypted | Templates cannot sync or send |
-| AWS S3 | Campaign media and warehouse photos | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | Uploads fail |
+| Service | Used for                                                                                                                         | Required env                                               | Behaviour when absent                                                                 |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Resend  | **All** transactional email — sign-in codes, security alerts, account creation, password reset, approvals, notifications, quotes | `RESEND_API_KEY`, `RESEND_FROM_EMAIL`                      | Sign-in codes fail closed (login returns 503); every other send is logged and skipped |
+| Brevo   | Email **campaigns** (`/campaigns/email`)                                                                                         | Brevo API key                                              | **The page cannot load.** It reads campaigns from Brevo, not from the local database  |
+| MSG91   | WhatsApp templates and sending                                                                                                   | Per-number credentials, stored AES-GCM encrypted           | Templates cannot sync or send                                                         |
+| AWS S3  | Campaign media and warehouse photos                                                                                              | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | Uploads fail                                                                          |
 
 Note the asymmetry: **WhatsApp campaigns are stored locally, email campaigns are
 not.** `/campaigns/whatsapp` works from the database alone; `/campaigns/email`
@@ -594,6 +593,6 @@ is a view onto Brevo and needs that account configured.
 
 ## Related documents
 
-- [USER_FLOWS.md](./USER_FLOWS.md) — every call to action, and the order to use them in
-- [SUPPLY_CHAIN_MODULES.md](./SUPPLY_CHAIN_MODULES.md) — module reference and API endpoints
-- [LOCAL_SETUP.md](./LOCAL_SETUP.md) — getting it running
+- [user-flows.md](./user-flows.md) — every call to action, and the order to use them in
+- [supply-chain-modules.md](./supply-chain-modules.md) — module reference and API endpoints
+- [local-setup.md](./local-setup.md) — getting it running

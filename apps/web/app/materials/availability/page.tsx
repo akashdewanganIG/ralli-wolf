@@ -5,7 +5,7 @@ import { Checkbox } from "@repo/ui/components/ui/checkbox";
 import { Button } from "@repo/ui/components/ui/button";
 import { Input } from "@repo/ui/components/ui/input";
 import Link from "next/link";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   EmptyState,
   ErrorBanner,
@@ -15,19 +15,19 @@ import {
   SimpleTable,
   StatCard,
 } from "@/components/supply-chain/shared";
-import { WarehouseFilter } from "@/components/supply-chain/WarehouseFilter";
+import { WarehouseFilter } from "@/components/supply-chain/warehouse-filter";
 import {
   ProductPicker,
   type PickedProduct,
-} from "@/components/supply-chain/ProductPicker";
-import { useMaterialMutations } from "@/hooks/useSupplyChain";
+} from "@/components/supply-chain/product-picker";
+import { useMaterialMutations } from "@/hooks/use-supply-chain";
 import {
   formatMoney,
   formatPercent,
   formatQuantity,
   humanizeEnum,
 } from "@/lib/utils/decimal";
-import type { AvailabilityLine } from "@/lib/api/types/supplyChain";
+import type { AvailabilityLine } from "@/lib/api/types/supply-chain";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { Tag } from "@repo/ui/components/ui/tag";
 

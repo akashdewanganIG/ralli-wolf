@@ -1,6 +1,6 @@
 "use client";
 
-import logov3 from "@/app/assets/images/logos/logo_v1.png";
+import logov3 from "@/app/assets/images/logos/logo-v1.png";
 import {
   AakramanOrderFirmDetails,
   AakramanProduct,
@@ -12,6 +12,7 @@ import { Button } from "@repo/ui/components/ui/button";
 import { Card, CardContent } from "@repo/ui/components/ui/card";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -32,8 +33,8 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
+import { toast } from "@/lib/toast";
 
-// Local storage keys
 const CART_STORAGE_KEY = "aakraman_cart";
 const CUSTOMER_DETAILS_KEY = "aakraman_customer_details";
 
@@ -42,7 +43,38 @@ interface CartItem {
   quantity: number;
 }
 
-// Zod schema for quantity validation
+const storedCartSchema: z.ZodType<CartItem[]> = z.array(
+  z.object({
+    product: z.object({
+      id: z.number().int().positive(),
+      name: z.string(),
+      code: z.string(),
+      imageUrl: z.string().nullable(),
+      price: z.union([z.number(), z.string()]).nullable(),
+      description: z.string().nullable(),
+      categoryId: z.number().int().positive(),
+      active: z.boolean(),
+      category: z.object({ id: z.number().int(), name: z.string() }),
+    }),
+    quantity: z.number().int().positive(),
+  })
+);
+
+const storedFirmDetailsSchema: z.ZodType<AakramanOrderFirmDetails> = z.object({
+  firmName: z.string().min(1),
+  ownerFirstName: z.string().min(1),
+  ownerLastName: z.string().min(1),
+  contactNumber: z.string().regex(/^\d{10}$/),
+  email: z.string().email().optional(),
+  city: z.string().min(1),
+  state: z.string().min(1),
+  pincode: z
+    .string()
+    .regex(/^\d{6}$/)
+    .optional(),
+  gst: z.string().optional(),
+});
+
 const quantitySchema = z
   .number()
   .int()
@@ -72,30 +104,28 @@ export default function BookAOrderPage() {
     Record<number, string>
   >({});
 
-  // Firm details from localStorage
   const [firmDetails, setFirmDetails] =
     useState<AakramanOrderFirmDetails | null>(null);
 
-  // Load cart from localStorage
   useEffect(() => {
     const savedCart = localStorage.getItem(CART_STORAGE_KEY);
     if (savedCart) {
       try {
-        setCart(JSON.parse(savedCart));
-      } catch (e) {
-        console.error("Failed to parse cart from localStorage:", e);
+        setCart(storedCartSchema.parse(JSON.parse(savedCart)));
+      } catch {
+        localStorage.removeItem(CART_STORAGE_KEY);
       }
     }
   }, []);
 
-  // Save cart to localStorage whenever it changes
   useEffect(() => {
     if (cart.length > 0) {
       localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+    } else {
+      localStorage.removeItem(CART_STORAGE_KEY);
     }
   }, [cart]);
 
-  // Check authentication and load data
   useEffect(() => {
     const init = async () => {
       if (!aakramanService.isAuthenticated()) {
@@ -103,17 +133,24 @@ export default function BookAOrderPage() {
         return;
       }
 
-      // Check if customer details exist
       const savedDetails = localStorage.getItem(CUSTOMER_DETAILS_KEY);
       if (!savedDetails) {
         router.push("/aakraman/customer-details");
         return;
       }
 
+      let parsedDetails: AakramanOrderFirmDetails;
       try {
-        const parsedDetails = JSON.parse(savedDetails);
-        setFirmDetails(parsedDetails);
+        parsedDetails = storedFirmDetailsSchema.parse(JSON.parse(savedDetails));
+      } catch {
+        localStorage.removeItem(CUSTOMER_DETAILS_KEY);
+        router.push("/aakraman/customer-details");
+        setIsLoading(false);
+        return;
+      }
+      setFirmDetails(parsedDetails);
 
+      try {
         const [userRes, productsRes] = await Promise.all([
           aakramanService.getCurrentUser(),
           aakramanService.getProducts(),
@@ -121,10 +158,11 @@ export default function BookAOrderPage() {
         setUser(userRes.user);
         setProducts(productsRes.products);
       } catch (err: any) {
-        console.error("Failed to load data:", err);
         if (err.response?.status === 401) {
           aakramanService.removeToken();
           router.push("/aakraman");
+        } else {
+          toast.error(err, "Failed to load order data");
         }
       } finally {
         setIsLoading(false);
@@ -134,18 +172,15 @@ export default function BookAOrderPage() {
     init();
   }, [router]);
 
-  // All products (no filtering, no grouping)
   const filteredProducts = useMemo(() => {
     return products;
   }, [products]);
 
-  // Cart total items
   const cartTotal = useMemo(() => {
     return cart.reduce((sum, item) => sum + item.quantity, 0);
   }, [cart]);
 
   const addToCart = (product: AakramanProduct, quantity: number) => {
-    // Validate quantity
     const validationResult = quantitySchema.safeParse(quantity);
     if (!validationResult.success) {
       setQuantityErrors(prev => ({
@@ -156,14 +191,12 @@ export default function BookAOrderPage() {
       return;
     }
 
-    // Clear error for this product
     setQuantityErrors(prev => {
       const newErrors = { ...prev };
       delete newErrors[product.id];
       return newErrors;
     });
 
-    // Add or update cart
     setCart(prev => {
       const existing = prev.find(item => item.product.id === product.id);
       if (existing) {
@@ -176,7 +209,6 @@ export default function BookAOrderPage() {
       return [...prev, { product, quantity: validationResult.data }];
     });
 
-    // Clear quantity input for this product
     setQuantityInputs(prev => {
       const newInputs = { ...prev };
       delete newInputs[product.id];
@@ -185,7 +217,6 @@ export default function BookAOrderPage() {
   };
 
   const updateCartQuantity = (productId: number, quantity: number) => {
-    // Validate quantity
     const validationResult = quantitySchema.safeParse(quantity);
     if (!validationResult.success) {
       setCartQuantityErrors(prev => ({
@@ -196,14 +227,12 @@ export default function BookAOrderPage() {
       return;
     }
 
-    // Clear error for this product
     setCartQuantityErrors(prev => {
       const newErrors = { ...prev };
       delete newErrors[productId];
       return newErrors;
     });
 
-    // Update cart quantity
     setCart(prev => {
       return prev.map(item =>
         item.product.id === productId
@@ -212,7 +241,6 @@ export default function BookAOrderPage() {
       );
     });
 
-    // Clear quantity input for this product
     setCartQuantityInputs(prev => {
       const newInputs = { ...prev };
       delete newInputs[productId];
@@ -251,12 +279,10 @@ export default function BookAOrderPage() {
         })),
       });
 
-      // Clear cart from local storage
       localStorage.removeItem(CART_STORAGE_KEY);
       setCart([]);
       setOrderNumber(response.data.orderNumber);
 
-      // Close cart modal and open success modal
       setShowCart(false);
       setShowSuccessModal(true);
     } catch (err: any) {
@@ -269,7 +295,6 @@ export default function BookAOrderPage() {
   };
 
   const handleBack = () => {
-    // Clear customer details to allow editing
     localStorage.removeItem(CUSTOMER_DETAILS_KEY);
     router.push("/aakraman/customer-details");
   };
@@ -279,7 +304,6 @@ export default function BookAOrderPage() {
     setOrderNumber("");
     setError("");
 
-    // Clear customer details to start fresh
     localStorage.removeItem(CUSTOMER_DETAILS_KEY);
 
     router.push("/aakraman/customer-details");
@@ -297,11 +321,9 @@ export default function BookAOrderPage() {
 
   return (
     <div className="min-h-screen bg-surface-elevated pb-24">
-      {/* Header */}
       <header className="sticky top-0 z-40 bg-primary shadow-md">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-2 sm:py-3">
           <div className="flex items-center justify-between gap-2 sm:gap-4">
-            {/* Back Button and Logo */}
             <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
               <button
                 type="button"
@@ -322,7 +344,6 @@ export default function BookAOrderPage() {
               </div>
             </div>
 
-            {/* User Name and Cart */}
             <div className="flex items-center gap-2 sm:gap-3">
               {user && (
                 <div className="flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-lg bg-surface/90">
@@ -351,7 +372,6 @@ export default function BookAOrderPage() {
         </div>
       </header>
 
-      {/* Products Grid */}
       <main className="max-w-7xl mx-auto px-3 py-2 mt-4">
         {filteredProducts.length === 0 ? (
           <div className="text-center py-12 sm:py-16 md:py-20">
@@ -369,7 +389,6 @@ export default function BookAOrderPage() {
                   key={product.id}
                   className="flex h-full flex-col overflow-hidden bg-surface transition-shadow duration-300 hover:shadow-xl"
                 >
-                  {/* Product Image with Gradient Background */}
                   <div className="relative h-30 ">
                     {product.imageUrl ? (
                       <div className="absolute inset-0 flex items-center justify-center p-2">
@@ -388,9 +407,7 @@ export default function BookAOrderPage() {
                     )}
                   </div>
 
-                  {/* Product Details */}
                   <CardContent className="p-2 flex flex-col flex-1">
-                    {/* Product Code as Badge */}
                     <div className="flex flex-wrap gap-1">
                       <Badge
                         variant="secondary"
@@ -400,19 +417,16 @@ export default function BookAOrderPage() {
                       </Badge>
                     </div>
 
-                    {/* Product Name - Bold and Prominent */}
                     <h3 className="font-bold text-sm sm:text-base mb-2 md:text-[0.9375rem]  line-clamp-2 text-foreground leading-tight">
                       {product.name}
                     </h3>
 
-                    {/* Product Description */}
                     {product.description && (
                       <p className="text-xs sm:text-[0.6875rem] md:text-xs text-text-secondary mb-3 sm:mb-4 line-clamp-2 sm:line-clamp-3 flex-1">
                         {product.description}
                       </p>
                     )}
 
-                    {/* Quantity Input and Add to Cart */}
                     <div className="mt-z space-y-2">
                       <div>
                         <Label
@@ -435,7 +449,7 @@ export default function BookAOrderPage() {
                               ...prev,
                               [product.id]: value,
                             }));
-                            // Clear error when user starts typing
+
                             if (quantityErrors[product.id]) {
                               setQuantityErrors(prev => {
                                 const newErrors = { ...prev };
@@ -487,7 +501,6 @@ export default function BookAOrderPage() {
         )}
       </main>
 
-      {/* Floating Cart Button (Mobile) */}
       {cartTotal > 0 && (
         <div className="fixed bottom-4 left-3 right-3 sm:left-4 sm:right-4 lg:hidden z-50">
           <Button
@@ -500,13 +513,11 @@ export default function BookAOrderPage() {
         </div>
       )}
 
-      {/* Cart Slide-over */}
       <Dialog
         open={showCart}
         onOpenChange={open => !isSubmitting && setShowCart(open)}
       >
-        <DialogContent className="w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
-          {/* Loading Overlay */}
+        <DialogContent className="w-[95vw] gap-0 overflow-hidden sm:max-w-md">
           {isSubmitting && (
             <div className="absolute inset-0 bg-surface/90 flex items-center justify-center rounded-lg">
               <div className="text-center">
@@ -523,113 +534,116 @@ export default function BookAOrderPage() {
               Your Cart ({cartTotal} items)
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 mt-4">
-            {cart.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">
-                Your cart is empty
-              </p>
-            ) : (
-              cart.map(item => (
-                <div
-                  key={item.product.id}
-                  className="flex items-center gap-3 p-3 bg-surface-elevated rounded-lg"
-                >
-                  <div className="w-16 h-16 relative bg-active rounded flex-shrink-0">
-                    {item.product.imageUrl ? (
-                      <Image
-                        src={item.product.imageUrl}
-                        alt={item.product.name}
-                        fill
-                        className="object-cover rounded"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Package className="w-8 h-8 text-muted-foreground" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-muted-foreground">
-                      {item.product.code}
-                    </p>
-                    <p className="font-medium text-sm truncate">
-                      {item.product.name}
-                    </p>
-                    <div className="mt-1">
-                      <Label
-                        htmlFor={`cart-quantity-${item.product.id}`}
-                        className="text-xs text-text-secondary font-medium"
-                      >
-                        Quantity
-                      </Label>
-                      <Input
-                        id={`cart-quantity-${item.product.id}`}
-                        type="text"
-                        inputMode="numeric"
-                        value={
-                          cartQuantityInputs[item.product.id] ??
-                          item.quantity.toString()
-                        }
-                        onChange={e => {
-                          const value = e.target.value;
-                          setCartQuantityInputs(prev => ({
-                            ...prev,
-                            [item.product.id]: value,
-                          }));
-                          // Clear error when user starts typing
-                          if (cartQuantityErrors[item.product.id]) {
-                            setCartQuantityErrors(prev => {
-                              const newErrors = { ...prev };
-                              delete newErrors[item.product.id];
-                              return newErrors;
-                            });
-                          }
-                        }}
-                        onBlur={e => {
-                          const inputValue = e.target.value;
-                          const parsedQuantity =
-                            inputValue === ""
-                              ? 0
-                              : Number.parseInt(inputValue, 10);
-                          if (isNaN(parsedQuantity)) {
-                            setCartQuantityErrors(prev => ({
-                              ...prev,
-                              [item.product.id]: "Please enter a valid number",
-                            }));
-                            return;
-                          }
-                          updateCartQuantity(item.product.id, parsedQuantity);
-                        }}
-                        placeholder="Enter quantity"
-                        size="sm"
-                        className="mt-1"
-                      />
-                      {cartQuantityErrors[item.product.id] && (
-                        <p className="text-[0.625rem] sm:text-xs text-destructive mt-1">
-                          {cartQuantityErrors[item.product.id]}
-                        </p>
+          <DialogBody className="space-y-3">
+            <div className="space-y-3">
+              {cart.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">
+                  Your cart is empty
+                </p>
+              ) : (
+                cart.map(item => (
+                  <div
+                    key={item.product.id}
+                    className="flex items-center gap-3 p-3 bg-surface-elevated rounded-lg"
+                  >
+                    <div className="w-16 h-16 relative bg-active rounded flex-shrink-0">
+                      {item.product.imageUrl ? (
+                        <Image
+                          src={item.product.imageUrl}
+                          alt={item.product.name}
+                          fill
+                          className="object-cover rounded"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Package className="w-8 h-8 text-muted-foreground" />
+                        </div>
                       )}
                     </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-muted-foreground">
+                        {item.product.code}
+                      </p>
+                      <p className="font-medium text-sm truncate">
+                        {item.product.name}
+                      </p>
+                      <div className="mt-1">
+                        <Label
+                          htmlFor={`cart-quantity-${item.product.id}`}
+                          className="text-xs text-text-secondary font-medium"
+                        >
+                          Quantity
+                        </Label>
+                        <Input
+                          id={`cart-quantity-${item.product.id}`}
+                          type="text"
+                          inputMode="numeric"
+                          value={
+                            cartQuantityInputs[item.product.id] ??
+                            item.quantity.toString()
+                          }
+                          onChange={e => {
+                            const value = e.target.value;
+                            setCartQuantityInputs(prev => ({
+                              ...prev,
+                              [item.product.id]: value,
+                            }));
+
+                            if (cartQuantityErrors[item.product.id]) {
+                              setCartQuantityErrors(prev => {
+                                const newErrors = { ...prev };
+                                delete newErrors[item.product.id];
+                                return newErrors;
+                              });
+                            }
+                          }}
+                          onBlur={e => {
+                            const inputValue = e.target.value;
+                            const parsedQuantity =
+                              inputValue === ""
+                                ? 0
+                                : Number.parseInt(inputValue, 10);
+                            if (isNaN(parsedQuantity)) {
+                              setCartQuantityErrors(prev => ({
+                                ...prev,
+                                [item.product.id]:
+                                  "Please enter a valid number",
+                              }));
+                              return;
+                            }
+                            updateCartQuantity(item.product.id, parsedQuantity);
+                          }}
+                          placeholder="Enter quantity"
+                          size="sm"
+                          className="mt-1"
+                        />
+                        {cartQuantityErrors[item.product.id] && (
+                          <p className="text-[0.625rem] sm:text-xs text-destructive mt-1">
+                            {cartQuantityErrors[item.product.id]}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeFromCart(item.product.id)}
+                      className="p-2 text-destructive hover:bg-error-surface rounded whitespace-nowrap"
+                      aria-label={`Remove ${item.product.name} from cart`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => removeFromCart(item.product.id)}
-                    className="p-2 text-destructive hover:bg-error-surface rounded whitespace-nowrap"
-                    aria-label={`Remove ${item.product.name} from cart`}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-          {error && (
-            <div className="mt-4 p-3 bg-error-surface border border-error-border rounded-lg">
-              <p className="text-sm text-destructive">{error}</p>
+                ))
+              )}
             </div>
-          )}
+            {error && (
+              <div className="p-3 bg-error-surface border border-error-border rounded-lg">
+                <p className="text-sm text-destructive">{error}</p>
+              </div>
+            )}
+          </DialogBody>
           {cart.length > 0 && (
-            <DialogFooter className="mt-4">
+            <DialogFooter>
               <Button
                 onClick={handlePlaceOrder}
                 disabled={isSubmitting}
@@ -642,9 +656,8 @@ export default function BookAOrderPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Success Modal */}
       <Dialog open={showSuccessModal} onOpenChange={setShowSuccessModal}>
-        <DialogContent className="w-[95vw] sm:max-w-md text-center">
+        <DialogContent className="w-[95vw] p-4 text-center sm:max-w-md">
           <div className="flex flex-col items-center py-4">
             <div className="w-20 h-20 bg-success-surface rounded-full flex items-center justify-center mb-4">
               <CheckCircle className="w-12 h-12 text-success-foreground" />

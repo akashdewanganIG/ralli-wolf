@@ -4,9 +4,6 @@
 @source "../../../apps/web/**/*.{js,ts,jsx,tsx}";
 @source "../**/*.{js,ts,jsx,tsx}";
 
-/* Build output is not source. Tailwind scans by glob, not by git status, so a
-   dist directory whose name happens to fall outside .gitignore gets scanned and
-   its emitted chunks produce unparsable CSS. Exclude them by shape instead. */
 @source not "../../../apps/web/.next*/**";
 @source not "../../../apps/web/out/**";
 @source not "../../../**/node_modules/**";
@@ -15,21 +12,16 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  /* Body / UI text */
   --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
-  /* Headings / display */
+
   --font-display: var(--font-jakarta);
-  /* Brand-level headings, matched to the Ralli Wolf wordmark. Reserved for
-     a page’s single defining title — it is too heavy to carry body copy. */
+
   --font-brand:
     var(--font-archivo-black), var(--font-jakarta), ui-sans-serif, system-ui,
     sans-serif;
   --max-width-screen-3xl: 120rem;
 
-  /* One grayscale for the product: Tailwind Neutral. `gray`, `slate` and
-     `zinc` are aliased onto it so any utility still spelled the old way
-     lands on the same ramp instead of a second, slightly-different gray. */
   --color-neutral-50: #fafafa;
   --color-neutral-100: #f5f5f5;
   --color-neutral-200: #e5e5e5;
@@ -75,9 +67,6 @@
   --color-zinc-900: #171717;
   --color-zinc-950: #0a0a0a;
 
-  /* `indigo-*` predates the red rebrand and is still spelled that way in a
-     few screens; it resolves to the Ralli Wolf ramp rather than to actual
-     indigo. New work should use `primary`. */
   --color-indigo-50: #fef2f2;
   --color-indigo-100: #fee2e2;
   --color-indigo-200: #fecaca;
@@ -90,99 +79,58 @@
   --color-indigo-900: #7a0710;
 }
 
-/* ==========================================================================
-   Design tokens
-   --------------------------------------------------------------------------
-   One grayscale (Tailwind Neutral) carries the whole interface. Colour appears
-   only where it means something: status, destructive intent, data.
-
-   Read this file in three parts:
-     1. `:root`  — the light theme's raw values
-     2. `.dark`  — the dark theme's raw values, re-picked rather than inverted
-     3. `@theme inline` — exposes each raw value as a Tailwind utility
-
-   Components must consume the semantic names (`bg-surface`, `text-muted-
-   foreground`, `border-subtle`), never a raw scale step. Retheming then means
-   editing this file and nothing else.
-   ========================================================================== */
-
 :root {
   color-scheme: light;
 
-  /* -- Surfaces ---------------------------------------------------------
-     Light layers downward from white: the page is the *tinted* layer and
-     content panels sit on top of it in white. That reads as paper on a desk
-     and avoids the flat all-white dashboard. */
-  --background: #fafafa; /* A. page background          neutral-50  */
-  --surface: #ffffff; /* B. primary surface (cards)  white       */
-  --surface-secondary: #f5f5f5; /* C. secondary surface        neutral-100 */
-  --surface-elevated: #fafafa; /* D. nested inside a surface  neutral-50  */
-  --surface-subtle: #fafafa; /*    legacy alias of elevated             */
-  --sidebar: #ffffff; /* E. navigation surface                   */
+  --background: #fafafa;
+  --surface: #ffffff;
+  --surface-secondary: #f5f5f5;
+  --surface-elevated: #fafafa;
+  --surface-subtle: #fafafa;
+  --sidebar: #ffffff;
   --navbar: #ffffff;
 
-  /* Cards and popovers are the primary surface; kept as separate names
-     because component libraries address them individually. */
   --card: var(--surface);
   --card-foreground: #171717;
   --popover: var(--surface);
   --popover-foreground: #171717;
 
-  /* -- Lines ------------------------------------------------------------ */
-  --border: #e5e5e5; /* F. default border           neutral-200 */
-  --border-subtle: #f0f0f0; /* G. divider inside a surface             */
-  --border-strong: #d4d4d4; /*    hover / emphasis         neutral-300 */
-  /* Placeholder fill. One step off the surface — enough to read as content
-     pending, not so much that a loading table looks like a striped chart. */
+  --border: #e5e5e5;
+  --border-subtle: #f0f0f0;
+  --border-strong: #d4d4d4;
+
   --skeleton: #ececec;
 
-  /* -- Text -------------------------------------------------------------
-     Four steps only. More than four stops reading as hierarchy and starts
-     reading as inconsistency. */
-  --foreground: #171717; /* H. primary                  neutral-900 */
-  --text-secondary: #525252; /* I. secondary                neutral-600 */
-  --text-tertiary: #737373; /*    legacy alias of muted                */
-  --muted-foreground: #737373; /* J. muted                    neutral-500 */
-  --text-disabled: #a3a3a3; /* K. disabled                 neutral-400 */
+  --foreground: #171717;
+  --text-secondary: #525252;
+  --text-tertiary: #737373;
+  --muted-foreground: #737373;
+  --text-disabled: #a3a3a3;
 
-  /* -- Controls --------------------------------------------------------- */
-  --input-background: #ffffff; /* L. field fill                           */
-  --input: #d4d4d4; /*    field border             neutral-300 */
-  --hover: #f5f5f5; /* M. hover                    neutral-100 */
-  --active: #e5e5e5; /* N. pressed                  neutral-200 */
-  --selected: #f5f5f5; /* O. selected row/item                    */
+  --input-background: #ffffff;
+  --input: #d4d4d4;
+  --hover: #f5f5f5;
+  --active: #e5e5e5;
+  --selected: #f5f5f5;
   --selected-foreground: #171717;
-  --ring: #ed1c24; /* P. focus ring — the brand red           */
-  --overlay: rgb(10 10 10 / 0.55); /* Q. modal backdrop                  */
+  --ring: #ed1c24;
+  --overlay: rgb(10 10 10 / 0.55);
 
-  /* -- Brand -------------------------------------------------------------
-     Ralli Wolf red. The only decorative-looking colour that earns its place,
-     because it is the identity. Used for primary actions and focus. White
-     label on it reads at 4.4:1, which suits the semibold text buttons carry. */
   --primary: #ed1c24;
   --primary-foreground: #ffffff;
   --primary-surface: #fef2f2;
   --primary-border: #fecaca;
-  /* Text on the *tinted* --primary-surface, as opposed to
-     --primary-foreground, which is text on filled --primary. The bare
-     --primary only reaches ~3.7:1 here, short of 4.5:1 for a 13px label. */
+
   --primary-surface-foreground: #c5101b;
 
-  /* Neutral secondary action, so "not the primary button" is not a colour. */
   --secondary: #f5f5f5;
   --secondary-foreground: #404040;
   --muted: #f5f5f5;
   --accent: #f5f5f5;
   --accent-foreground: #171717;
 
-  /* -- Status -----------------------------------------------------------
-     `-surface` is the tinted background, `-foreground` the text that sits on
-     it, and the bare name the saturated mark (icon, dot, bar). */
   --success: #16a34a;
-  /* Text on a *filled* success surface, as opposed to --success-foreground,
-     which is text on the tinted --success-surface. The two cannot share a
-     value: --success is dark green here and light green in dark mode, so the
-     contrasting text flips with it. */
+
   --success-on: #ffffff;
   --success-surface: #f0fdf4;
   --success-foreground: #15803d;
@@ -200,15 +148,9 @@
   --info-foreground: #1d4ed8;
   --info-border: #bfdbfe;
 
-  /* Destructive is error, named for intent rather than state. */
   --destructive: var(--error);
   --destructive-foreground: #ffffff;
 
-  /* -- Data visualisation ------------------------------------------------
-     `--chart-mark` is the single hue for magnitude marks (bars, gauge arcs);
-     `--chart-step-*` is an ordinal ramp, light -> dark, for lifecycle stages.
-     The lightness gaps and the pale end's contrast against the card surface
-     are what keep the steps apart — do not hand-tune one value in isolation. */
   --chart-mark: #9e1b21;
   --chart-mark-hatch: #b32229;
   --chart-accent: #ed1c24;
@@ -221,7 +163,6 @@
   --chart-step-4: #c5101b;
   --chart-step-5: #8f1319;
 
-  /* -- Navigation -------------------------------------------------------- */
   --sidebar-foreground: #525252;
   --sidebar-primary: #fef2f2;
   --sidebar-primary-foreground: #c5101b;
@@ -234,54 +175,36 @@
   --scrollbar-thumb: #d4d4d4;
   --scrollbar-thumb-hover: #a3a3a3;
 
-  /* -- Shape -------------------------------------------------------------
-     rem-based so the whole interface scales with the user's font size. */
-  /* Base of the radius scale. Derived steps: sm 4px, md 6px, lg 8px (the
-     control radius), xl 12px (the card radius). Deliberately short of the
-     16px+ that reads as bubbly at dashboard density. */
   --radius: 0.5rem;
 }
 
 .dark {
   color-scheme: dark;
 
-  /* -- Surfaces ---------------------------------------------------------
-     Dark layers *upward*: the page is the darkest plane and each panel that
-     sits closer to the reader gets lighter. Four distinct steps, so a modal
-     over a card over the page still reads as three planes without borders
-     doing all the work. Pure black is avoided — it flattens the layering and
-     haloes against text on OLED. */
-  --background: #0a0a0a; /* A. page                     neutral-950 */
-  --surface: #171717; /* B. primary surface          neutral-900 */
-  --surface-secondary: #1f1f1f; /* C. secondary surface                    */
-  --surface-elevated: #262626; /* D. nested / raised          neutral-800 */
+  --background: #0a0a0a;
+  --surface: #171717;
+  --surface-secondary: #1f1f1f;
+  --surface-elevated: #262626;
   --surface-subtle: #1f1f1f;
-  --sidebar: #121212; /* E. navigation, just off the page        */
+  --sidebar: #121212;
   --navbar: #121212;
 
   --card: var(--surface);
   --card-foreground: #fafafa;
-  --popover: var(--surface-elevated); /* popovers float above cards        */
+  --popover: var(--surface-elevated);
   --popover-foreground: #fafafa;
 
-  /* -- Lines ------------------------------------------------------------
-     Borders lighten rather than darken, so they read against the surface
-     they divide rather than disappearing into it. */
   --border: #2e2e2e;
   --border-subtle: #232323;
   --border-strong: #3f3f3f;
   --skeleton: #262626;
 
-  /* -- Text -------------------------------------------------------------
-     Not pure white: #fafafa keeps long-form reading comfortable at the
-     contrast ratios dark backgrounds already exaggerate. */
-  --foreground: #fafafa; /* H. primary                  neutral-50  */
-  --text-secondary: #a3a3a3; /* I. secondary                neutral-400 */
+  --foreground: #fafafa;
+  --text-secondary: #a3a3a3;
   --text-tertiary: #737373;
-  --muted-foreground: #8a8a8a; /* J. muted                                */
-  --text-disabled: #5c5c5c; /* K. disabled                             */
+  --muted-foreground: #8a8a8a;
+  --text-disabled: #5c5c5c;
 
-  /* -- Controls --------------------------------------------------------- */
   --input-background: #1f1f1f;
   --input: #3a3a3a;
   --hover: #262626;
@@ -291,10 +214,6 @@
   --ring: #f5252d;
   --overlay: rgb(0 0 0 / 0.65);
 
-  /* -- Brand -------------------------------------------------------------
-     A true red, lifted only far enough off the brand value to clear a
-     near-black page (4.9:1 against #0a0a0a). The previous #ff5a5f was a
-     salmon tint and read as washed out next to the light theme. */
   --primary: #f5252d;
   --primary-foreground: #ffffff;
   --primary-surface: #2a1215;
@@ -307,9 +226,6 @@
   --accent: #262626;
   --accent-foreground: #fafafa;
 
-  /* -- Status -----------------------------------------------------------
-     Marks lighten and surfaces become deep, desaturated tints of the same
-     hue — a light theme's #f0fdf4 would glare here. */
   --success: #4ade80;
   --success-on: #052e16;
   --success-surface: #10251a;
@@ -331,8 +247,6 @@
   --destructive: var(--error);
   --destructive-foreground: #1a0505;
 
-  /* Re-stepped from the same ramp so the pale end still reads against the
-     dark card, rather than reusing the light theme's steps. */
   --chart-mark: #d8474e;
   --chart-mark-hatch: #e35a61;
   --chart-accent: #ff5a60;
@@ -345,7 +259,6 @@
   --chart-step-4: #e04a51;
   --chart-step-5: #b7272e;
 
-  /* -- Navigation -------------------------------------------------------- */
   --sidebar-foreground: #a3a3a3;
   --sidebar-primary: #2a1416;
   --sidebar-primary-foreground: #ff7a80;
@@ -360,7 +273,6 @@
 }
 
 @theme inline {
-  /* Every semantic token above, exposed as a Tailwind colour utility. */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -456,7 +368,6 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Ralli Wolf type pairing: Plus Jakarta Sans for headings, Inter for body */
   h1,
   h2,
   h3,
@@ -468,7 +379,6 @@
       sans-serif;
   }
 
-  /* https://tailwindcss.com/docs/upgrade-guide#buttons-use-the-default-cursor */
   button:not(:disabled),
   [role="button"]:not(:disabled) {
     cursor: pointer;
@@ -479,18 +389,6 @@
     color: var(--foreground);
   }
 
-  /* No visible scrollbars anywhere.
-
-     This hides the *bar*, never the scrolling: `scrollbar-width: none` and a
-     zero-size `::-webkit-scrollbar` leave the element scrollable by wheel,
-     trackpad, touch, arrow keys, Page Up/Down, Home/End, and programmatic
-     `scrollIntoView`. Overflow is untouched, so focusing something below the
-     fold still scrolls it into view — which is what keeps this accessible
-     rather than merely tidy.
-
-     Firefox and legacy Edge take the standard properties; Chrome, Edge, and
-     Safari take the pseudo-element. Between them that is every browser the
-     project targets. */
   * {
     scrollbar-width: none;
     -ms-overflow-style: none;
@@ -507,17 +405,6 @@
   }
 }
 
-/* Sign-in page surfaces.
-
-   The whole page above the footer is one flat colour — splitting it into
-   tinted bands made a short page look like three unrelated sections. The
-   footer is the only separate plane, and it sits one step *lighter* so the
-   page reads as the ground and the footer as the panel resting on it. */
-/* The sign-in page scrolls without drawing a scrollbar.
-
-   The scrolling element is the auth wrapper, not `.login-page` itself, so
-   this reaches it through `:has()` — which keeps the rule scoped to this one
-   page instead of stripping the bar from every auth screen. */
 :has(> .login-page) {
   scrollbar-width: none;
 }
@@ -527,10 +414,6 @@
 }
 
 .login-page {
-  /* Light: a genuinely grey ground, not an off-white one. The earlier
-     #f4f4f4 sat too close to the white inputs and cards, so nothing read as
-     layered — everything looked like one washed-out sheet. Dropping the
-     ground gives the white fields something to sit on. */
   --login-bg: #f1f1f1;
   --login-footer: #e8e8e8;
   --login-panel: #ffffff;
@@ -544,20 +427,34 @@
   --login-border: #2b2b2b;
 }
 
-/* Raised primary action.
+/*
+ * Login showcase slides: every slide stays mounted and crossfades on opacity,
+ * while the visible one drifts slowly. The resting transform matches the
+ * animation's end frame, so a slide holds its scale as it fades out and only
+ * resets while it is invisible.
+ */
+.login-slide {
+  opacity: 0;
+  transform: scale(1.12);
+  transition: opacity 1200ms ease-in-out;
+  will-change: opacity, transform;
+}
 
-   A multi-layer box-shadow is expressed here rather than as an arbitrary
-   Tailwind value: the comma-separated layers with alpha do not survive the
-   utility parser, and an effect this fiddly belongs in one named place.
+.login-slide[data-active="true"] {
+  opacity: 1;
+  animation: login-slide-drift 7200ms ease-out forwards;
+}
 
-   Depth comes from four cheap layers, all neutral or brand-hued so no new
-   colour enters the system:
-     1. a top inner highlight, as if lit from above
-     2. a bottom inner edge shade
-     3. a tight contact shadow
-     4. a soft ambient shadow
-   plus a faint same-hue sheen (::before) that lifts the centre so the face
-   reads as slightly convex rather than flat. */
+@keyframes login-slide-drift {
+  from {
+    transform: scale(1.04);
+  }
+
+  to {
+    transform: scale(1.12);
+  }
+}
+
 [data-slot="button"].btn-raised {
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.28),
@@ -588,8 +485,6 @@
     0 6px 14px -4px rgb(0 0 0 / 0.22);
 }
 
-/* Pressed: the face sinks, so the outer shadows collapse and the lighting
-   inverts to an inner shade. */
 [data-slot="button"].btn-raised:active:not(:disabled) {
   box-shadow:
     inset 0 2px 4px rgb(0 0 0 / 0.26),
@@ -608,9 +503,6 @@
   opacity: 0;
 }
 
-/* Dark mode: a white highlight that reads as “lit” on a light surface reads
-   as “glowing” on a dark one, so it is softened and the ambient shadow is
-   deepened to keep the same amount of separation. */
 .dark [data-slot="button"].btn-raised {
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.18),
@@ -641,21 +533,6 @@
     inset 0 1px 0 rgb(0 0 0 / 0.2);
 }
 
-/* ---------------------------------------------------------------------------
-   Dimensional button surface
-
-   The shared depth for any button with a filled face — primary, destructive,
-   success, and the full-width card action. The same lit-face language as
-   `.btn-raised` at a smaller scale: the values are reduced rather than
-   proportionally shrunk, because a 36px control wearing the login button's
-   8px ambient shadow reads as a floating chip rather than a button set into
-   the surface.
-
-   Everything is `box-shadow`, so the control's border box is unchanged — a
-   button keeps lining up with the 36px input beside it no matter how much
-   depth it appears to have. That is what item 10 needs: the effect reads
-   dimensionally without the geometry growing.
-   --------------------------------------------------------------------------- */
 [data-slot="button"].btn-dimensional {
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.24),
@@ -686,8 +563,6 @@
     0 4px 9px -3px rgb(0 0 0 / 0.2);
 }
 
-/* Pressed: the face sinks into the card. Depth alone carries this — the
-   project does not move controls on press. */
 [data-slot="button"].btn-dimensional:active:not(:disabled) {
   box-shadow:
     inset 0 2px 3px rgb(0 0 0 / 0.24),
@@ -736,12 +611,6 @@
     inset 0 1px 0 rgb(0 0 0 / 0.2);
 }
 
-/* Action row of a form rendered inside a dialog.
-
-   The button stays inside its <form>, so native submit, Enter-to-submit, and
-   constraint validation all keep working — only the presentation is lifted to
-   match `DialogFooter`. Doing this the other way round (moving the button into
-   the footer) would have meant wiring every form up by id for no visual gain. */
 .dialog-form-actions {
   display: flex;
   flex-wrap: wrap;
@@ -752,112 +621,61 @@
   border-top: 1px solid var(--border);
 }
 
-/* ---------------------------------------------------------------------------
-   Metric card hatching
-
-   A metric's tone is carried by a diagonal hatch drawn *into* the card surface
-   rather than by flooding the card with a tinted background. A full amber or
-   red fill turns every warning into a billboard and forces the type to fight
-   its own background for contrast; a hatch reads as texture, stays quiet next
-   to a neutral card, and leaves the value sitting on the normal surface.
-
-   `--metric-accent` is the single knob. Tone classes set it; nothing else
-   about the card changes, which is what keeps the treatment identical across
-   every metric regardless of semantic.
-   --------------------------------------------------------------------------- */
-.metric-hatch {
+/*
+ * Cards that carry a state get a narrow wash along their right edge, gone by
+ * the time it reaches the middle. Ordinary cards get no wash at all, so the
+ * colour only ever means something.
+ */
+.metric-tint {
   position: relative;
   isolation: isolate;
   --metric-accent: var(--muted-foreground);
-  /* Alpha, not a second colour: the hatch has to sit correctly on white and on
-     neutral-900, and one translucent stroke does that where two hard-coded
-     tints would need maintaining in parallel. */
-  --metric-hatch-alpha: 0.09;
-  --metric-hatch-gap: 7px;
+  --metric-tint-alpha: 0.1;
 }
 
-.metric-hatch::before {
+.metric-tint::before {
   content: "";
   position: absolute;
   inset: 0;
   z-index: -1;
   border-radius: inherit;
   pointer-events: none;
-  background-image: repeating-linear-gradient(
-    135deg,
+  background-image: linear-gradient(
+    to left,
     color-mix(
         in srgb,
-        var(--metric-accent) calc(var(--metric-hatch-alpha) * 100%),
+        var(--metric-accent) calc(var(--metric-tint-alpha) * 100%),
         transparent
       )
-      0,
-    color-mix(
-        in srgb,
-        var(--metric-accent) calc(var(--metric-hatch-alpha) * 100%),
-        transparent
-      )
-      1px,
-    transparent 1px,
-    transparent var(--metric-hatch-gap)
-  );
-  /* Fades out before it reaches the text column, so the value and label always
-     land on clean surface while the corner still shows the tone. */
-  -webkit-mask-image: linear-gradient(
-    215deg,
-    rgb(0 0 0 / 1) 0%,
-    rgb(0 0 0 / 0.55) 38%,
-    transparent 72%
-  );
-  mask-image: linear-gradient(
-    215deg,
-    rgb(0 0 0 / 1) 0%,
-    rgb(0 0 0 / 0.55) 38%,
-    transparent 72%
+      0%,
+    transparent 42%
   );
 }
 
-.metric-hatch-neutral {
-  --metric-accent: var(--muted-foreground);
-}
-.metric-hatch-critical {
+.metric-tint-critical {
   --metric-accent: var(--error);
 }
-.metric-hatch-positive {
+.metric-tint-positive {
   --metric-accent: var(--success);
 }
-.metric-hatch-warning {
-  --metric-accent: var(--warning);
+
+/* Anything needing attention reads red, a shade softer than critical. */
+.metric-tint-warning {
+  --metric-accent: var(--error);
+  --metric-tint-alpha: 0.07;
 }
-.metric-hatch-info {
+.metric-tint-info {
   --metric-accent: var(--info);
 }
 
-/* Dark mode: the same stroke at the same alpha disappears against neutral-900,
-   so the hatch is lifted rather than re-coloured. */
-.dark .metric-hatch {
-  --metric-hatch-alpha: 0.16;
+.dark .metric-tint {
+  --metric-tint-alpha: 0.18;
 }
 
-.dark .metric-hatch-neutral {
-  --metric-accent: #a3a3a3;
+.dark .metric-tint-warning {
+  --metric-tint-alpha: 0.12;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .metric-hatch::before {
-    transition: none;
-  }
-}
-
-/* Content-aware card grids.
-
-   The column count follows how much room each card actually needs — expressed
-   in rem, so it tracks the user’s font size — rather than a viewport
-   breakpoint. A breakpoint-driven `lg:grid-cols-4` keeps four columns when
-   someone raises their default font size to 24px and the labels clip; this
-   drops to three, then two, then one, on its own.
-
-   `min(100%, …)` stops the track from exceeding a container narrower than the
-   ideal card width, which would otherwise force a horizontal scrollbar. */
 .grid-auto-fit,
 .grid-auto-fit-sm,
 .grid-auto-fit-lg {
@@ -881,8 +699,6 @@
   overscroll-behavior: contain;
 }
 
-/* Panels that still need to scroll but must not show a scrollbar — the sidebar
-   navigation, where a track would cut through the section rules. */
 .scrollbar-none {
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -894,7 +710,6 @@
   display: none;
 }
 
-/* Shared application rhythm. Existing pages inherit one responsive content gutter. */
 .app-content > :where(.p-4, .p-5, .p-6) {
   margin-inline: auto;
   width: 100%;
@@ -917,7 +732,6 @@
   stroke-width: 1.8;
 }
 
-/* Compatibility layer for older module screens that still render native controls. */
 .app-content :where(button, a).rounded-md.bg-primary {
   display: inline-flex;
   min-height: 2.5rem;
@@ -941,20 +755,11 @@
   transition-duration: 150ms;
 }
 
-/* Older screens use native controls; keep their keyboard focus as visible as
-   the shared component library without overriding component-level rings. */
 .app-content :where(a[href], button:not([data-slot="button"])):focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 24%, transparent);
 }
 
-/* A button label always reads on one line; the control grows, the text never
-   wraps.
-
-   `:not(.flex)` keeps this off card-shaped links. Those are `flex` containers
-   holding a title and a description, and inheriting `nowrap` made their copy
-   run past the card edge and get clipped mid-word. Real buttons use
-   `inline-flex`, so they are unaffected. */
 .app-content
   :where(button, a):not(.flex):where(
     .rounded,

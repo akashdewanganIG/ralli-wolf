@@ -21,13 +21,7 @@ import {
   InsufficientStockError,
   NotFoundError,
 } from "./errors.js";
-import {
-  ZERO,
-  requirePositive,
-  roundQuantity,
-  sum,
-  toDecimal,
-} from "./decimal.js";
+import { ZERO, requirePositive, roundQuantity, sum } from "./decimal.js";
 
 type Tx = Prisma.TransactionClient;
 
@@ -41,19 +35,6 @@ export interface PutawaySuggestion {
   remainingWeightKg: Prisma.Decimal | null;
 }
 
-/**
- * Rank the bins a receipt could be put away into.
- *
- * The ranking is deliberately simple and explainable, because a warehouse
- * supervisor has to be able to tell why the system suggested a location:
- *
- *  1. a bin that already holds this item consolidates the SKU;
- *  2. a pick face for this item keeps replenishment short;
- *  3. otherwise the emptiest bin in traversal order.
- *
- * Bins that cannot physically take the receipt — blocked, inactive, or over
- * their weight rating — are filtered out rather than scored down.
- */
 export async function suggestPutawayBins(
   input: {
     productId: number;
@@ -109,7 +90,7 @@ export async function suggestPutawayBins(
     if (bin.maxWeightKg) {
       remainingWeight = bin.maxWeightKg.minus(currentWeight);
       if (incomingWeight && remainingWeight.lessThan(incomingWeight)) {
-        continue; // physically will not fit
+        continue;
       }
     }
 
@@ -138,7 +119,6 @@ export async function suggestPutawayBins(
       reason = `Mixed bin holding ${otherItems} other item(s)`;
     }
 
-    // Earlier traversal positions break ties, so putaway walks the aisle in order.
     score -= Math.min(bin.pickSequence, 20) / 100;
 
     suggestions.push({
@@ -156,10 +136,6 @@ export async function suggestPutawayBins(
   return suggestions.slice(0, input.limit ?? 5);
 }
 
-/**
- * Raise putaway work for goods sitting in a receiving bin. One task per
- * receipt line keeps the lot identity intact through the move.
- */
 export async function createPutawayTask(
   tx: Tx,
   input: {
@@ -210,10 +186,6 @@ export async function createPutawayTask(
   });
 }
 
-/**
- * Complete a putaway: physically move the goods and close the task. A short
- * putaway is allowed and leaves the task open for the remainder.
- */
 export async function completePutawayTask(
   tx: Tx,
   input: {
@@ -223,6 +195,9 @@ export async function completePutawayTask(
     userId: number;
   }
 ) {
+  await tx.$queryRaw`
+    SELECT "id" FROM "putaway_tasks" WHERE "id" = ${input.taskId} FOR UPDATE
+  `;
   const task = await tx.putawayTask.findUnique({ where: { id: input.taskId } });
   if (!task) throw new NotFoundError("Putaway task");
   if (
@@ -238,14 +213,10 @@ export async function completePutawayTask(
   }
 
   const outstanding = task.quantity.minus(task.movedQuantity);
-  const quantity = input.quantity
-    ? toDecimal(input.quantity, "quantity")
-    : outstanding;
-  if (quantity.lessThanOrEqualTo(0)) {
-    throw new DomainError("quantity must be greater than zero", {
-      code: "VALIDATION_ERROR",
-    });
-  }
+  const quantity =
+    input.quantity === undefined || input.quantity === null
+      ? requirePositive(outstanding, "quantity")
+      : requirePositive(input.quantity, "quantity");
   if (quantity.greaterThan(outstanding)) {
     throw new DomainError(
       `Putaway task ${task.taskNumber} has only ${outstanding.toFixed(4)} left to move`,
@@ -293,15 +264,6 @@ export interface PickLineRequest {
   quantity: Prisma.Decimal | number | string;
 }
 
-/**
- * Build a pick list for a demand document.
- *
- * Each requested line is allocated across the bins that actually hold stock,
- * in the order the item's picking strategy dictates, and the resulting tasks
- * are sequenced by bin traversal order so a picker walks the aisle once
- * rather than criss-crossing it. Stock is reserved as the list is created, so
- * two pick lists cannot be built against the same units.
- */
 export async function createPickList(
   tx: Tx,
   input: {
@@ -350,7 +312,6 @@ export async function createPickList(
     quantity: Prisma.Decimal;
   }> = [];
 
-  // Sorting by product id keeps the advisory locks in a deterministic order.
   const sortedLines = [...input.lines].sort(
     (a, b) => a.productId - b.productId
   );
@@ -455,7 +416,6 @@ export async function createPickList(
     }
   }
 
-  // Walk order: bin traversal sequence, then bin id for stability.
   plannedTasks.sort(
     (a, b) => a.pickSequence - b.pickSequence || a.binId - b.binId
   );
@@ -504,11 +464,6 @@ export async function createPickList(
   });
 }
 
-/**
- * Confirm a pick. The stock leaves the bin and the ledger records it against
- * the lot the picker actually took, which is what makes lot traceability
- * survive the warehouse floor.
- */
 export async function confirmPick(
   tx: Tx,
   input: {
@@ -518,6 +473,9 @@ export async function confirmPick(
     notes?: string | null;
   }
 ) {
+  await tx.$queryRaw`
+    SELECT "id" FROM "pick_tasks" WHERE "id" = ${input.pickTaskId} FOR UPDATE
+  `;
   const task = await tx.pickTask.findUnique({
     where: { id: input.pickTaskId },
     include: { pickList: true },
@@ -538,14 +496,10 @@ export async function confirmPick(
   }
 
   const outstanding = task.requestedQuantity.minus(task.pickedQuantity);
-  const quantity = input.quantity
-    ? toDecimal(input.quantity, "quantity")
-    : outstanding;
-  if (quantity.lessThanOrEqualTo(0)) {
-    throw new DomainError("quantity must be greater than zero", {
-      code: "VALIDATION_ERROR",
-    });
-  }
+  const quantity =
+    input.quantity === undefined || input.quantity === null
+      ? requirePositive(outstanding, "quantity")
+      : requirePositive(input.quantity, "quantity");
   if (quantity.greaterThan(outstanding)) {
     throw new DomainError(
       `Only ${outstanding.toFixed(4)} is left to pick on this task`,
@@ -590,7 +544,6 @@ export async function confirmPick(
     },
   });
 
-  // Roll the header status forward once every task is done.
   const remaining = await tx.pickTask.count({
     where: {
       pickListId: task.pickListId,
@@ -612,7 +565,6 @@ export async function confirmPick(
   return updated;
 }
 
-/** Release a pick list to the floor so pickers can start on it. */
 export async function releasePickList(
   tx: Tx,
   pickListId: number,
@@ -638,13 +590,24 @@ export async function releasePickList(
   });
 }
 
-/** Cancel a pick list and hand its reserved stock back. */
 export async function cancelPickList(tx: Tx, pickListId: number) {
   const pickList = await tx.pickList.findUnique({
     where: { id: pickListId },
     include: { tasks: true },
   });
   if (!pickList) throw new NotFoundError("Pick list");
+  if (
+    !(<PickListStatus[]>[
+      PickListStatus.IN_PROGRESS,
+      PickListStatus.PICKED,
+      PickListStatus.PACKED,
+    ]).includes(pickList.status)
+  ) {
+    throw new DomainError(
+      `Pick list ${pickList.pickListNumber} cannot be packed while ${pickList.status.toLowerCase()}`,
+      { status: 409, code: "PICK_LIST_NOT_PACKABLE" }
+    );
+  }
   if (pickList.status === PickListStatus.SHIPPED) {
     throw new DomainError("A shipped pick list cannot be cancelled", {
       code: "INVALID_STATUS",
@@ -667,11 +630,6 @@ export async function cancelPickList(tx: Tx, pickListId: number) {
   });
 }
 
-/**
- * Pack picked goods into a carton or onto a pallet. Only quantities that have
- * actually been picked can be packed, so a packing slip can never overstate
- * what left the building.
- */
 export async function packPickedGoods(
   tx: Tx,
   input: {
@@ -690,16 +648,31 @@ export async function packPickedGoods(
     userId: number;
   }
 ) {
-  const pickList = await tx.pickList.findUnique({
-    where: { id: input.pickListId },
-    include: { tasks: true },
-  });
-  if (!pickList) throw new NotFoundError("Pick list");
   if (input.lines.length === 0) {
     throw new DomainError("A package needs at least one line", {
       code: "VALIDATION_ERROR",
     });
   }
+  const taskIds = input.lines.map(line => line.pickTaskId);
+  if (new Set(taskIds).size !== taskIds.length) {
+    throw new DomainError("A pick task can appear only once in a package", {
+      code: "DUPLICATE_PICK_TASK",
+    });
+  }
+  await tx.$queryRaw`
+    SELECT "id" FROM "pick_lists" WHERE "id" = ${input.pickListId} FOR UPDATE
+  `;
+  await tx.$queryRaw`
+    SELECT "id" FROM "pick_tasks"
+    WHERE "id" IN (${Prisma.join([...taskIds].sort((a, b) => a - b))})
+    ORDER BY "id"
+    FOR UPDATE
+  `;
+  const pickList = await tx.pickList.findUnique({
+    where: { id: input.pickListId },
+    include: { tasks: true },
+  });
+  if (!pickList) throw new NotFoundError("Pick list");
 
   const packageNumber = await nextDocumentNumber(tx, SEQUENCE_KEYS.PACKAGE);
   const created = await tx.package.create({
@@ -708,12 +681,22 @@ export async function packPickedGoods(
       pickListId: input.pickListId,
       palletId: input.palletId ?? null,
       status: PackageStatus.PACKED,
-      grossWeightKg: input.grossWeightKg
-        ? toDecimal(input.grossWeightKg, "grossWeightKg")
-        : null,
-      lengthCm: input.lengthCm ? toDecimal(input.lengthCm, "lengthCm") : null,
-      widthCm: input.widthCm ? toDecimal(input.widthCm, "widthCm") : null,
-      heightCm: input.heightCm ? toDecimal(input.heightCm, "heightCm") : null,
+      grossWeightKg:
+        input.grossWeightKg === undefined || input.grossWeightKg === null
+          ? null
+          : requirePositive(input.grossWeightKg, "grossWeightKg"),
+      lengthCm:
+        input.lengthCm === undefined || input.lengthCm === null
+          ? null
+          : requirePositive(input.lengthCm, "lengthCm"),
+      widthCm:
+        input.widthCm === undefined || input.widthCm === null
+          ? null
+          : requirePositive(input.widthCm, "widthCm"),
+      heightCm:
+        input.heightCm === undefined || input.heightCm === null
+          ? null
+          : requirePositive(input.heightCm, "heightCm"),
       carrier: input.carrier ?? null,
       trackingNumber: input.trackingNumber ?? null,
       packedById: input.userId,
@@ -766,12 +749,31 @@ export async function packPickedGoods(
       status: { notIn: [TaskStatus.COMPLETED, TaskStatus.CANCELLED] },
     },
   });
-  if (outstanding === 0) {
-    await tx.pickList.update({
-      where: { id: input.pickListId },
-      data: { status: PickListStatus.PACKED },
-    });
-  }
+  const packedByTask = await tx.packageLine.groupBy({
+    by: ["pickTaskId"],
+    where: {
+      pickTask: { pickListId: input.pickListId },
+      package: { status: { not: PackageStatus.CANCELLED } },
+    },
+    _sum: { quantity: true },
+  });
+  const packedQuantities = new Map(
+    packedByTask.map(row => [row.pickTaskId, row._sum.quantity ?? ZERO])
+  );
+  const hasUnpackedQuantity = pickList.tasks.some(task =>
+    task.pickedQuantity.greaterThan(packedQuantities.get(task.id) ?? ZERO)
+  );
+  await tx.pickList.update({
+    where: { id: input.pickListId },
+    data: {
+      status:
+        outstanding > 0
+          ? PickListStatus.IN_PROGRESS
+          : hasUnpackedQuantity
+            ? PickListStatus.PICKED
+            : PickListStatus.PACKED,
+    },
+  });
 
   return tx.package.findUniqueOrThrow({
     where: { id: created.id },
@@ -786,7 +788,6 @@ export async function packPickedGoods(
   });
 }
 
-/** Mark packages as gone and close out the pick list. */
 export async function shipPackages(
   tx: Tx,
   input: { packageIds: number[]; pickListId: number }
@@ -796,11 +797,65 @@ export async function shipPackages(
       code: "VALIDATION_ERROR",
     });
   }
+  if (new Set(input.packageIds).size !== input.packageIds.length) {
+    throw new DomainError("packageIds cannot contain duplicates", {
+      code: "VALIDATION_ERROR",
+    });
+  }
+  const orderedIds = [...input.packageIds].sort((a, b) => a - b);
+  await tx.$queryRaw`
+    SELECT "id" FROM "pick_lists" WHERE "id" = ${input.pickListId} FOR UPDATE
+  `;
+  await tx.$queryRaw`
+    SELECT "id" FROM "packages"
+    WHERE "id" IN (${Prisma.join(orderedIds)})
+    ORDER BY "id"
+    FOR UPDATE
+  `;
+  const pickList = await tx.pickList.findUnique({
+    where: { id: input.pickListId },
+    select: { id: true, pickListNumber: true, status: true },
+  });
+  if (!pickList) throw new NotFoundError("Pick list");
+  if (pickList.status !== PickListStatus.PACKED) {
+    throw new DomainError(
+      `Pick list ${pickList.pickListNumber} must be fully packed before shipping`,
+      { status: 409, code: "PICK_LIST_NOT_PACKED" }
+    );
+  }
+  const packages = await tx.package.findMany({
+    where: { id: { in: orderedIds } },
+    select: { id: true, pickListId: true, status: true },
+  });
+  if (packages.length !== orderedIds.length) {
+    throw new NotFoundError("One or more packages");
+  }
+  const invalid = packages.find(
+    entry =>
+      entry.pickListId !== input.pickListId ||
+      entry.status !== PackageStatus.PACKED
+  );
+  if (invalid) {
+    throw new DomainError(
+      `Package ${invalid.id} does not belong to this pick list or is not ready to ship`,
+      { status: 409, code: "PACKAGE_NOT_SHIPPABLE" }
+    );
+  }
 
-  await tx.package.updateMany({
-    where: { id: { in: input.packageIds }, pickListId: input.pickListId },
+  const shipped = await tx.package.updateMany({
+    where: {
+      id: { in: orderedIds },
+      pickListId: input.pickListId,
+      status: PackageStatus.PACKED,
+    },
     data: { status: PackageStatus.SHIPPED, shippedAt: new Date() },
   });
+  if (shipped.count !== orderedIds.length) {
+    throw new DomainError("Package state changed while shipping", {
+      status: 409,
+      code: "PACKAGE_STATE_CHANGED",
+    });
+  }
 
   const open = await tx.package.count({
     where: {
@@ -818,10 +873,6 @@ export async function shipPackages(
   return open;
 }
 
-/**
- * Bin utilisation for a warehouse: how full each location is by weight and by
- * distinct items, so a supervisor can spot congestion before it bites.
- */
 export async function getStorageUtilisation(warehouseId: number) {
   const bins = await prisma.storageBin.findMany({
     where: { warehouseId, isActive: true },

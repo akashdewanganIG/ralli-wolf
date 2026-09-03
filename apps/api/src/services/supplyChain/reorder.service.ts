@@ -13,11 +13,6 @@ import { getAvailability, getIncomingQuantity } from "./stock.service.js";
 import { ZERO, roundQuantity } from "./decimal.js";
 import { createNotification } from "../../controllers/notification.controller.js";
 
-/**
- * Settings that tune the alert engine. They live in `global_settings` so an
- * administrator can change them from the Settings screen; the fallbacks here
- * are only used until the row is seeded.
- */
 export const SUPPLY_CHAIN_SETTINGS = {
   EXPIRY_WARNING_DAYS: "inventory.expiry_warning_days",
   ALERT_NOTIFY_ROLES: "inventory.alert_notify_roles",
@@ -58,13 +53,6 @@ export interface AlertEvaluationSummary {
   }>;
 }
 
-/**
- * Classify one product/warehouse position against its replenishment policy.
- *
- * The comparison uses *projected* stock — free stock plus what is already on
- * order — because raising a purchase alert for something a supplier is
- * already shipping is how buyers end up double-ordering.
- */
 function classify(
   available: Prisma.Decimal,
   projected: Prisma.Decimal,
@@ -109,13 +97,6 @@ function classify(
   return null;
 }
 
-/**
- * Evaluate every active reorder rule and reconcile the open alert queue.
- *
- * The engine is idempotent: running it twice does not create duplicate alerts
- * (a partial unique index enforces one OPEN alert per product/warehouse/type),
- * and positions that have recovered have their alerts resolved automatically.
- */
 export async function evaluateStockAlerts(
   options: {
     warehouseId?: number | null;
@@ -166,7 +147,6 @@ export async function evaluateStockAlerts(
     options.warehouseId ?? null
   );
 
-  // Requisition lines are grouped by warehouse so one document covers a run.
   const requisitionDrafts = new Map<
     number,
     Array<{
@@ -200,7 +180,6 @@ export async function evaluateStockAlerts(
       },
     });
 
-    // Close anything that no longer applies.
     for (const alert of openAlerts) {
       const stillApplies =
         verdict?.type === alert.alertType ||
@@ -304,7 +283,6 @@ export async function evaluateStockAlerts(
       verdict.type === StockAlertType.REORDER_POINT;
 
     if (autoRequisitionEnabled && rule.autoRequisition && needsReplenishment) {
-      // Order at least the configured lot size, and enough to clear the gap.
       const gap = roundQuantity(
         Prisma.Decimal.max(ZERO, verdict.threshold.minus(projected))
       );
@@ -378,11 +356,6 @@ function buildAlertMessage(
   }
 }
 
-/**
- * Create the alert unless an identical one is already open. The partial
- * unique index is the real guard; catching its violation keeps a concurrent
- * evaluation run from failing the whole batch.
- */
 async function upsertAlert(input: {
   productId: number;
   warehouseId: number;
@@ -442,10 +415,6 @@ async function upsertAlert(input: {
   }
 }
 
-/**
- * Flag lots that are past, or close to, their expiry date. Only stock that is
- * actually on hand is considered — a fully consumed lot is not a problem.
- */
 export async function evaluateExpiryAlerts(
   warningDays: number,
   warehouseId?: number | null
@@ -474,7 +443,6 @@ export async function evaluateExpiryAlerts(
   const alerts: AlertEvaluationSummary["alerts"] = [];
   let raised = 0;
 
-  // One alert per product/warehouse, carrying the earliest-expiring lot.
   const grouped = new Map<string, (typeof balances)[number][]>();
   for (const balance of balances) {
     const key = `${balance.productId}:${balance.warehouseId}`;
@@ -550,12 +518,6 @@ export async function evaluateExpiryAlerts(
   return { raised, alerts };
 }
 
-/**
- * The price we expect to pay, taken from the supplier catalogue in force
- * today, falling back to the item's standard cost. Returns zero only when
- * neither is on record, and the requisition then shows a zero estimate
- * rather than a made-up one.
- */
 async function resolveExpectedUnitPrice(
   productId: number,
   supplierId: number | null
@@ -591,8 +553,6 @@ async function createReplenishmentRequisitions(
     }>
   >
 ): Promise<number> {
-  // Requisitions raised by the engine are owned by the earliest system admin,
-  // because a document must always have an accountable requester.
   const systemUser = await prisma.user.findFirst({
     where: { role: UserRole.ADMIN, deletedAt: null },
     orderBy: { id: "asc" },
@@ -603,7 +563,6 @@ async function createReplenishmentRequisitions(
   let created = 0;
 
   for (const [warehouseId, lines] of drafts.entries()) {
-    // Skip anything already covered by an open requisition.
     const pendingLines = await prisma.purchaseRequisitionLine.findMany({
       where: {
         productId: { in: lines.map(line => line.productId) },
@@ -704,7 +663,6 @@ async function notifyStockAlerts(
   );
 }
 
-/** Acknowledge an alert so the team knows somebody has picked it up. */
 export async function acknowledgeAlert(
   alertId: number,
   userId: number,

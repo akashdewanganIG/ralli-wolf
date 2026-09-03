@@ -8,7 +8,6 @@ import { EditNumberModal } from "@/components/whatsapp/edit-number-modal";
 import { whatsappService } from "@/lib/api/services";
 import { toast } from "@/lib/toast";
 import { Button, Label } from "@repo/ui";
-import { Badge } from "@repo/ui/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -16,71 +15,54 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@repo/ui/components/ui/select";
-import {
-  Check,
-  ChevronDown,
-  Edit,
-  Plus,
-  RefreshCw,
-  Search,
-  Trash2,
-  X,
-} from "@repo/ui/icons";
-import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { Check, Edit, Plus, RefreshCw, Search, Trash2 } from "@repo/ui/icons";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Tag } from "@repo/ui/components/ui/tag";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { PageHeader } from "@repo/ui/components/ui/page-header";
 import { CategorySwitcher } from "@repo/ui/components/ui/category-switcher";
+import type { MessageTemplate, MessagingAccount } from "@/lib/api/types";
 
 const ALLOW_UTILITY_TEMPLATES =
   process.env.NEXT_PUBLIC_ALLOW_UTILITY_TEMPLATES === "true";
 const ALLOW_AUTH_TEMPLATES =
   process.env.NEXT_PUBLIC_ALLOW_AUTH_TEMPLATES === "true";
 
-type Template = {
-  id: number;
-  name: string;
-  language: string;
-  languages?: Array<{
-    code: string;
-    status: string;
-    id: number;
-    rejection_reason?: string;
-  }>;
-  category?: string | null;
-  status: string;
-  components?: any;
-  createdAt: string;
-  updatedAt?: string;
-};
+type Template = MessageTemplate;
+type WhatsAppNumber = MessagingAccount;
 
-type WhatsAppNumber = {
-  id: number;
-  displayName: string;
-  phoneNumber?: string;
-  senderId?: string | null;
-  businessId?: string | null;
-  status?: string;
-  provider: string;
-  createdAt: string;
-  updatedAt?: string;
-};
+function errorMessage(error: unknown): string {
+  return error instanceof Error && error.message
+    ? error.message
+    : "Unexpected error";
+}
+
+function aggregateTemplateStatus(template: Template): string {
+  if (!template.languages?.length) return template.status || "UNKNOWN";
+  const statuses = template.languages.map(language => language.status);
+  const hasApproved = statuses.includes("APPROVED");
+  const hasPending = statuses.includes("PENDING");
+  const hasRejected = statuses.some(
+    status => status === "REJECTED" || status === "FAILED"
+  );
+  if (hasApproved && !hasPending && !hasRejected) return "APPROVED";
+  if (hasApproved && (hasPending || hasRejected)) return "MIXED";
+  if (hasPending) return "PENDING";
+  if (hasRejected) return "REJECTED";
+  return "UNKNOWN";
+}
 
 export default function WhatsAppManagementPage() {
-  const router = useRouter();
   const [activeTab, setActiveTab] = useState<"templates" | "numbers">(
     "templates"
   );
 
-  // Templates state
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [filteredTemplates, setFilteredTemplates] = useState<Template[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [templateSearchQuery, setTemplateSearchQuery] = useState("");
   const [isTemplateSearchOpen, setIsTemplateSearchOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<number | null>(null);
-  const [accounts, setAccounts] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<MessagingAccount[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(
@@ -88,7 +70,6 @@ export default function WhatsAppManagementPage() {
   );
   const [deletingTemplate, setDeletingTemplate] = useState(false);
 
-  // Filter state
   const [selectedLanguageFilter, setSelectedLanguageFilter] =
     useState<string>("all");
   const [selectedStatusFilter, setSelectedStatusFilter] =
@@ -96,7 +77,6 @@ export default function WhatsAppManagementPage() {
   const [selectedCategoryFilter, setSelectedCategoryFilter] =
     useState<string>("all");
 
-  // Numbers state
   const [numbers, setNumbers] = useState<WhatsAppNumber[]>([]);
   const [numbersLoading, setNumbersLoading] = useState(false);
   const [showEditNumberModal, setShowEditNumberModal] = useState(false);
@@ -104,32 +84,25 @@ export default function WhatsAppManagementPage() {
     null
   );
 
-  // Refs
   const templateSearchRef = useRef<HTMLDivElement>(null);
 
-  // Load accounts on mount
-  useEffect(() => {
-    loadAccounts();
-  }, []);
+  const allowedTemplates = useMemo(
+    () =>
+      templates.filter(template => {
+        const category = template.category?.toLowerCase();
+        if (category === "marketing") return true;
+        if (category === "utility") return ALLOW_UTILITY_TEMPLATES;
+        if (category === "authentication" || category === "auth") {
+          return ALLOW_AUTH_TEMPLATES;
+        }
+        return false;
+      }),
+    [templates]
+  );
 
-  // Load templates when account is selected
-  useEffect(() => {
-    if (selectedAccount) {
-      loadTemplates();
-    }
-  }, [selectedAccount]);
-
-  // Load numbers on mount
-  useEffect(() => {
-    if (activeTab === "numbers") {
-      loadNumbers();
-    }
-  }, [activeTab]);
-
-  // Extract unique filter values from templates
   const uniqueLanguages = Array.from(
     new Set(
-      templates.flatMap(template => {
+      allowedTemplates.flatMap(template => {
         if (template?.languages && Array.isArray(template.languages)) {
           return template.languages.map(lang => lang.code);
         }
@@ -139,94 +112,9 @@ export default function WhatsAppManagementPage() {
   ).sort();
 
   const uniqueStatuses = Array.from(
-    new Set(
-      templates.flatMap(template => {
-        if (template?.languages && Array.isArray(template.languages)) {
-          const statuses = template.languages.map(l => l.status);
-          const hasApproved = statuses.some(s => s === "APPROVED");
-          const hasPending = statuses.some(s => s === "PENDING");
-          const hasRejected = statuses.some(
-            s => s === "REJECTED" || s === "FAILED"
-          );
-          if (hasApproved && !hasPending && !hasRejected) return ["APPROVED"];
-          if (hasApproved && (hasPending || hasRejected)) return ["MIXED"];
-          if (hasPending) return ["PENDING"];
-          if (hasRejected) return ["REJECTED"];
-          return ["UNKNOWN"];
-        }
-        return template?.status ? [template.status] : ["UNKNOWN"];
-      })
-    )
+    new Set(allowedTemplates.map(aggregateTemplateStatus))
   ).sort();
 
-  // Filter templates based on search and filters
-  useEffect(() => {
-    let filtered = templates;
-
-    // Apply search filter
-    if (templateSearchQuery.trim()) {
-      filtered = filtered.filter(template =>
-        template.name.toLowerCase().includes(templateSearchQuery.toLowerCase())
-      );
-    }
-
-    // Apply language filter
-    if (selectedLanguageFilter !== "all") {
-      filtered = filtered.filter(template => {
-        if (template?.languages && Array.isArray(template.languages)) {
-          return template.languages.some(
-            lang => lang.code === selectedLanguageFilter
-          );
-        }
-        return template?.language === selectedLanguageFilter;
-      });
-    }
-
-    // Apply status filter
-    if (selectedStatusFilter !== "all") {
-      filtered = filtered.filter(template => {
-        if (template?.languages && Array.isArray(template.languages)) {
-          const statuses = template.languages.map(l => l.status);
-          const hasApproved = statuses.some(s => s === "APPROVED");
-          const hasPending = statuses.some(s => s === "PENDING");
-          const hasRejected = statuses.some(
-            s => s === "REJECTED" || s === "FAILED"
-          );
-
-          let templateStatus = "UNKNOWN";
-          if (hasApproved && !hasPending && !hasRejected) {
-            templateStatus = "APPROVED";
-          } else if (hasApproved && (hasPending || hasRejected)) {
-            templateStatus = "MIXED";
-          } else if (hasPending) {
-            templateStatus = "PENDING";
-          } else if (hasRejected) {
-            templateStatus = "REJECTED";
-          }
-
-          return templateStatus === selectedStatusFilter;
-        }
-        return template?.status === selectedStatusFilter;
-      });
-    }
-
-    // Apply category filter
-    if (selectedCategoryFilter !== "all") {
-      filtered = filtered.filter(
-        template => template?.category === selectedCategoryFilter
-      );
-    }
-
-    setFilteredTemplates(filtered);
-  }, [
-    templateSearchQuery,
-    templates,
-    selectedLanguageFilter,
-    selectedStatusFilter,
-    selectedCategoryFilter,
-  ]);
-
-  // Click outside handler for template search
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -246,52 +134,55 @@ export default function WhatsAppManagementPage() {
     };
   }, [isTemplateSearchOpen]);
 
-  const loadAccounts = async () => {
+  const loadAccounts = useCallback(async () => {
     try {
       const data = await whatsappService.listAccounts();
-      // Filter to show only active accounts in template dropdown
+
       const activeAccounts = data.filter(a => a.status === "ACTIVE");
       setAccounts(activeAccounts);
-      if (activeAccounts.length > 0 && !selectedAccount && activeAccounts[0]) {
-        setSelectedAccount(activeAccounts[0].id);
-      }
-    } catch (error: any) {
-      toast.error("Failed to load accounts: " + error.message);
+      setSelectedAccount(current => current ?? activeAccounts[0]?.id ?? null);
+    } catch (error: unknown) {
+      toast.error("Failed to load accounts: " + errorMessage(error));
     }
-  };
+  }, []);
 
-  const loadTemplates = async () => {
+  const loadTemplates = useCallback(async () => {
     if (!selectedAccount) return;
 
     setTemplatesLoading(true);
     try {
       const data = await whatsappService.listTemplates(selectedAccount);
-      // Filter out any null or invalid entries
-      const validTemplates = (data || []).filter(tpl => tpl && tpl.id);
-      setTemplates(validTemplates);
-      setFilteredTemplates(validTemplates);
-    } catch (error: any) {
-      toast.error("Failed to load templates: " + error.message);
+      setTemplates(data);
+    } catch (error: unknown) {
+      toast.error("Failed to load templates: " + errorMessage(error));
     } finally {
       setTemplatesLoading(false);
     }
-  };
+  }, [selectedAccount]);
 
-  const loadNumbers = async () => {
+  const loadNumbers = useCallback(async () => {
     setNumbersLoading(true);
     try {
       const data = await whatsappService.listAccounts();
-      console.log("Numbers received from API:", data);
-      // Filter out any null or invalid entries
-      const validNumbers = (data || []).filter(num => num && num.id);
-      console.log("Valid numbers after filtering:", validNumbers);
-      setNumbers(validNumbers);
-    } catch (error: any) {
-      toast.error("Failed to load numbers: " + error.message);
+      setNumbers(data);
+    } catch (error: unknown) {
+      toast.error("Failed to load numbers: " + errorMessage(error));
     } finally {
       setNumbersLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    void loadAccounts();
+  }, [loadAccounts]);
+
+  useEffect(() => {
+    if (selectedAccount) void loadTemplates();
+  }, [loadTemplates, selectedAccount]);
+
+  useEffect(() => {
+    if (activeTab === "numbers") void loadNumbers();
+  }, [activeTab, loadNumbers]);
 
   const handleSyncTemplates = async () => {
     if (!selectedAccount) {
@@ -304,8 +195,8 @@ export default function WhatsAppManagementPage() {
       await whatsappService.syncTemplates(selectedAccount);
       toast.success(`Synced templates successfully`);
       await loadTemplates();
-    } catch (error: any) {
-      toast.error("Failed to sync templates: " + error.message);
+    } catch (error: unknown) {
+      toast.error("Failed to sync templates: " + errorMessage(error));
     } finally {
       setTemplatesLoading(false);
     }
@@ -319,8 +210,8 @@ export default function WhatsAppManagementPage() {
         `Synced ${result.synced} numbers successfully. ${result.errors} errors.`
       );
       await loadNumbers();
-    } catch (error: any) {
-      toast.error("Failed to sync numbers: " + error.message);
+    } catch (error: unknown) {
+      toast.error("Failed to sync numbers: " + errorMessage(error));
     } finally {
       setNumbersLoading(false);
     }
@@ -344,8 +235,8 @@ export default function WhatsAppManagementPage() {
       setShowDeleteModal(false);
       setSelectedTemplate(null);
       await loadTemplates();
-    } catch (error: any) {
-      toast.error("Failed to delete template: " + error.message);
+    } catch (error: unknown) {
+      toast.error("Failed to delete template: " + errorMessage(error));
     } finally {
       setDeletingTemplate(false);
     }
@@ -353,7 +244,7 @@ export default function WhatsAppManagementPage() {
 
   const handleTemplateCreated = () => {
     setShowCreateModal(false);
-    loadTemplates();
+    void loadTemplates();
   };
 
   const handleEditNumber = (number: WhatsAppNumber) => {
@@ -364,44 +255,68 @@ export default function WhatsAppManagementPage() {
   const handleNumberUpdated = () => {
     setShowEditNumberModal(false);
     setSelectedNumber(null);
-    loadNumbers();
+    void loadNumbers();
   };
 
-  const visibleTemplates = templates
-    .filter(t => {
-      const category = t.category?.toLowerCase();
+  const uniqueCategories = Array.from(
+    new Set(
+      allowedTemplates
+        .map(template => template.category)
+        .filter((category): category is string => Boolean(category))
+    )
+  ).sort();
 
-      if (category === "utility" && !ALLOW_UTILITY_TEMPLATES) return false;
-      if (category === "auth" && !ALLOW_AUTH_TEMPLATES) return false;
+  const visibleTemplates = useMemo(() => {
+    const search = templateSearchQuery.trim().toLowerCase();
+    return allowedTemplates.filter(template => {
+      if (search && !template.name.toLowerCase().includes(search)) return false;
+      if (
+        selectedLanguageFilter !== "all" &&
+        !(
+          template.languages?.some(
+            language => language.code === selectedLanguageFilter
+          ) ?? template.language === selectedLanguageFilter
+        )
+      ) {
+        return false;
+      }
+      if (
+        selectedStatusFilter !== "all" &&
+        aggregateTemplateStatus(template) !== selectedStatusFilter
+      ) {
+        return false;
+      }
+      return (
+        selectedCategoryFilter === "all" ||
+        template.category === selectedCategoryFilter
+      );
+    });
+  }, [
+    allowedTemplates,
+    selectedCategoryFilter,
+    selectedLanguageFilter,
+    selectedStatusFilter,
+    templateSearchQuery,
+  ]);
 
-      // Only marketing remains visible
-      return category === "marketing";
-    })
-    .reverse();
-  // .sort((a, b) => {
-  //   return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-  // });
-
-  console.log("visibleTemplates", visibleTemplates);
   const templateColumns: TableColumn<Template>[] = [
     {
       key: "name",
       label: "Template Name",
-      render: (value: any, template: Template) => (
+      render: (_value, template) => (
         <div className="font-medium">{template?.name || "N/A"}</div>
       ),
     },
     {
       key: "language",
       label: "Languages",
-      render: (value: any, template: Template) => {
-        // Check if template has multiple languages array
+      render: (_value, template) => {
         if (template?.languages && Array.isArray(template.languages)) {
           return (
             <div className="flex flex-wrap gap-1">
-              {template.languages.map((lang: any, index: number) => (
+              {template.languages.map(lang => (
                 <span
-                  key={index}
+                  key={`${lang.code}-${String(lang.id)}`}
                   className={`px-2 py-0.5 rounded text-xs font-medium uppercase ${
                     lang.status === "APPROVED"
                       ? "bg-success-surface text-success-foreground"
@@ -417,44 +332,32 @@ export default function WhatsAppManagementPage() {
             </div>
           );
         }
-        // Fallback for single language display
+
         return <div className="uppercase">{template?.language || "N/A"}</div>;
       },
     },
     {
       key: "category",
       label: "Category",
-      render: (value: any, template: Template) => (
+      render: (_value, template) => (
         <div className="capitalize">{template?.category || "N/A"}</div>
       ),
     },
     {
       key: "status",
       label: "Status",
-      render: (value: any, template: Template) => {
-        // If template has multiple languages, show aggregate status
+      render: (_value, template) => {
         if (template?.languages && Array.isArray(template.languages)) {
-          const statuses = template.languages.map(l => l.status);
-          const hasApproved = statuses.some(s => s === "APPROVED");
-          const hasPending = statuses.some(s => s === "PENDING");
-          const hasRejected = statuses.some(
-            s => s === "REJECTED" || s === "FAILED"
-          );
-
-          let statusText = "UNKNOWN";
+          const statuses = template.languages.map(language => language.status);
+          const statusText = aggregateTemplateStatus(template);
           let tone: React.ComponentProps<typeof Tag>["tone"] = "neutral";
-
-          if (hasApproved && !hasPending && !hasRejected) {
-            statusText = "APPROVED";
+          if (statusText === "APPROVED") {
             tone = "active";
-          } else if (hasApproved && (hasPending || hasRejected)) {
-            statusText = "MIXED";
+          } else if (statusText === "MIXED") {
             tone = "progress";
-          } else if (hasPending) {
-            statusText = "PENDING";
+          } else if (statusText === "PENDING") {
             tone = "pending";
-          } else if (hasRejected) {
-            statusText = "REJECTED";
+          } else if (statusText === "REJECTED") {
             tone = "danger";
           }
 
@@ -465,7 +368,6 @@ export default function WhatsAppManagementPage() {
           );
         }
 
-        // Fallback for single status
         return (
           <Tag
             tone={
@@ -484,7 +386,7 @@ export default function WhatsAppManagementPage() {
     {
       key: "actions",
       label: "Actions",
-      render: (value: any, template: Template) => (
+      render: (_value, template) => (
         <div className="flex gap-2">
           <Button
             variant="ghost"
@@ -501,21 +403,19 @@ export default function WhatsAppManagementPage() {
     {
       key: "phoneNumber",
       label: "Phone Number",
-      render: (value: any, number: WhatsAppNumber) => (
+      render: (_value, number) => (
         <div className="font-medium">{number?.phoneNumber || "N/A"}</div>
       ),
     },
     {
       key: "displayName",
       label: "Display Name",
-      render: (value: any, number: WhatsAppNumber) => (
-        <div>{number?.displayName || "N/A"}</div>
-      ),
+      render: (_value, number) => <div>{number?.displayName || "N/A"}</div>,
     },
     {
       key: "status",
       label: "Status",
-      render: (value: any, number: WhatsAppNumber) => (
+      render: (_value, number) => (
         <Tag tone={number?.status === "ACTIVE" ? "active" : "neutral"}>
           {number?.status || "INACTIVE"}
         </Tag>
@@ -524,7 +424,7 @@ export default function WhatsAppManagementPage() {
     {
       key: "actions",
       label: "Actions",
-      render: (value: any, number: WhatsAppNumber) => (
+      render: (_value, number) => (
         <div className="flex gap-2">
           <Button variant="ghost" onClick={() => handleEditNumber(number)}>
             <Edit className="h-4 w-4" />
@@ -536,16 +436,11 @@ export default function WhatsAppManagementPage() {
 
   return (
     <PageShell>
-      {/* The back button is gone: this is a listing the sidebar links to, so
-          "back" navigated to history rather than up a hierarchy. */}
       <PageHeader
         title="WhatsApp management"
         description="Your approved WhatsApp message layouts and the phone numbers you send from."
       />
 
-      {/* The shared tab bar, not a pair of hand-rolled buttons: it carries the
-          tablist/tab roles, a roving tabindex and arrow-key navigation, none of
-          which the local version had. */}
       <CategorySwitcher
         items={[
           { value: "templates", label: "Templates" },
@@ -556,10 +451,8 @@ export default function WhatsAppManagementPage() {
         label="WhatsApp management sections"
       />
 
-      {/* Templates Tab */}
       {activeTab === "templates" && (
         <div className="space-y-4">
-          {/* Account Selector */}
           <div className="grid gap-2 max-w-[15rem]">
             <Label htmlFor="account-select">Account</Label>
             <Select
@@ -584,10 +477,8 @@ export default function WhatsAppManagementPage() {
             </Select>
           </div>
 
-          {/* Toolbar */}
           <div className="flex justify-between items-center">
             <div className="flex gap-2">
-              {/* Template Search Dropdown */}
               <div className="relative" ref={templateSearchRef}>
                 <Button
                   variant="outline"
@@ -610,12 +501,12 @@ export default function WhatsAppManagementPage() {
                       />
                     </div>
                     <div className="max-h-64 overflow-y-auto overflow-x-auto">
-                      {filteredTemplates.length === 0 ? (
+                      {visibleTemplates.length === 0 ? (
                         <div className="px-4 py-3 text-muted-foreground text-sm">
                           No templates found
                         </div>
                       ) : (
-                        filteredTemplates.map(template => (
+                        visibleTemplates.map(template => (
                           <button
                             type="button"
                             key={template.id}
@@ -682,7 +573,6 @@ export default function WhatsAppManagementPage() {
             </div>
           </div>
 
-          {/* Templates Table */}
           {selectedAccount ? (
             <DataTable
               data={visibleTemplates}
@@ -725,7 +615,6 @@ export default function WhatsAppManagementPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                  {/* 
                   <Select
                     value={selectedCategoryFilter}
                     onValueChange={setSelectedCategoryFilter}
@@ -735,13 +624,13 @@ export default function WhatsAppManagementPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Categories</SelectItem>
-                      {uniqueCategories.map((category) => (
+                      {uniqueCategories.map(category => (
                         <SelectItem key={category} value={category}>
                           {category}
                         </SelectItem>
                       ))}
                     </SelectContent>
-                  </Select> */}
+                  </Select>
                 </div>
               }
               filterBadges={
@@ -788,10 +677,8 @@ export default function WhatsAppManagementPage() {
         </div>
       )}
 
-      {/* Numbers Tab */}
       {activeTab === "numbers" && (
         <div className="space-y-4">
-          {/* Toolbar */}
           <div className="flex justify-end items-center">
             <div className="flex gap-2">
               <Button
@@ -807,7 +694,6 @@ export default function WhatsAppManagementPage() {
             </div>
           </div>
 
-          {/* Numbers Table */}
           <DataTable
             data={numbers}
             columns={numberColumns}
@@ -818,7 +704,6 @@ export default function WhatsAppManagementPage() {
         </div>
       )}
 
-      {/* Modals */}
       {showCreateModal && selectedAccount && (
         <CreateTemplateModal
           accountId={selectedAccount}

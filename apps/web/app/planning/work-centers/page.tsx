@@ -14,7 +14,7 @@ import {
 } from "@repo/ui/components/ui/select";
 import { Tag } from "@repo/ui/components/ui/tag";
 
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   ErrorBanner,
   Field,
@@ -23,10 +23,10 @@ import {
   SimpleTable,
   StatCard,
 } from "@/components/supply-chain/shared";
-import { usePlanningMutations, useWorkCenters } from "@/hooks/useFinance";
-import { useWarehouses } from "@/hooks/useSupplyChain";
+import { usePlanningMutations, useWorkCenters } from "@/hooks/use-finance";
+import { useWarehouses } from "@/hooks/use-supply-chain";
 import { formatMoney } from "@/lib/utils/decimal";
-import { DataTransfer } from "@/components/data-transfer/DataTransfer";
+import { DataTransfer } from "@/components/data-transfer/data-transfer";
 
 const TYPES = [
   { value: "MACHINE", label: "Machine" },

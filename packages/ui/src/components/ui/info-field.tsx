@@ -78,7 +78,6 @@ const InfoGrid = React.forwardRef<HTMLDivElement, InfoGridProps>(
       className={cn(
         "grid gap-5",
         {
-          // Always stack on mobile, expand with breakpoints for readability
           "grid-cols-1": columns === 1,
           "grid-cols-1 sm:grid-cols-2": columns === 2,
           "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3": columns === 3,

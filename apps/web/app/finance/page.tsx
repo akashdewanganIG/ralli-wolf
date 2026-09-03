@@ -6,7 +6,7 @@ import Link from "next/link";
 import { PageShell } from "@repo/ui/components/ui/page-shell";
 import { Tag } from "@repo/ui/components/ui/tag";
 
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/components/protected-route";
 import {
   ErrorBanner,
   PageHeader,
@@ -14,10 +14,9 @@ import {
   SimpleTable,
   StatCard,
 } from "@/components/supply-chain/shared";
-import { useFinanceDashboard } from "@/hooks/useFinance";
+import { useFinanceDashboard } from "@/hooks/use-finance";
 import { formatDate, formatMoney } from "@/lib/utils/decimal";
 
-/** A single ageing profile, drawn as proportional bars. */
 function Ageing({
   title,
   buckets,
@@ -37,8 +36,7 @@ function Ageing({
       </p>
       {rows.map(row => {
         const amount = Number(row.amount);
-        // "Not due" is the healthy bucket; everything after it is late, and
-        // gets progressively more attention.
+
         const overdue = row.label !== "Not due";
         return (
           <div key={row.label} className="flex items-center gap-3">
@@ -72,12 +70,9 @@ function Ageing({
 
 export default function FinancePage() {
   const { data, isLoading, isError } = useFinanceDashboard();
-  // Without data there is nothing honest to put in a figure, and a failed
-  // request is no more informative than one still in flight. Every figure on
-  // this page therefore keys off `d` itself rather than off a status flag.
+
   const d = data?.data;
 
-  // Currencies with open invoices that the headline figures do not speak for.
   const mixed = React.useMemo(() => {
     if (!d) return [];
     const all = new Set([

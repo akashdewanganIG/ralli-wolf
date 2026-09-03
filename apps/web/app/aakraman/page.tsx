@@ -15,7 +15,7 @@ import { Button } from "@repo/ui/components/ui/button";
 import { Input } from "@repo/ui/components/ui/input";
 import { Label } from "@repo/ui/components/ui/label";
 import { ArrowRight } from "@repo/ui/icons";
-import logov3 from "@/app/assets/images/logos/logo_v1.png";
+import logov3 from "@/app/assets/images/logos/logo-v1.png";
 import { aakramanService } from "@/lib/api/services";
 
 const emailSchema = z.string().email("Enter a valid email address");
@@ -39,7 +39,6 @@ export default function AakramanLoginPage() {
     Partial<Record<LoginField, boolean>>
   >({});
 
-  // Check if already logged in
   useEffect(() => {
     if (aakramanService.isAuthenticated()) {
       router.push("/aakraman/customer-details");
@@ -104,7 +103,6 @@ export default function AakramanLoginPage() {
     try {
       const response = await aakramanService.verifyOtp({ email, otp });
 
-      // Store token and redirect
       aakramanService.setToken(response.token);
       router.push("/aakraman/customer-details");
     } catch (err: any) {
