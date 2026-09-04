@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { createHash } from "node:crypto";
 import { prisma } from "@repo/db";
+import { logError } from "../utils/logger.js";
 
 type KeyFn = (req: Request) => string;
 
@@ -8,9 +9,11 @@ interface RateLimitOptions {
   windowMs: number;
   max: number;
   keyGenerator?: KeyFn;
+  countStatusCodes?: readonly number[];
 }
 
 let requestsSinceSweep = 0;
+const RATE_LIMIT_KEY_VERSION = "v2";
 
 function sweepExpiredBuckets(now: Date) {
   requestsSinceSweep += 1;
@@ -22,8 +25,15 @@ function sweepExpiredBuckets(now: Date) {
     .catch(() => undefined);
 }
 
+export function shouldCountRateLimitResponse(
+  statusCode: number,
+  countStatusCodes?: readonly number[]
+): boolean {
+  return !countStatusCodes || countStatusCodes.includes(statusCode);
+}
+
 export function rateLimit(options: RateLimitOptions) {
-  const { windowMs, max, keyGenerator } = options;
+  const { windowMs, max, keyGenerator, countStatusCodes } = options;
   return async (req: Request, res: Response, next: NextFunction) => {
     const ip = req.ip || "unknown";
     const keyExtra = keyGenerator ? keyGenerator(req) : "";
@@ -31,7 +41,7 @@ export function rateLimit(options: RateLimitOptions) {
     sweepExpiredBuckets(now);
     const route = `${req.method}:${req.baseUrl}:${req.route?.path ?? req.path}`;
     const key = createHash("sha256")
-      .update(`${route}:${ip}:${keyExtra}`)
+      .update(`${RATE_LIMIT_KEY_VERSION}:${route}:${ip}:${keyExtra}`)
       .digest("base64url");
 
     try {
@@ -55,6 +65,29 @@ export function rateLimit(options: RateLimitOptions) {
       `;
       const entry = rows[0];
       if (!entry) throw new Error("Rate limit counter was not returned");
+
+      if (countStatusCodes) {
+        let settled = false;
+        const settle = () => {
+          if (settled) return;
+          settled = true;
+          res.off("finish", settle);
+          res.off("close", settle);
+          if (shouldCountRateLimitResponse(res.statusCode, countStatusCodes))
+            return;
+
+          void prisma.$executeRaw`
+              UPDATE "rate_limit_buckets"
+              SET "count" = GREATEST("count" - 1, 0), "updated_at" = NOW()
+              WHERE "key" = ${key}
+            `.catch(error =>
+            logError("rate_limit_refund_failed", error, { route })
+          );
+        };
+        res.once("finish", settle);
+        res.once("close", settle);
+      }
+
       if (entry.count <= max) return next();
 
       const retryAfter = Math.max(

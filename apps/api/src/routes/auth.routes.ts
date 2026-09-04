@@ -23,6 +23,7 @@ router.post(
     windowMs: 15 * 60 * 1000,
     max: 10,
     keyGenerator: emailRateLimitKey,
+    countStatusCodes: [401],
   }),
   authController.login
 );

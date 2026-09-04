@@ -43,6 +43,12 @@ function describeLoginError(error: unknown): {
   }
 
   switch (apiError.code) {
+    case "HOSTING_SERVICE_WAKING":
+      return {
+        title: "Service is starting",
+        description:
+          "The hosted API was asleep and is waking up. Please try again in about a minute.",
+      };
     case "INVALID_CREDENTIALS":
       return {
         title: "Invalid email or password",
@@ -75,7 +81,7 @@ function describeLoginError(error: unknown): {
     return {
       title: "Too many attempts",
       description:
-        "This account is temporarily locked out. Wait a few minutes before trying again.",
+        "Sign-in requests are temporarily limited for this email and network. Wait a few minutes before trying again.",
     };
   }
   if (apiError.status >= 500) {

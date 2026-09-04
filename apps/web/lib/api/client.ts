@@ -36,6 +36,11 @@ apiClient.interceptors.response.use(
     const status = axiosError?.response?.status ?? 0;
     const transportCode = axiosError?.code;
     const url = axiosError?.config?.url;
+    const renderRouting = String(
+      axiosError?.response?.headers?.["x-render-routing"] || ""
+    );
+    const isHostingServiceWaking =
+      status === 429 && renderRouting.includes("hibernate-rate-limited");
     const responseData =
       typeof axiosError?.response?.data === "object" &&
       axiosError.response.data !== null &&
@@ -103,11 +108,17 @@ apiClient.interceptors.response.use(
       typeof responseData?.code === "string" ? responseData.code : undefined;
     const apiError: ApiError = {
       message:
-        (typeof serverMessage === "string" ? serverMessage : null) ||
+        (isHostingServiceWaking
+          ? "The hosted service is starting. Please try again shortly."
+          : typeof serverMessage === "string"
+            ? serverMessage
+            : null) ||
         axiosError?.message ||
         (error instanceof Error ? error.message : "An error occurred"),
       status,
-      code: serverCode ?? transportCode,
+      code: isHostingServiceWaking
+        ? "HOSTING_SERVICE_WAKING"
+        : (serverCode ?? transportCode),
       ...(typeof attemptsRemaining === "number" &&
       Number.isSafeInteger(attemptsRemaining)
         ? { attemptsRemaining }
