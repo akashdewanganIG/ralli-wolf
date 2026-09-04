@@ -6,6 +6,7 @@ import { parseApiError } from "./api/error-handler";
 type ToastOptions = {
   description?: string;
   duration?: number;
+  id?: string | number;
 };
 
 export const toast = {

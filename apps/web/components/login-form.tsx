@@ -3,7 +3,7 @@
 import { ArrowLeft, Eye, EyeOff } from "@repo/ui/icons";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@repo/ui/components/ui/button";
 import { Input } from "@repo/ui/components/ui/input";
@@ -11,6 +11,7 @@ import { cn } from "@repo/ui/lib/utils";
 import ralliWolfLogo from "../app/assets/images/logos/ralli-wolf-logo.png";
 import { useAuth } from "../contexts/auth-context";
 import type { ApiError } from "../lib/api/types";
+import { healthService } from "../lib/api/services";
 import { validateEmailBasic } from "../lib/validation";
 import { toast } from "@/lib/toast";
 import LoginShowcase from "./login-showcase";
@@ -22,6 +23,9 @@ type Step = "credentials" | "code";
 type Factor = "totp" | "email";
 
 const RESEND_COOLDOWN_SECONDS = 30;
+const SERVICE_WAKE_TIMEOUT_SECONDS = 90;
+const SERVICE_HEALTH_POLL_MS = 5_000;
+const SERVICE_HEALTH_REQUEST_TIMEOUT_MS = 8_000;
 
 function asApiError(error: unknown): ApiError | null {
   return error && typeof error === "object" && "status" in error
@@ -175,8 +179,14 @@ export function LoginForm({
   const [factor, setFactor] = useState<Factor>("email");
   const [availableFactors, setAvailableFactors] = useState<Factor[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isServiceWaking, setIsServiceWaking] = useState(false);
+  const [serviceWakeSeconds, setServiceWakeSeconds] = useState(0);
   const [resendIn, setResendIn] = useState(0);
   const otpInputRef = useRef<HTMLInputElement>(null);
+  const serviceWakeSequenceRef = useRef(0);
+  const serviceWakeToastRef = useRef<string | number | undefined>(undefined);
+  const serviceWakeCountdownRef = useRef<number | undefined>(undefined);
+  const serviceWakeAbortRef = useRef<AbortController | null>(null);
   const {
     login,
     resendLoginOtp,
@@ -211,6 +221,134 @@ export function LoginForm({
   useEffect(() => {
     if (step === "code") otpInputRef.current?.focus();
   }, [step]);
+
+  useEffect(
+    () => () => {
+      serviceWakeSequenceRef.current += 1;
+      if (serviceWakeCountdownRef.current !== undefined) {
+        window.clearInterval(serviceWakeCountdownRef.current);
+        serviceWakeCountdownRef.current = undefined;
+      }
+      serviceWakeAbortRef.current?.abort();
+      serviceWakeAbortRef.current = null;
+      if (serviceWakeToastRef.current !== undefined) {
+        toast.dismiss(serviceWakeToastRef.current);
+        serviceWakeToastRef.current = undefined;
+      }
+    },
+    []
+  );
+
+  const startServiceWakeup = useCallback(() => {
+    if (serviceWakeToastRef.current !== undefined) return;
+
+    const sequence = ++serviceWakeSequenceRef.current;
+    const startedAt = Date.now();
+    setIsServiceWaking(true);
+    setServiceWakeSeconds(SERVICE_WAKE_TIMEOUT_SECONDS);
+
+    const toastId = toast.loading("Starting the service", {
+      description: `Checking API readiness · up to ${SERVICE_WAKE_TIMEOUT_SECONDS} seconds remaining`,
+      duration: Infinity,
+    });
+    serviceWakeToastRef.current = toastId;
+
+    serviceWakeCountdownRef.current = window.setInterval(() => {
+      if (serviceWakeSequenceRef.current !== sequence) return;
+      const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+      const remaining = Math.max(0, SERVICE_WAKE_TIMEOUT_SECONDS - elapsed);
+      setServiceWakeSeconds(remaining);
+      toast.loading("Starting the service", {
+        id: toastId,
+        description: `Checking API readiness · up to ${remaining} seconds remaining`,
+        duration: Infinity,
+      });
+    }, 1_000);
+
+    const finish = () => {
+      if (serviceWakeCountdownRef.current !== undefined) {
+        window.clearInterval(serviceWakeCountdownRef.current);
+        serviceWakeCountdownRef.current = undefined;
+      }
+      serviceWakeAbortRef.current?.abort();
+      serviceWakeAbortRef.current = null;
+      serviceWakeToastRef.current = undefined;
+      setIsServiceWaking(false);
+      setServiceWakeSeconds(0);
+    };
+
+    const checkUntilReady = async () => {
+      while (serviceWakeSequenceRef.current === sequence) {
+        const remainingBeforeRequest =
+          SERVICE_WAKE_TIMEOUT_SECONDS * 1_000 - (Date.now() - startedAt);
+        if (remainingBeforeRequest <= 0) {
+          finish();
+          toast.error("The service is taking longer than expected", {
+            id: toastId,
+            description: "Please wait another minute, then try signing in.",
+            duration: 8_000,
+          });
+          return;
+        }
+
+        const controller = new AbortController();
+        serviceWakeAbortRef.current = controller;
+        const health = await healthService
+          .checkHealth({
+            timeoutMs: Math.min(
+              SERVICE_HEALTH_REQUEST_TIMEOUT_MS,
+              remainingBeforeRequest
+            ),
+            signal: controller.signal,
+          })
+          .catch(() => null);
+        if (serviceWakeAbortRef.current === controller) {
+          serviceWakeAbortRef.current = null;
+        }
+        if (serviceWakeSequenceRef.current !== sequence) {
+          if (serviceWakeCountdownRef.current !== undefined) {
+            window.clearInterval(serviceWakeCountdownRef.current);
+            serviceWakeCountdownRef.current = undefined;
+          }
+          return;
+        }
+        if (health?.status === "ok" && health.database === "connected") {
+          finish();
+          toast.success("Service is ready", {
+            id: toastId,
+            description: "You can sign in now.",
+            duration: 5_000,
+          });
+          return;
+        }
+
+        const remainingAfterRequest =
+          SERVICE_WAKE_TIMEOUT_SECONDS * 1_000 - (Date.now() - startedAt);
+        if (remainingAfterRequest <= 0) {
+          finish();
+          toast.error("The service is taking longer than expected", {
+            id: toastId,
+            description: "Please wait another minute, then try signing in.",
+            duration: 8_000,
+          });
+          return;
+        }
+
+        await new Promise(resolve =>
+          window.setTimeout(
+            resolve,
+            Math.min(SERVICE_HEALTH_POLL_MS, remainingAfterRequest)
+          )
+        );
+      }
+      if (serviceWakeCountdownRef.current !== undefined) {
+        window.clearInterval(serviceWakeCountdownRef.current);
+        serviceWakeCountdownRef.current = undefined;
+      }
+    };
+
+    void checkUntilReady();
+  }, []);
 
   const returnToCredentials = () => {
     setStep("credentials");
@@ -255,6 +393,10 @@ export function LoginForm({
         });
       }
     } catch (error) {
+      if (asApiError(error)?.code === "HOSTING_SERVICE_WAKING") {
+        startServiceWakeup();
+        return;
+      }
       const { title, description } = describeLoginError(error);
       toast.error(title, { description });
     } finally {
@@ -323,6 +465,7 @@ export function LoginForm({
 
   const submitDisabled =
     isSubmitting ||
+    isServiceWaking ||
     (step === "credentials" ? !!emailError || !email : otp.length !== 6);
 
   const canFallBackToEmail =
@@ -380,7 +523,9 @@ export function LoginForm({
               >
                 {step === "credentials" ? (
                   <>
-                    <LoginProviders disabled={isSubmitting} />
+                    <LoginProviders
+                      disabled={isSubmitting || isServiceWaking}
+                    />
 
                     <div className="space-y-1.5">
                       <label
@@ -523,9 +668,11 @@ export function LoginForm({
                     ? step === "credentials"
                       ? "Checking…"
                       : "Signing in…"
-                    : step === "credentials"
-                      ? "Continue"
-                      : "Verify and sign in"}
+                    : isServiceWaking
+                      ? `Starting service… ${serviceWakeSeconds}s`
+                      : step === "credentials"
+                        ? "Continue"
+                        : "Verify and sign in"}
                 </Button>
 
                 {step === "code" ? (

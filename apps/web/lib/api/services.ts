@@ -1547,8 +1547,13 @@ export const settingsService = {
 };
 
 export const healthService = {
-  checkHealth: async (): Promise<{ status: string; database: string }> => {
-    const response = await apiClient.get("/health");
+  checkHealth: async (
+    options: { timeoutMs?: number; signal?: AbortSignal } = {}
+  ): Promise<{ status: string; database: string }> => {
+    const response = await apiClient.get("/api/health", {
+      timeout: options.timeoutMs,
+      signal: options.signal,
+    });
     return response.data;
   },
 };

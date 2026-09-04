@@ -1,4 +1,4 @@
-import { Express } from "express";
+import { Express, type RequestHandler } from "express";
 import { prisma } from "@repo/db";
 import authRoutes from "./auth.routes.js";
 import userRoutes from "./users.routes.js";
@@ -47,7 +47,7 @@ import {
 } from "./supply-chain.routes.js";
 
 export function setupRoutes(app: Express) {
-  app.get("/health", async (req, res) => {
+  const healthHandler: RequestHandler = async (_req, res) => {
     try {
       await prisma.$queryRaw`SELECT 1`;
       res.json({ status: "ok", database: "connected" });
@@ -57,7 +57,9 @@ export function setupRoutes(app: Express) {
         database: "disconnected",
       });
     }
-  });
+  };
+
+  app.get(["/health", "/api/health"], healthHandler);
 
   app.get("/healthz", (req, res) => {
     const token = process.env.KEEPALIVE_TOKEN;
