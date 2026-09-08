@@ -1,12 +1,14 @@
 "use client";
 
-import { toast as sonner } from "sonner";
+import { toast as sonner, type ExternalToast } from "sonner";
 import { parseApiError } from "./api/error-handler";
 
 type ToastOptions = {
   description?: string;
   duration?: number;
   id?: string | number;
+  action?: ExternalToast["action"];
+  onDismiss?: ExternalToast["onDismiss"];
 };
 
 export const toast = {

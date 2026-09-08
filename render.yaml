@@ -9,6 +9,12 @@
 # link them to a Blueprint. Until then, treat it as the reference for what the
 # dashboard fields should contain.
 #
+# The commands below were INFERRED from a deploy log, not exported from the
+# dashboard, so they may not match what the live services actually run. Before
+# ever creating a Blueprint Instance from this file, reconcile each value
+# against the dashboard — otherwise Render will provision a second pair of
+# services from these guesses, at new URLs, alongside the existing ones.
+#
 # Secrets are declared with `sync: false` so their values stay in the dashboard
 # and never land in git.
 

@@ -4,6 +4,7 @@ import axios, {
   InternalAxiosRequestConfig,
 } from "axios";
 import { config } from "../config";
+import { notifyServiceAsleep } from "./service-asleep-notice";
 import { ApiError } from "./types";
 
 /**
@@ -70,7 +71,8 @@ apiClient.interceptors.response.use(
     }
 
     const retryConfig = axiosError?.config as RetryableConfig | undefined;
-    if (isHostingServiceWaking && retryConfig) {
+    const isAuthBootstrap = url === "/api/auth/me";
+    if (isHostingServiceWaking && retryConfig && !isAuthBootstrap) {
       retryConfig.hostingWakeRetryUntil ??=
         Date.now() + HOSTING_WAKE_RETRY_BUDGET_MS;
       if (Date.now() < retryConfig.hostingWakeRetryUntil) {
@@ -79,6 +81,15 @@ apiClient.interceptors.response.use(
         );
         if (!retryConfig.signal?.aborted) return apiClient(retryConfig);
       }
+    }
+
+    // Reached only once the request is genuinely not going to succeed: either
+    // the wake retry is spent, or this was the auth bootstrap that skips it. A
+    // gateway status means the proxy could not reach the API at all, which for
+    // a hosted API that sleeps is the same situation from the user's side.
+    const isGatewayFailure = status === 502 || status === 503 || status === 504;
+    if (isHostingServiceWaking || isGatewayFailure) {
+      notifyServiceAsleep();
     }
 
     const isExpected404 = status === 404;

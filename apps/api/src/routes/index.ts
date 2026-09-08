@@ -46,7 +46,118 @@ import {
   productionRouter,
 } from "./supply-chain.routes.js";
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/** Only a well-formed http(s) origin is worth turning into a link. */
+function frontendOrigin(): string | null {
+  const raw = process.env.FRONTEND_URL?.trim();
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+    return parsed.origin;
+  } catch {
+    return null;
+  }
+}
+
+function statusPage(databaseReachable: boolean, appOrigin: string | null) {
+  const state = databaseReachable
+    ? { tone: "ok", label: "Running", detail: "Database connected" }
+    : {
+        tone: "warn",
+        label: "Running",
+        detail: "Database unreachable — sign-in will fail",
+      };
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Ralli Wolf API</title>
+<style>
+  :root { color-scheme: light dark; --bg:#f6f7f9; --card:#fff; --fg:#11181c; --muted:#5f6b76; --line:#e3e8ef; --ok:#0f7b3f; --okbg:#e7f6ed; --warn:#8a5a00; --warnbg:#fdf3e0; --accent:#11181c; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0e1216; --card:#161b22; --fg:#e6edf3; --muted:#9aa7b2; --line:#242c36; --ok:#4ade80; --okbg:#0f2a1b; --warn:#fbbf24; --warnbg:#2b2010; --accent:#e6edf3; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px;
+         background:var(--bg); color:var(--fg);
+         font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  .card { width:100%; max-width:26rem; background:var(--card); border:1px solid var(--line);
+          border-radius:14px; padding:28px; box-shadow:0 1px 2px rgba(16,24,40,.04),0 12px 32px -12px rgba(16,24,40,.14); }
+  .badge { display:inline-flex; align-items:center; gap:7px; padding:5px 11px; border-radius:999px;
+           font-size:12.5px; font-weight:600; letter-spacing:.01em;
+           color:var(--ok); background:var(--okbg); }
+  .badge.warn { color:var(--warn); background:var(--warnbg); }
+  .dot { width:7px; height:7px; border-radius:50%; background:currentColor; }
+  h1 { margin:18px 0 6px; font-size:21px; letter-spacing:-.015em; }
+  p { margin:0; color:var(--muted); font-size:13.5px; }
+  dl { margin:22px 0 0; border-top:1px solid var(--line); }
+  .row { display:flex; justify-content:space-between; gap:16px; padding:11px 0; border-bottom:1px solid var(--line); }
+  dt { color:var(--muted); font-size:13px; }
+  dd { margin:0; font-size:13px; font-weight:500; text-align:right; }
+  a.back { display:block; margin-top:24px; padding:11px 16px; border-radius:9px; text-align:center;
+           background:var(--accent); color:var(--card); text-decoration:none; font-weight:600; font-size:14px; }
+  .note { margin-top:14px; text-align:center; font-size:12.5px; color:var(--muted); }
+</style>
+</head>
+<body>
+  <main class="card">
+    <span class="badge${state.tone === "warn" ? " warn" : ""}"><span class="dot"></span>${escapeHtml(state.label)}</span>
+    <h1>Ralli Wolf API</h1>
+    <p>${escapeHtml(state.detail)}</p>
+    <dl>
+      <div class="row"><dt>Service</dt><dd>Online</dd></div>
+      <div class="row"><dt>Database</dt><dd>${databaseReachable ? "Connected" : "Unreachable"}</dd></div>
+      <div class="row"><dt>Checked</dt><dd>${escapeHtml(new Date().toUTCString())}</dd></div>
+    </dl>
+    ${
+      appOrigin
+        ? `<a class="back" href="${escapeHtml(appOrigin)}">Back to Ralli Wolf</a>
+    <p class="note">The server is awake. You can close this tab and sign in.</p>`
+        : `<p class="note" style="margin-top:24px">The server is awake. You can close this tab and return to the app.</p>`
+    }
+  </main>
+</body>
+</html>`;
+}
+
 export function setupRoutes(app: Express) {
+  /*
+   * Opening the API host directly used to land on Express's "Cannot GET /",
+   * which reads like a broken deployment. The web app now sends people here to
+   * wake a sleeping instance, so the root has to answer the only question they
+   * have: is it up, and can I go back?
+   */
+  const statusPageHandler: RequestHandler = async (_req, res) => {
+    let databaseReachable = true;
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch {
+      databaseReachable = false;
+    }
+    // The global policy is default-src 'none', which would drop the inline
+    // stylesheet; widen it for this one HTML response only.
+    res.setHeader(
+      "Content-Security-Policy",
+      "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'"
+    );
+    res.setHeader("Cache-Control", "no-store");
+    res.type("html").send(statusPage(databaseReachable, frontendOrigin()));
+  };
+
+  app.get("/", statusPageHandler);
+
   const healthHandler: RequestHandler = async (_req, res) => {
     try {
       await prisma.$queryRaw`SELECT 1`;
