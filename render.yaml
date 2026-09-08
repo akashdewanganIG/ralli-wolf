@@ -1,0 +1,90 @@
+# Render service definitions.
+#
+# These settings previously existed only in the Render dashboard, which meant
+# nothing in the repository recorded how either service is built or started.
+# This file is the source of truth for that.
+#
+# IMPORTANT: adding this file does not reconfigure services that were created
+# by hand in the dashboard — those stay dashboard-managed until you deliberately
+# link them to a Blueprint. Until then, treat it as the reference for what the
+# dashboard fields should contain.
+#
+# Secrets are declared with `sync: false` so their values stay in the dashboard
+# and never land in git.
+
+services:
+  - type: web
+    name: ralli-wolf-api
+    runtime: node
+    plan: free
+    # Repo root: the build needs the workspace to resolve @repo/db.
+    rootDir: .
+    buildCommand: npm ci && npx turbo run build --filter=api
+    # --workspace runs the script with apps/api as its working directory, so the
+    # relative `node dist/index.js` in that package resolves.
+    startCommand: npm start --workspace=api
+    healthCheckPath: /health
+    envVars:
+      # Render injects the port to bind. Never set PORT yourself — an explicit
+      # value overrides Render's and the platform then cannot reach the service.
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: OTP_HASH_SECRET
+        sync: false
+      - key: TOTP_ENCRYPTION_KEY
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_EMAIL
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      # Left unset here rather than guessed — both change runtime behaviour and
+      # the dashboard already holds the values that are actually in use.
+      - key: TRUST_PROXY_HOPS
+        sync: false
+      - key: RUN_EMBEDDED_SCHEDULERS
+        sync: false
+      - key: KEEPALIVE_TOKEN
+        sync: false
+      - key: S3_BUCKET_NAME
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_PUBLIC_BASE_URL
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_REGION
+        sync: false
+
+  - type: web
+    name: ralli-wolf-web
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: npm ci && npx turbo run build --filter=web
+    startCommand: npm start --workspace=web
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Server-side only. instrumentation.ts reads this to wake the API on
+      # start, and next.config reads it to proxy /api/* so the session cookie
+      # stays same-origin.
+      - key: API_PROXY_TARGET
+        sync: false
+      # Inlined at BUILD time — changing it needs a rebuild, not a restart.
+      - key: NEXT_PUBLIC_API_URL
+        value: "/"
