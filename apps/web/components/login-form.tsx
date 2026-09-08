@@ -3,7 +3,7 @@
 import { ArrowLeft, Eye, EyeOff } from "@repo/ui/icons";
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@repo/ui/components/ui/button";
 import { Input } from "@repo/ui/components/ui/input";
@@ -23,12 +23,6 @@ type Step = "credentials" | "code";
 type Factor = "totp" | "email";
 
 const RESEND_COOLDOWN_SECONDS = 30;
-const SERVICE_WAKE_TIMEOUT_SECONDS = 90;
-const SERVICE_HEALTH_POLL_MS = 3_000;
-// A hibernating host holds the connection open for the whole cold start, so a
-// health probe has to outlive it. Aborting sooner kills the very request that
-// wakes the service and the poll can never observe the API coming back.
-const SERVICE_HEALTH_REQUEST_TIMEOUT_MS = 45_000;
 
 function asApiError(error: unknown): ApiError | null {
   return error && typeof error === "object" && "status" in error
@@ -50,11 +44,12 @@ function describeLoginError(error: unknown): {
   }
 
   switch (apiError.code) {
+    // Only reachable once the client has already spent its retry budget riding
+    // out the cold start, so this is a real failure, not a "wait a moment".
     case "HOSTING_SERVICE_WAKING":
       return {
-        title: "Service is starting",
-        description:
-          "The hosted API was asleep and is waking up. Please try again in about a minute.",
+        title: "The server did not come back up",
+        description: "Try signing in again — it should be awake by now.",
       };
     case "INVALID_CREDENTIALS":
       return {
@@ -182,16 +177,8 @@ export function LoginForm({
   const [factor, setFactor] = useState<Factor>("email");
   const [availableFactors, setAvailableFactors] = useState<Factor[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isServiceWaking, setIsServiceWaking] = useState(false);
-  const [serviceWakeSeconds, setServiceWakeSeconds] = useState(0);
   const [resendIn, setResendIn] = useState(0);
   const otpInputRef = useRef<HTMLInputElement>(null);
-  const serviceWakeSequenceRef = useRef(0);
-  const serviceWakeToastRef = useRef<string | number | undefined>(undefined);
-  const serviceWakeCountdownRef = useRef<number | undefined>(undefined);
-  const serviceWakeDeadlineRef = useRef<number | undefined>(undefined);
-  const serviceWakeAbortRef = useRef<AbortController | null>(null);
-  const resumeAfterWakeRef = useRef<() => boolean>(() => false);
   const {
     login,
     resendLoginOtp,
@@ -227,199 +214,19 @@ export function LoginForm({
     if (step === "code") otpInputRef.current?.focus();
   }, [step]);
 
-  useEffect(
-    () => () => {
-      serviceWakeSequenceRef.current += 1;
-      if (serviceWakeCountdownRef.current !== undefined) {
-        window.clearInterval(serviceWakeCountdownRef.current);
-        serviceWakeCountdownRef.current = undefined;
-      }
-      if (serviceWakeDeadlineRef.current !== undefined) {
-        window.clearTimeout(serviceWakeDeadlineRef.current);
-        serviceWakeDeadlineRef.current = undefined;
-      }
-      serviceWakeAbortRef.current?.abort();
-      serviceWakeAbortRef.current = null;
-      if (serviceWakeToastRef.current !== undefined) {
-        toast.dismiss(serviceWakeToastRef.current);
-        serviceWakeToastRef.current = undefined;
-      }
-    },
-    []
-  );
-
   /**
-   * `resumeWhenReady` is only for a wake the user actually triggered by pressing
-   * Continue. A wake started by the page-load probe must never auto-submit: the
-   * user could be mid-password when the API comes up, and a partial submit
-   * spends one of their limited login attempts.
-   */
-  const startServiceWakeup = useCallback(({ resumeWhenReady = false } = {}) => {
-    if (serviceWakeToastRef.current !== undefined) return;
-
-    const sequence = ++serviceWakeSequenceRef.current;
-    const startedAt = Date.now();
-    setIsServiceWaking(true);
-    setServiceWakeSeconds(SERVICE_WAKE_TIMEOUT_SECONDS);
-
-    const toastId = toast.loading("Starting the service", {
-      description: `Checking API readiness · up to ${SERVICE_WAKE_TIMEOUT_SECONDS} seconds remaining`,
-      duration: Infinity,
-    });
-    serviceWakeToastRef.current = toastId;
-
-    // Scoped to this attempt: a superseded poll must never clear the timers of
-    // the attempt that replaced it.
-    let countdownTimer: number | undefined;
-    const stopCountdown = () => {
-      if (countdownTimer === undefined) return;
-      window.clearInterval(countdownTimer);
-      if (serviceWakeCountdownRef.current === countdownTimer) {
-        serviceWakeCountdownRef.current = undefined;
-      }
-      countdownTimer = undefined;
-    };
-
-    countdownTimer = window.setInterval(() => {
-      if (serviceWakeSequenceRef.current !== sequence) {
-        stopCountdown();
-        return;
-      }
-      const elapsed = Math.floor((Date.now() - startedAt) / 1000);
-      const remaining = Math.max(0, SERVICE_WAKE_TIMEOUT_SECONDS - elapsed);
-      setServiceWakeSeconds(remaining);
-      if (remaining <= 0) {
-        stopCountdown();
-        return;
-      }
-      toast.loading("Starting the service", {
-        id: toastId,
-        description: `Checking API readiness · up to ${remaining} seconds remaining`,
-        duration: Infinity,
-      });
-    }, 1_000);
-    serviceWakeCountdownRef.current = countdownTimer;
-
-    let deadlineTimer: number | undefined;
-    const finish = () => {
-      stopCountdown();
-      if (deadlineTimer !== undefined) {
-        window.clearTimeout(deadlineTimer);
-        if (serviceWakeDeadlineRef.current === deadlineTimer) {
-          serviceWakeDeadlineRef.current = undefined;
-        }
-        deadlineTimer = undefined;
-      }
-      serviceWakeAbortRef.current?.abort();
-      serviceWakeAbortRef.current = null;
-      serviceWakeToastRef.current = undefined;
-      setIsServiceWaking(false);
-      setServiceWakeSeconds(0);
-    };
-
-    // Hard stop that does not depend on where the polling loop happens to be:
-    // when the countdown hits zero the loading toast always resolves.
-    const giveUp = () => {
-      if (serviceWakeSequenceRef.current !== sequence) return;
-      serviceWakeSequenceRef.current += 1;
-      finish();
-      toast.error("The service is taking longer than expected", {
-        id: toastId,
-        description: "Please wait another minute, then try signing in.",
-        duration: 8_000,
-      });
-    };
-
-    deadlineTimer = window.setTimeout(
-      giveUp,
-      SERVICE_WAKE_TIMEOUT_SECONDS * 1_000
-    );
-    serviceWakeDeadlineRef.current = deadlineTimer;
-
-    const checkUntilReady = async () => {
-      while (serviceWakeSequenceRef.current === sequence) {
-        const remainingBeforeRequest =
-          SERVICE_WAKE_TIMEOUT_SECONDS * 1_000 - (Date.now() - startedAt);
-        if (remainingBeforeRequest <= 0) {
-          giveUp();
-          return;
-        }
-
-        const controller = new AbortController();
-        serviceWakeAbortRef.current = controller;
-        const health = await healthService
-          .checkHealth({
-            timeoutMs: Math.min(
-              SERVICE_HEALTH_REQUEST_TIMEOUT_MS,
-              remainingBeforeRequest
-            ),
-            signal: controller.signal,
-          })
-          .catch(() => null);
-        if (serviceWakeAbortRef.current === controller) {
-          serviceWakeAbortRef.current = null;
-        }
-        if (serviceWakeSequenceRef.current !== sequence) {
-          stopCountdown();
-          return;
-        }
-        if (health?.status === "ok" && health.database === "connected") {
-          serviceWakeSequenceRef.current += 1;
-          finish();
-          const resumed = resumeWhenReady && resumeAfterWakeRef.current();
-          toast.success("Service is ready", {
-            id: toastId,
-            description: resumed
-              ? "Signing you in now."
-              : "You can sign in now.",
-            duration: 5_000,
-          });
-          return;
-        }
-
-        const remainingAfterRequest =
-          SERVICE_WAKE_TIMEOUT_SECONDS * 1_000 - (Date.now() - startedAt);
-        if (remainingAfterRequest <= 0) {
-          giveUp();
-          return;
-        }
-
-        await new Promise(resolve =>
-          window.setTimeout(
-            resolve,
-            Math.min(SERVICE_HEALTH_POLL_MS, remainingAfterRequest)
-          )
-        );
-      }
-      stopCountdown();
-    };
-
-    void checkUntilReady();
-  }, []);
-
-  /**
-   * Touch the API as soon as the page opens rather than waiting for a failed
-   * sign-in. A hibernating host boots on the first request it receives, so this
-   * spends the seconds the user is typing instead of theirs: by the time they
-   * press Continue the API is usually already up. Only the host's explicit
-   * "asleep" signal opens the countdown — a plain network blip must not put a
-   * toast on a page nobody has interacted with yet.
+   * Fire-and-forget: touching the API is what boots a hibernating host, so this
+   * gets the cold start under way while the user is still reading the form. It
+   * deliberately renders nothing — a request that arrives mid-boot is retried
+   * transparently by the API client, so there is no state here worth showing.
    */
   useEffect(() => {
     const controller = new AbortController();
     void healthService
-      .checkHealth({
-        timeoutMs: SERVICE_HEALTH_REQUEST_TIMEOUT_MS,
-        signal: controller.signal,
-      })
-      .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
-        if (asApiError(error)?.code === "HOSTING_SERVICE_WAKING") {
-          startServiceWakeup();
-        }
-      });
+      .checkHealth({ signal: controller.signal })
+      .catch(() => undefined);
     return () => controller.abort();
-  }, [startServiceWakeup]);
+  }, []);
 
   const returnToCredentials = () => {
     setStep("credentials");
@@ -430,7 +237,7 @@ export function LoginForm({
     clearError();
   };
 
-  const submitCredentials = async ({ isWakeRetry = false } = {}) => {
+  const submitCredentials = async () => {
     const normalizedEmail = email.trim().toLowerCase();
     setIsSubmitting(true);
     clearError();
@@ -464,29 +271,12 @@ export function LoginForm({
         });
       }
     } catch (error) {
-      // A retry that still reports a sleeping host falls through to the normal
-      // error toast rather than opening a second wake-up countdown.
-      if (asApiError(error)?.code === "HOSTING_SERVICE_WAKING" && !isWakeRetry) {
-        startServiceWakeup({ resumeWhenReady: true });
-        return;
-      }
       const { title, description } = describeLoginError(error);
       toast.error(title, { description });
     } finally {
       setIsSubmitting(false);
     }
   };
-
-  // Kept on a ref so the wake-up poll (created once) can resume the sign-in the
-  // user already asked for instead of making them press Continue again.
-  useEffect(() => {
-    resumeAfterWakeRef.current = () => {
-      if (step !== "credentials" || !email || emailError || !password)
-        return false;
-      void submitCredentials({ isWakeRetry: true });
-      return true;
-    };
-  });
 
   const submitOtp = async () => {
     setIsSubmitting(true);
@@ -549,7 +339,6 @@ export function LoginForm({
 
   const submitDisabled =
     isSubmitting ||
-    isServiceWaking ||
     (step === "credentials" ? !!emailError || !email : otp.length !== 6);
 
   const canFallBackToEmail =
@@ -607,9 +396,7 @@ export function LoginForm({
               >
                 {step === "credentials" ? (
                   <>
-                    <LoginProviders
-                      disabled={isSubmitting || isServiceWaking}
-                    />
+                    <LoginProviders disabled={isSubmitting} />
 
                     <div className="space-y-1.5">
                       <label
@@ -752,11 +539,9 @@ export function LoginForm({
                     ? step === "credentials"
                       ? "Checking…"
                       : "Signing in…"
-                    : isServiceWaking
-                      ? `Starting service… ${serviceWakeSeconds}s`
-                      : step === "credentials"
-                        ? "Continue"
-                        : "Verify and sign in"}
+                    : step === "credentials"
+                      ? "Continue"
+                      : "Verify and sign in"}
                 </Button>
 
                 {step === "code" ? (

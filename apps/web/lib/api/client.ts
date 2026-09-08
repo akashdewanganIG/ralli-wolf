@@ -6,6 +6,19 @@ import axios, {
 import { config } from "../config";
 import { ApiError } from "./types";
 
+/**
+ * A hibernating host answers with 429 at its edge, before the request ever
+ * reaches the API, so retrying is safe for any method — nothing was executed.
+ * Riding the cold start out here means callers never see a "service is waking"
+ * state at all: the request simply takes longer and then succeeds.
+ */
+const HOSTING_WAKE_RETRY_BUDGET_MS = 60_000;
+const HOSTING_WAKE_RETRY_DELAY_MS = 2_500;
+
+type RetryableConfig = InternalAxiosRequestConfig & {
+  hostingWakeRetryUntil?: number;
+};
+
 const apiClient: AxiosInstance = axios.create({
   baseURL: config.apiUrl,
   timeout: 60000,
@@ -31,7 +44,7 @@ apiClient.interceptors.response.use(
   (response: AxiosResponse) => {
     return response;
   },
-  (error: unknown) => {
+  async (error: unknown) => {
     const axiosError = axios.isAxiosError(error) ? error : null;
     const status = axiosError?.response?.status ?? 0;
     const transportCode = axiosError?.code;
@@ -54,6 +67,18 @@ apiClient.interceptors.response.use(
         status: 0,
         code: "ERR_CANCELED",
       } as ApiError);
+    }
+
+    const retryConfig = axiosError?.config as RetryableConfig | undefined;
+    if (isHostingServiceWaking && retryConfig) {
+      retryConfig.hostingWakeRetryUntil ??=
+        Date.now() + HOSTING_WAKE_RETRY_BUDGET_MS;
+      if (Date.now() < retryConfig.hostingWakeRetryUntil) {
+        await new Promise(resolve =>
+          setTimeout(resolve, HOSTING_WAKE_RETRY_DELAY_MS)
+        );
+        if (!retryConfig.signal?.aborted) return apiClient(retryConfig);
+      }
     }
 
     const isExpected404 = status === 404;
