@@ -44,7 +44,14 @@ const Toaster = ({ ...props }: ToasterProps) => {
             "data-[type=error]:border-error-border data-[type=error]:bg-error-surface",
             "data-[type=info]:border-info-border data-[type=info]:bg-info-surface",
           ].join(" "),
-          icon: "mt-0.5 flex shrink-0 items-center justify-center",
+          icon: [
+            "mt-0.5 flex shrink-0 items-center justify-center",
+
+            "group-data-[type=loading]/toast:order-last group-data-[type=loading]/toast:mt-0 group-data-[type=loading]/toast:self-center group-data-[type=loading]/toast:pl-1",
+          ].join(" "),
+
+          loader:
+            "static! transform-none! flex size-4 items-center justify-center",
           content: "flex min-w-0 flex-1 flex-col gap-0.5",
           title: [
             "text-[0.8125rem] font-semibold leading-5 tracking-[-0.006em]",

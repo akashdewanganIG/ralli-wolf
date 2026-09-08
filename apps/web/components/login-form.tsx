@@ -24,8 +24,11 @@ type Factor = "totp" | "email";
 
 const RESEND_COOLDOWN_SECONDS = 30;
 const SERVICE_WAKE_TIMEOUT_SECONDS = 90;
-const SERVICE_HEALTH_POLL_MS = 5_000;
-const SERVICE_HEALTH_REQUEST_TIMEOUT_MS = 8_000;
+const SERVICE_HEALTH_POLL_MS = 3_000;
+// A hibernating host holds the connection open for the whole cold start, so a
+// health probe has to outlive it. Aborting sooner kills the very request that
+// wakes the service and the poll can never observe the API coming back.
+const SERVICE_HEALTH_REQUEST_TIMEOUT_MS = 45_000;
 
 function asApiError(error: unknown): ApiError | null {
   return error && typeof error === "object" && "status" in error
@@ -186,7 +189,9 @@ export function LoginForm({
   const serviceWakeSequenceRef = useRef(0);
   const serviceWakeToastRef = useRef<string | number | undefined>(undefined);
   const serviceWakeCountdownRef = useRef<number | undefined>(undefined);
+  const serviceWakeDeadlineRef = useRef<number | undefined>(undefined);
   const serviceWakeAbortRef = useRef<AbortController | null>(null);
+  const resumeAfterWakeRef = useRef<() => boolean>(() => false);
   const {
     login,
     resendLoginOtp,
@@ -229,6 +234,10 @@ export function LoginForm({
         window.clearInterval(serviceWakeCountdownRef.current);
         serviceWakeCountdownRef.current = undefined;
       }
+      if (serviceWakeDeadlineRef.current !== undefined) {
+        window.clearTimeout(serviceWakeDeadlineRef.current);
+        serviceWakeDeadlineRef.current = undefined;
+      }
       serviceWakeAbortRef.current?.abort();
       serviceWakeAbortRef.current = null;
       if (serviceWakeToastRef.current !== undefined) {
@@ -239,7 +248,13 @@ export function LoginForm({
     []
   );
 
-  const startServiceWakeup = useCallback(() => {
+  /**
+   * `resumeWhenReady` is only for a wake the user actually triggered by pressing
+   * Continue. A wake started by the page-load probe must never auto-submit: the
+   * user could be mid-password when the API comes up, and a partial submit
+   * spends one of their limited login attempts.
+   */
+  const startServiceWakeup = useCallback(({ resumeWhenReady = false } = {}) => {
     if (serviceWakeToastRef.current !== undefined) return;
 
     const sequence = ++serviceWakeSequenceRef.current;
@@ -253,22 +268,47 @@ export function LoginForm({
     });
     serviceWakeToastRef.current = toastId;
 
-    serviceWakeCountdownRef.current = window.setInterval(() => {
-      if (serviceWakeSequenceRef.current !== sequence) return;
+    // Scoped to this attempt: a superseded poll must never clear the timers of
+    // the attempt that replaced it.
+    let countdownTimer: number | undefined;
+    const stopCountdown = () => {
+      if (countdownTimer === undefined) return;
+      window.clearInterval(countdownTimer);
+      if (serviceWakeCountdownRef.current === countdownTimer) {
+        serviceWakeCountdownRef.current = undefined;
+      }
+      countdownTimer = undefined;
+    };
+
+    countdownTimer = window.setInterval(() => {
+      if (serviceWakeSequenceRef.current !== sequence) {
+        stopCountdown();
+        return;
+      }
       const elapsed = Math.floor((Date.now() - startedAt) / 1000);
       const remaining = Math.max(0, SERVICE_WAKE_TIMEOUT_SECONDS - elapsed);
       setServiceWakeSeconds(remaining);
+      if (remaining <= 0) {
+        stopCountdown();
+        return;
+      }
       toast.loading("Starting the service", {
         id: toastId,
         description: `Checking API readiness · up to ${remaining} seconds remaining`,
         duration: Infinity,
       });
     }, 1_000);
+    serviceWakeCountdownRef.current = countdownTimer;
 
+    let deadlineTimer: number | undefined;
     const finish = () => {
-      if (serviceWakeCountdownRef.current !== undefined) {
-        window.clearInterval(serviceWakeCountdownRef.current);
-        serviceWakeCountdownRef.current = undefined;
+      stopCountdown();
+      if (deadlineTimer !== undefined) {
+        window.clearTimeout(deadlineTimer);
+        if (serviceWakeDeadlineRef.current === deadlineTimer) {
+          serviceWakeDeadlineRef.current = undefined;
+        }
+        deadlineTimer = undefined;
       }
       serviceWakeAbortRef.current?.abort();
       serviceWakeAbortRef.current = null;
@@ -277,17 +317,31 @@ export function LoginForm({
       setServiceWakeSeconds(0);
     };
 
+    // Hard stop that does not depend on where the polling loop happens to be:
+    // when the countdown hits zero the loading toast always resolves.
+    const giveUp = () => {
+      if (serviceWakeSequenceRef.current !== sequence) return;
+      serviceWakeSequenceRef.current += 1;
+      finish();
+      toast.error("The service is taking longer than expected", {
+        id: toastId,
+        description: "Please wait another minute, then try signing in.",
+        duration: 8_000,
+      });
+    };
+
+    deadlineTimer = window.setTimeout(
+      giveUp,
+      SERVICE_WAKE_TIMEOUT_SECONDS * 1_000
+    );
+    serviceWakeDeadlineRef.current = deadlineTimer;
+
     const checkUntilReady = async () => {
       while (serviceWakeSequenceRef.current === sequence) {
         const remainingBeforeRequest =
           SERVICE_WAKE_TIMEOUT_SECONDS * 1_000 - (Date.now() - startedAt);
         if (remainingBeforeRequest <= 0) {
-          finish();
-          toast.error("The service is taking longer than expected", {
-            id: toastId,
-            description: "Please wait another minute, then try signing in.",
-            duration: 8_000,
-          });
+          giveUp();
           return;
         }
 
@@ -306,17 +360,18 @@ export function LoginForm({
           serviceWakeAbortRef.current = null;
         }
         if (serviceWakeSequenceRef.current !== sequence) {
-          if (serviceWakeCountdownRef.current !== undefined) {
-            window.clearInterval(serviceWakeCountdownRef.current);
-            serviceWakeCountdownRef.current = undefined;
-          }
+          stopCountdown();
           return;
         }
         if (health?.status === "ok" && health.database === "connected") {
+          serviceWakeSequenceRef.current += 1;
           finish();
+          const resumed = resumeWhenReady && resumeAfterWakeRef.current();
           toast.success("Service is ready", {
             id: toastId,
-            description: "You can sign in now.",
+            description: resumed
+              ? "Signing you in now."
+              : "You can sign in now.",
             duration: 5_000,
           });
           return;
@@ -325,12 +380,7 @@ export function LoginForm({
         const remainingAfterRequest =
           SERVICE_WAKE_TIMEOUT_SECONDS * 1_000 - (Date.now() - startedAt);
         if (remainingAfterRequest <= 0) {
-          finish();
-          toast.error("The service is taking longer than expected", {
-            id: toastId,
-            description: "Please wait another minute, then try signing in.",
-            duration: 8_000,
-          });
+          giveUp();
           return;
         }
 
@@ -341,14 +391,35 @@ export function LoginForm({
           )
         );
       }
-      if (serviceWakeCountdownRef.current !== undefined) {
-        window.clearInterval(serviceWakeCountdownRef.current);
-        serviceWakeCountdownRef.current = undefined;
-      }
+      stopCountdown();
     };
 
     void checkUntilReady();
   }, []);
+
+  /**
+   * Touch the API as soon as the page opens rather than waiting for a failed
+   * sign-in. A hibernating host boots on the first request it receives, so this
+   * spends the seconds the user is typing instead of theirs: by the time they
+   * press Continue the API is usually already up. Only the host's explicit
+   * "asleep" signal opens the countdown — a plain network blip must not put a
+   * toast on a page nobody has interacted with yet.
+   */
+  useEffect(() => {
+    const controller = new AbortController();
+    void healthService
+      .checkHealth({
+        timeoutMs: SERVICE_HEALTH_REQUEST_TIMEOUT_MS,
+        signal: controller.signal,
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        if (asApiError(error)?.code === "HOSTING_SERVICE_WAKING") {
+          startServiceWakeup();
+        }
+      });
+    return () => controller.abort();
+  }, [startServiceWakeup]);
 
   const returnToCredentials = () => {
     setStep("credentials");
@@ -359,7 +430,7 @@ export function LoginForm({
     clearError();
   };
 
-  const submitCredentials = async () => {
+  const submitCredentials = async ({ isWakeRetry = false } = {}) => {
     const normalizedEmail = email.trim().toLowerCase();
     setIsSubmitting(true);
     clearError();
@@ -393,8 +464,10 @@ export function LoginForm({
         });
       }
     } catch (error) {
-      if (asApiError(error)?.code === "HOSTING_SERVICE_WAKING") {
-        startServiceWakeup();
+      // A retry that still reports a sleeping host falls through to the normal
+      // error toast rather than opening a second wake-up countdown.
+      if (asApiError(error)?.code === "HOSTING_SERVICE_WAKING" && !isWakeRetry) {
+        startServiceWakeup({ resumeWhenReady: true });
         return;
       }
       const { title, description } = describeLoginError(error);
@@ -403,6 +476,17 @@ export function LoginForm({
       setIsSubmitting(false);
     }
   };
+
+  // Kept on a ref so the wake-up poll (created once) can resume the sign-in the
+  // user already asked for instead of making them press Continue again.
+  useEffect(() => {
+    resumeAfterWakeRef.current = () => {
+      if (step !== "credentials" || !email || emailError || !password)
+        return false;
+      void submitCredentials({ isWakeRetry: true });
+      return true;
+    };
+  });
 
   const submitOtp = async () => {
     setIsSubmitting(true);
