@@ -71,6 +71,21 @@ export const NAVIGATION_COMMANDS: NavigationCommand[] = [
     icon: ChartNoAxesCombined,
     keywords: ["home", "overview", "metrics"],
   },
+  {
+    id: "nav:/architecture",
+    label: "Architecture & User Flow",
+    href: "/architecture",
+    group: "Overview",
+    icon: Share2,
+    keywords: [
+      "architecture",
+      "map",
+      "flows",
+      "modules",
+      "diagram",
+      "structure",
+    ],
+  },
 
   {
     id: "nav:landing-page-builder",

@@ -73,6 +73,7 @@ import {
   LockKey as PhLockKey,
   MagnifyingGlass as PhMagnifyingGlass,
   MapPin as PhMapPin,
+  Minus as PhMinus,
   Moon as PhMoon,
   Megaphone as PhMegaphone,
   Note as PhNote,
@@ -286,6 +287,7 @@ export const MessageCircle = /*#__PURE__*/ duotone(
   "MessageCircle"
 );
 export const MessageSquare = /*#__PURE__*/ duotone(PhChat, "MessageSquare");
+export const Minus = /*#__PURE__*/ duotone(PhMinus, "Minus");
 export const Moon = /*#__PURE__*/ duotone(PhMoon, "Moon");
 export const MoreHorizontal = /*#__PURE__*/ duotone(
   PhDotsThree,

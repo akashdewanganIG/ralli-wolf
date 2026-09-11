@@ -3,6 +3,7 @@
 import * as React from "react";
 import { MessageCircle, RefreshCw, X } from "@repo/ui/icons";
 import { cn } from "@repo/ui/lib/utils";
+import { ArchitectureTrigger } from "./architecture-trigger";
 
 interface CannedQuestion {
   id: string;
@@ -260,28 +261,32 @@ export function SupportChat() {
         </div>
       ) : null}
 
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={() => setOpen(current => !current)}
-        aria-expanded={open}
-        aria-label={open ? "Close help assistant" : "Open help assistant"}
-        className={cn(
-          "group inline-flex h-12 items-center gap-2 rounded-full bg-primary text-primary-foreground outline-none ring-4 ring-primary/10",
-          "shadow-[0_10px_24px_-8px_rgb(0_0_0/0.35)] transition-[background-color,box-shadow,transform] duration-150",
-          "hover:-translate-y-0.5 hover:shadow-[0_14px_28px_-8px_rgb(0_0_0/0.4)] focus-visible:ring-primary/40 active:translate-y-0 active:scale-95",
-          open ? "w-12 justify-center" : "pl-3.5 pr-4"
-        )}
-      >
-        {open ? (
-          <X className="size-5" />
-        ) : (
-          <>
-            <MessageCircle className="size-5 shrink-0" />
-            <span className="text-[0.8125rem] font-semibold">Need help?</span>
-          </>
-        )}
-      </button>
+      <div className="flex items-center gap-2">
+        <ArchitectureTrigger />
+
+        <button
+          ref={triggerRef}
+          type="button"
+          onClick={() => setOpen(current => !current)}
+          aria-expanded={open}
+          aria-label={open ? "Close help assistant" : "Open help assistant"}
+          className={cn(
+            "group inline-flex h-12 items-center gap-2 rounded-full bg-primary text-primary-foreground outline-none ring-4 ring-primary/10",
+            "shadow-[0_10px_24px_-8px_rgb(0_0_0/0.35)] transition-[background-color,box-shadow,transform] duration-150",
+            "hover:-translate-y-0.5 hover:shadow-[0_14px_28px_-8px_rgb(0_0_0/0.4)] focus-visible:ring-primary/40 active:translate-y-0 active:scale-95",
+            open ? "w-12 justify-center" : "pl-3.5 pr-4"
+          )}
+        >
+          {open ? (
+            <X className="size-5" />
+          ) : (
+            <>
+              <MessageCircle className="size-5 shrink-0" />
+              <span className="text-[0.8125rem] font-semibold">Need help?</span>
+            </>
+          )}
+        </button>
+      </div>
     </div>
   );
 }

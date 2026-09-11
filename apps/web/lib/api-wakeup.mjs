@@ -1,5 +1,3 @@
-import { setTimeout as delay } from "node:timers/promises";
-
 const API_WAKE_TIMEOUT_MS = 90_000;
 // A hibernating host holds the connection open for the whole cold start, so the
 // probe has to outlive it — a shorter abort kills the request that does the
@@ -8,6 +6,38 @@ const API_WAKE_REQUEST_TIMEOUT_MS = 45_000;
 const API_WAKE_POLL_MS = 3_000;
 // The host hibernates after ~15 minutes idle, so warm it well inside that.
 const API_KEEPALIVE_INTERVAL_MS = 10 * 60_000;
+
+/**
+ * An abortable sleep built on the global timer rather than
+ * `node:timers/promises`.
+ *
+ * Next compiles `instrumentation.ts` for every runtime it supports, so the
+ * dynamic import of this module is bundled for the non-Node layers too even
+ * though `register()` returns early there. Webpack cannot resolve a `node:`
+ * URI in those layers and the build fails with UnhandledSchemeError, so this
+ * module must stay free of node-scheme imports. `setTimeout` and
+ * `AbortSignal` exist in every runtime this can land in.
+ */
+function delay(ms, { signal } = {}) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason ?? new Error("Aborted"));
+      return;
+    }
+
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason ?? new Error("Aborted"));
+    };
+
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve(undefined);
+    }, ms);
+
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
 
 export function apiHealthUrl(rawTarget = process.env.API_PROXY_TARGET) {
   const value = rawTarget?.trim();
@@ -60,9 +90,9 @@ export async function wakeApi({
 
     const remainingAfterRequest = deadline - Date.now();
     if (remainingAfterRequest <= 0) break;
-    await delay(Math.min(pollMs, remainingAfterRequest), undefined, {
-      signal,
-    }).catch(() => undefined);
+    await delay(Math.min(pollMs, remainingAfterRequest), { signal }).catch(
+      () => undefined
+    );
   }
 
   return { status: signal.aborted ? "aborted" : "timed-out", attempts };
@@ -88,7 +118,7 @@ export async function keepApiWarm({
 
   let cycles = 0;
   while (!signal.aborted) {
-    await delay(intervalMs, undefined, { signal }).catch(() => undefined);
+    await delay(intervalMs, { signal }).catch(() => undefined);
     if (signal.aborted) break;
 
     cycles += 1;
