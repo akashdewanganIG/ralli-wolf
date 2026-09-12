@@ -56,6 +56,13 @@ export type FlowStepKind =
   | "decision"
   | "end";
 
+/** One labelled way out of a decision. */
+export interface FlowBranch {
+  label: string;
+  /** Id of the step this outcome leads to. */
+  to: string;
+}
+
 export interface FlowStep {
   id: string;
   label: string;
@@ -63,6 +70,13 @@ export interface FlowStep {
   route?: string;
   note?: string;
   adminOnly?: boolean;
+  /**
+   * Where this step goes when it is not simply the next entry in the array —
+   * used where two paths rejoin, or a remedial step loops back.
+   */
+  next?: string;
+  /** A decision's outcomes. Every `decision` step has at least two. */
+  branches?: FlowBranch[];
 }
 
 export interface UserFlow {
@@ -1421,6 +1435,10 @@ export const USER_FLOWS: UserFlow[] = [
         label: "Existing session still valid?",
         kind: "decision",
         note: "Checked on every load",
+        branches: [
+          { label: "already signed in", to: "s7" },
+          { label: "no session", to: "s3" },
+        ],
       },
       {
         id: "s3",
@@ -1470,17 +1488,22 @@ export const USER_FLOWS: UserFlow[] = [
         route: "/leads/lead-master",
         note: "Every module lands on a list first",
       },
+      { id: "s4", label: "Filter, search or sort the list", kind: "action" },
       {
-        id: "s4",
-        label: "Filter, search or sort the list",
-        kind: "action",
+        id: "s5",
+        label: "New record, or an existing one?",
+        kind: "decision",
+        branches: [
+          { label: "new record", to: "s6" },
+          { label: "existing one", to: "s7" },
+        ],
       },
-      { id: "s5", label: "New record, or an existing one?", kind: "decision" },
       {
         id: "s6",
         label: "Create from the listing's action button",
         kind: "action",
         note: "Opens a dialog on most screens",
+        next: "s8",
       },
       {
         id: "s7",
@@ -1558,6 +1581,10 @@ export const USER_FLOWS: UserFlow[] = [
         label: "Assigned to anyone?",
         kind: "decision",
         route: "/leads/unassigned-leads",
+        branches: [
+          { label: "no", to: "s3" },
+          { label: "yes", to: "s4" },
+        ],
       },
       {
         id: "s3",
@@ -1565,7 +1592,15 @@ export const USER_FLOWS: UserFlow[] = [
         kind: "action",
         route: "/leads/assigned",
       },
-      { id: "s4", label: "Qualified?", kind: "decision" },
+      {
+        id: "s4",
+        label: "Qualified?",
+        kind: "decision",
+        branches: [
+          { label: "yes", to: "s5" },
+          { label: "no", to: "s20" },
+        ],
+      },
       {
         id: "s5",
         label: "Convert — creates the account and contact together",
@@ -1595,6 +1630,10 @@ export const USER_FLOWS: UserFlow[] = [
         label: "Discount over the threshold?",
         kind: "decision",
         route: "/sales/approvals",
+        branches: [
+          { label: "yes", to: "s10" },
+          { label: "no", to: "s11" },
+        ],
       },
       {
         id: "s10",
@@ -1606,6 +1645,10 @@ export const USER_FLOWS: UserFlow[] = [
         id: "s11",
         label: "Accepted and primary quote?",
         kind: "decision",
+        branches: [
+          { label: "yes", to: "s12" },
+          { label: "no", to: "s21" },
+        ],
       },
       {
         id: "s12",
@@ -1615,6 +1658,8 @@ export const USER_FLOWS: UserFlow[] = [
         note: "Closes the opportunity as won",
       },
       { id: "s13", label: "Ready to fulfil", kind: "end" },
+      { id: "s20", label: "Marked unqualified", kind: "end" },
+      { id: "s21", label: "Closed lost, or the quote is revised", kind: "end" },
     ],
   },
   {
@@ -1631,12 +1676,24 @@ export const USER_FLOWS: UserFlow[] = [
         route: "/campaigns/segments",
         note: "Rules on city, state and keyword",
       },
-      { id: "s2", label: "Email or WhatsApp?", kind: "decision" },
+      {
+        id: "s2",
+        label: "Email or WhatsApp?",
+        kind: "decision",
+        branches: [
+          { label: "WhatsApp", to: "s3" },
+          { label: "Email", to: "s20" },
+        ],
+      },
       {
         id: "s3",
         label: "Approved template available?",
         kind: "decision",
         route: "/campaigns/whatsapp/management",
+        branches: [
+          { label: "no", to: "s4" },
+          { label: "yes", to: "s5" },
+        ],
       },
       {
         id: "s4",
@@ -1661,6 +1718,13 @@ export const USER_FLOWS: UserFlow[] = [
         label: "Delivery tracked — sent, delivered, read, failed",
         kind: "end",
         route: "/campaigns/whatsapp",
+      },
+      {
+        id: "s20",
+        label: "Email campaign runs in Brevo",
+        kind: "end",
+        route: "/campaigns/email",
+        note: "Email campaigns live in Brevo, not in this database",
       },
     ],
   },
@@ -1709,6 +1773,10 @@ export const USER_FLOWS: UserFlow[] = [
         label: "Quality check required?",
         kind: "decision",
         route: "/purchasing/quality",
+        branches: [
+          { label: "yes", to: "s20" },
+          { label: "no", to: "s7" },
+        ],
       },
       {
         id: "s7",
@@ -1728,6 +1796,13 @@ export const USER_FLOWS: UserFlow[] = [
         label: "On the shelf",
         kind: "end",
         route: "/inventory/stock",
+      },
+      {
+        id: "s20",
+        label: "Inspect — pass, fail, or pass with conditions",
+        kind: "action",
+        route: "/purchasing/quality",
+        next: "s7",
       },
     ],
   },
@@ -1751,7 +1826,15 @@ export const USER_FLOWS: UserFlow[] = [
         route: "/bom",
         note: "Circular references are rejected before they save",
       },
-      { id: "s3", label: "At least one component?", kind: "decision" },
+      {
+        id: "s3",
+        label: "At least one component?",
+        kind: "decision",
+        branches: [
+          { label: "no — add one", to: "s2" },
+          { label: "yes", to: "s4" },
+        ],
+      },
       {
         id: "s4",
         label: "Activate — the structure freezes",
@@ -1822,6 +1905,10 @@ export const USER_FLOWS: UserFlow[] = [
         label: "Does the order's BOM have a routing?",
         kind: "decision",
         route: "/planning",
+        branches: [
+          { label: "yes", to: "s4" },
+          { label: "no", to: "s20" },
+        ],
       },
       {
         id: "s4",
@@ -1840,12 +1927,28 @@ export const USER_FLOWS: UserFlow[] = [
         label: "Any day over 100%?",
         kind: "decision",
         route: "/planning/capacity",
+        branches: [
+          { label: "yes", to: "s21" },
+          { label: "no", to: "s7" },
+        ],
       },
       {
         id: "s7",
         label: "The plan fits",
         kind: "end",
         route: "/planning/capacity",
+      },
+      {
+        id: "s20",
+        label: "No routing — nothing to schedule against",
+        kind: "end",
+      },
+      {
+        id: "s21",
+        label: "Move work or add a shift",
+        kind: "action",
+        route: "/planning",
+        next: "s4",
       },
     ],
   },
@@ -1881,7 +1984,15 @@ export const USER_FLOWS: UserFlow[] = [
         kind: "action",
         route: "/warehouse/pick-lists",
       },
-      { id: "s5", label: "Everything picked?", kind: "decision" },
+      {
+        id: "s5",
+        label: "Everything picked?",
+        kind: "decision",
+        branches: [
+          { label: "no", to: "s20" },
+          { label: "yes", to: "s6" },
+        ],
+      },
       {
         id: "s6",
         label: "Pack the confirmed quantities",
@@ -1895,6 +2006,12 @@ export const USER_FLOWS: UserFlow[] = [
         route: "/warehouse/packages",
       },
       { id: "s8", label: "Shipped", kind: "end", route: "/warehouse/packages" },
+      {
+        id: "s20",
+        label: "Short-picked lines flagged",
+        kind: "action",
+        next: "s6",
+      },
     ],
   },
   {
@@ -1943,6 +2060,10 @@ export const USER_FLOWS: UserFlow[] = [
         id: "s1",
         label: "Goods received, or an order shipped",
         kind: "start",
+        branches: [
+          { label: "goods received", to: "s2" },
+          { label: "order shipped", to: "s4" },
+        ],
       },
       {
         id: "s2",
@@ -1955,6 +2076,7 @@ export const USER_FLOWS: UserFlow[] = [
         label: "Approve it for payment",
         kind: "action",
         route: "/finance/payables",
+        next: "s5",
       },
       {
         id: "s4",
@@ -1974,12 +2096,7 @@ export const USER_FLOWS: UserFlow[] = [
         label: "Balance and status recomputed from allocations",
         kind: "auto",
       },
-      {
-        id: "s7",
-        label: "Settled",
-        kind: "end",
-        route: "/finance",
-      },
+      { id: "s7", label: "Settled", kind: "end", route: "/finance" },
     ],
   },
   {
@@ -2010,11 +2127,7 @@ export const USER_FLOWS: UserFlow[] = [
         route: "/admin/user-management",
         adminOnly: true,
       },
-      {
-        id: "s4",
-        label: "Credentials emailed automatically",
-        kind: "auto",
-      },
+      { id: "s4", label: "Credentials emailed automatically", kind: "auto" },
       {
         id: "s5",
         label: "They set a password and choose a second factor",
@@ -2054,6 +2167,10 @@ export const USER_FLOWS: UserFlow[] = [
         label: "Is it the last method on the account?",
         kind: "decision",
         note: "The last one cannot be turned off — set another up first",
+        branches: [
+          { label: "yes", to: "s20" },
+          { label: "no", to: "s5" },
+        ],
       },
       {
         id: "s5",
@@ -2070,6 +2187,13 @@ export const USER_FLOWS: UserFlow[] = [
         route: "/admin/notifications",
       },
       { id: "s7", label: "Account and workspace configured", kind: "end" },
+      {
+        id: "s20",
+        label: "Blocked — set another method up first",
+        kind: "action",
+        route: "/settings",
+        next: "s3",
+      },
     ],
   },
   {
@@ -2085,13 +2209,22 @@ export const USER_FLOWS: UserFlow[] = [
         kind: "start",
         route: "/leads/lead-master",
       },
-      { id: "s2", label: "Importing or exporting?", kind: "decision" },
+      {
+        id: "s2",
+        label: "Importing or exporting?",
+        kind: "decision",
+        branches: [
+          { label: "importing", to: "s3" },
+          { label: "exporting", to: "s4" },
+        ],
+      },
       {
         id: "s3",
         label: "Download the template, fill it, upload it",
         kind: "action",
         route: "/leads/lead-master",
         note: "Requires the data.import capability",
+        next: "s5",
       },
       {
         id: "s4",

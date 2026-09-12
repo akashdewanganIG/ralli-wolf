@@ -17,7 +17,7 @@
  * in grouping bands drawn behind the result — never as a layout constraint.
  */
 
-import type { ArchNode, ArchRelation } from "./architecture-map";
+import type { ArchNode, ArchRelation, FlowStep } from "./architecture-map";
 
 export interface LayoutBox {
   id: string;
@@ -272,4 +272,169 @@ export function orthogonalPath(
   const last = points[points.length - 1]!;
   parts.push(`L ${last.x} ${last.y}`);
   return parts.join(" ");
+}
+
+/* ------------------------------------------------------------------ */
+/* User flows                                                          */
+/* ------------------------------------------------------------------ */
+
+export interface FlowEdge {
+  id: string;
+  from: string;
+  to: string;
+  /** Branch label ("yes", "Email", …). Absent on a plain sequential step. */
+  label?: string;
+  points: Array<{ x: number; y: number }>;
+  labelBox?: { x: number; y: number; w: number; h: number };
+}
+
+export interface FlowLayout {
+  nodes: LayoutBox[];
+  edges: FlowEdge[];
+  width: number;
+  height: number;
+}
+
+export const FLOW_W = 232;
+export const FLOW_H = 58;
+/** Decisions get a little more room; a fork needs to read as a fork. */
+export const FLOW_DECISION_H = 66;
+
+const FLOW_OPTIONS: Record<string, string> = {
+  "elk.algorithm": "layered",
+  "elk.direction": "DOWN",
+  "elk.edgeRouting": "ORTHOGONAL",
+  "elk.layered.nodePlacement.strategy": "BRANDES_KOEPF",
+  "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
+  // Flows loop back (re-add a component, reschedule, pick another method), so
+  // the cycle breaker has to run before layering.
+  "elk.layered.cycleBreaking.strategy": "GREEDY",
+  "elk.layered.thoroughness": "40",
+  "elk.spacing.nodeNode": "28",
+  "elk.spacing.edgeNode": "24",
+  "elk.spacing.edgeEdge": "16",
+  "elk.spacing.edgeLabel": "6",
+  "elk.layered.spacing.nodeNodeBetweenLayers": "56",
+  "elk.layered.spacing.edgeNodeBetweenLayers": "24",
+  "elk.edgeLabels.placement": "CENTER",
+  "elk.layered.edgeLabels.sideSelection": "SMART_DOWN",
+};
+
+/**
+ * Derives the edges of a flow from its steps.
+ *
+ * A step leads to its branches if it has any, else to `next` if set, else to
+ * whatever follows it in the array. An `end` step leads nowhere — which is what
+ * lets the terminal outcomes sit at the bottom of the array without the step
+ * above them accidentally pointing at one.
+ */
+export function flowEdges(
+  steps: FlowStep[]
+): Array<{ from: string; to: string; label?: string }> {
+  const present = new Set(steps.map(step => step.id));
+  const edges: Array<{ from: string; to: string; label?: string }> = [];
+
+  steps.forEach((step, index) => {
+    if (step.kind === "end") return;
+
+    if (step.branches?.length) {
+      for (const branch of step.branches) {
+        if (present.has(branch.to))
+          edges.push({ from: step.id, to: branch.to, label: branch.label });
+      }
+      return;
+    }
+
+    const target = step.next ?? steps[index + 1]?.id;
+    if (target && present.has(target))
+      edges.push({ from: step.id, to: target });
+  });
+
+  return edges;
+}
+
+export async function computeFlowLayout(
+  steps: FlowStep[]
+): Promise<FlowLayout> {
+  if (!steps.length) return { nodes: [], edges: [], width: 0, height: 0 };
+
+  const derived = flowEdges(steps);
+  const Elk = await loadElk();
+
+  const graph = {
+    id: "root",
+    layoutOptions: FLOW_OPTIONS,
+    children: steps.map(step => ({
+      id: step.id,
+      width: FLOW_W,
+      height: step.kind === "decision" ? FLOW_DECISION_H : FLOW_H,
+    })),
+    edges: derived.map((edge, index) => ({
+      id: `flow-${index}`,
+      sources: [edge.from],
+      targets: [edge.to],
+      ...(edge.label
+        ? {
+            labels: [
+              {
+                text: edge.label,
+                width: edge.label.length * 5.4 + 12,
+                height: 15,
+              },
+            ],
+          }
+        : {}),
+    })),
+  };
+
+  const result = await new Elk().layout(graph);
+
+  const nodes: LayoutBox[] = (result.children ?? []).map(child => ({
+    id: child.id,
+    x: child.x ?? 0,
+    y: child.y ?? 0,
+    w: child.width ?? FLOW_W,
+    h: child.height ?? FLOW_H,
+  }));
+
+  const edges: FlowEdge[] = [];
+  for (const raw of result.edges ?? []) {
+    const index = Number(raw.id.replace("flow-", ""));
+    const source = derived[index];
+    const section = raw.sections?.[0];
+    if (!source || !section) continue;
+
+    const points = [
+      section.startPoint,
+      ...(section.bendPoints ?? []),
+      section.endPoint,
+    ].map(point => ({ x: point.x, y: point.y }));
+
+    const rawLabel = raw.labels?.[0];
+    edges.push({
+      id: raw.id,
+      from: source.from,
+      to: source.to,
+      label: source.label,
+      points,
+      labelBox:
+        rawLabel &&
+        typeof rawLabel.x === "number" &&
+        typeof rawLabel.y === "number"
+          ? {
+              x: rawLabel.x,
+              y: rawLabel.y,
+              w: rawLabel.width ?? 0,
+              h: rawLabel.height ?? 15,
+            }
+          : undefined,
+    });
+  }
+
+  return {
+    nodes,
+    edges,
+    width: result.width ?? 0,
+    height: result.height ?? 0,
+  };
 }

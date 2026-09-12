@@ -168,12 +168,8 @@ export default function ArchitecturePage() {
   /** Reveals a hit without navigating — the user still has to click the node. */
   const revealHit = React.useCallback((hit: SearchHit) => {
     if (hit.kind === "flow") {
+      // Flows are selected, not expanded — the view picks it up from focusRequest.
       setView("flows");
-      setCollapsed(current => {
-        const next = new Set(current);
-        next.delete(hit.id);
-        return next;
-      });
     } else {
       setView("architecture");
       setCollapsed(current => {
@@ -310,12 +306,7 @@ export default function ArchitecturePage() {
 
         <div className="flex h-[clamp(26rem,72svh,58rem)] min-h-0 flex-col">
           {view === "flows" ? (
-            <UserFlowView
-              flows={flows}
-              collapsed={collapsed}
-              onToggleCollapse={toggleCollapse}
-              focusRequest={focusRequest}
-            />
+            <UserFlowView flows={flows} focusRequest={focusRequest} />
           ) : isWide ? (
             <ArchitectureView
               modules={modules}
