@@ -5,9 +5,9 @@ import { toast } from "../toast";
 import { ensureApiReady, manualApiWakeUrl } from "./service-readiness";
 
 /**
- * A request through the app's /api/* proxy is still an inbound request to the
- * hosted API, so it wakes a suspended Render service. Keep that work inside the
- * application and report progress instead of asking the user to visit the API.
+ * Normal application traffic remains behind the same-origin /api/* proxy. A
+ * separate browser health request wakes Render when it rate-limits requests
+ * coming from the web service itself.
  */
 const NOTICE_ID = "api-service-asleep";
 let notified = false;
@@ -19,20 +19,21 @@ function openManualWakeup(): void {
 function showStartingNotice(): void {
   toast.custom(
     () => (
-      <div className="w-full rounded-lg border border-border bg-popover px-3.5 py-3 text-popover-foreground shadow-[0_1px_2px_rgba(16,24,40,0.05),0_8px_20px_-8px_rgba(16,24,40,0.16)]">
-        <div className="flex items-center gap-2">
+      <div className="w-full text-popover-foreground">
+        <div className="flex items-center justify-between gap-3">
           <p className="text-[0.8125rem] font-semibold leading-5 tracking-[-0.006em]">
             Starting the server
           </p>
           <Loader2Icon className="size-4 shrink-0 animate-spin text-muted-foreground" />
         </div>
         <p className="mt-0.5 text-[0.75rem] leading-[1.4] text-foreground/70">
-          The idle API is waking automatically. This can take about a minute.
+          The idle API is waking automatically. Start it manually below for a
+          faster result.
         </p>
         <button
           type="button"
           onClick={openManualWakeup}
-          className="mt-2.5 w-full rounded-md border border-foreground/15 bg-foreground/[0.06] px-3 py-2 text-[0.75rem] font-medium text-foreground transition-colors hover:bg-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+          className="mt-2.5 w-full rounded-md border border-destructive/80 bg-destructive px-3 py-2 text-[0.75rem] font-medium text-destructive-foreground shadow-sm transition-[background-color,box-shadow] hover:bg-destructive/90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/30"
         >
           Start server manually
         </button>
@@ -54,11 +55,11 @@ export function notifyServiceAsleep(): void {
 
   showStartingNotice();
 
-  void ensureApiReady()
+  void ensureApiReady({ force: true })
     .then(() => {
       toast.success("The server is ready", {
         id: NOTICE_ID,
-        description: "Please retry the action that was interrupted.",
+        description: "You can continue using the application.",
         duration: 5_000,
       });
     })

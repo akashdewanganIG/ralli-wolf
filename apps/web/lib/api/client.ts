@@ -6,6 +6,7 @@ import axios, {
 import { config } from "../config";
 import { notifyServiceAsleep } from "./service-asleep-notice";
 import { ApiError } from "./types";
+import { announceExpiredSession } from "../auth-events";
 
 /**
  * A hibernating host answers with 429 at its edge, before the request ever
@@ -118,7 +119,12 @@ apiClient.interceptors.response.use(
       typeof url === "string" &&
       url.startsWith("/api/auth/") &&
       url !== "/api/auth/me";
-    if (status === 401 && isStaffRequest && !isCredentialOperation) {
+    if (
+      status === 401 &&
+      isStaffRequest &&
+      !isCredentialOperation &&
+      !isAuthBootstrap
+    ) {
       if (typeof window !== "undefined") {
         const publicSessionPaths = [
           "/login",
@@ -131,7 +137,7 @@ apiClient.interceptors.response.use(
           window.location.pathname.startsWith(path)
         );
         if (!isPublicSessionPage) {
-          window.location.href = "/login";
+          announceExpiredSession();
         }
       }
     }

@@ -358,25 +358,6 @@ export function LoginForm({
     await submitOtp();
   };
 
-  if (isLoading && !isSubmitting) {
-    return (
-      <div className="flex min-h-svh items-center justify-center bg-background px-6 text-center">
-        <div role="status" aria-live="polite">
-          <p className="text-sm font-medium text-foreground">
-            {isWaitingForApi
-              ? "Starting the secure server…"
-              : "Checking your session…"}
-          </p>
-          {isWaitingForApi ? (
-            <p className="mt-1 text-xs text-muted-foreground">
-              Free hosting can take about a minute to wake up.
-            </p>
-          ) : null}
-        </div>
-      </div>
-    );
-  }
-
   const submitDisabled =
     isSubmitting ||
     isWaitingForApi ||

@@ -8,6 +8,7 @@ import React, {
   ReactNode,
   useCallback,
 } from "react";
+import { useRouter } from "next/navigation";
 import { authService } from "../lib/api/services";
 import {
   User,
@@ -18,6 +19,8 @@ import {
   LoginResponse,
   ApiError,
 } from "../lib/api/types";
+import { ensureApiReady } from "../lib/api/service-readiness";
+import { AUTH_SESSION_EXPIRED_EVENT } from "../lib/auth-events";
 
 interface AuthContextType {
   user: User | null;
@@ -44,6 +47,7 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -115,13 +119,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setError(apiError.message || "Logout failed");
     } finally {
       setUser(null);
-      window.location.href = "/login";
+      router.replace("/login");
     }
   };
 
   useEffect(() => {
+    const expireSession = () => {
+      setUser(null);
+      setIsLoading(false);
+    };
+    window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, expireSession);
+    return () =>
+      window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, expireSession);
+  }, []);
+
+  useEffect(() => {
     const checkAuth = async () => {
       try {
+        await ensureApiReady();
         const currentUser = await authService.getCurrentUser();
         setUser(currentUser);
       } catch {

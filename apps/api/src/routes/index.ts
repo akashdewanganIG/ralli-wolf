@@ -61,7 +61,8 @@ function frontendOrigin(): string | null {
   if (!raw) return null;
   try {
     const parsed = new URL(raw);
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:")
+      return null;
     return parsed.origin;
   } catch {
     return null;
@@ -85,49 +86,129 @@ function statusPage(databaseReachable: boolean, appOrigin: string | null) {
 <meta name="robots" content="noindex">
 <title>Ralli Wolf API</title>
 <style>
-  :root { color-scheme: light dark; --bg:#f6f7f9; --card:#fff; --fg:#11181c; --muted:#5f6b76; --line:#e3e8ef; --ok:#0f7b3f; --okbg:#e7f6ed; --warn:#8a5a00; --warnbg:#fdf3e0; --accent:#11181c; }
+  :root {
+    color-scheme:light dark;
+    --bg:#f1f1f1;
+    --surface:#fff;
+    --surface-subtle:#f5f5f5;
+    --fg:#171717;
+    --muted:#737373;
+    --line:#d6d6d6;
+    --line-subtle:#e5e5e5;
+    --primary:#ed1c24;
+    --primary-hover:#c5101b;
+    --primary-on:#fff;
+    --primary-surface:#fef2f2;
+    --primary-line:#fecaca;
+    --ok:#15803d;
+    --okbg:#f0fdf4;
+    --okline:#bbf7d0;
+    --warn:#b45309;
+    --warnbg:#fffbeb;
+    --warnline:#fde68a;
+  }
   @media (prefers-color-scheme: dark) {
-    :root { --bg:#0e1216; --card:#161b22; --fg:#e6edf3; --muted:#9aa7b2; --line:#242c36; --ok:#4ade80; --okbg:#0f2a1b; --warn:#fbbf24; --warnbg:#2b2010; --accent:#e6edf3; }
+    :root {
+      --bg:#0f0f0f;
+      --surface:#1a1a1a;
+      --surface-subtle:#1f1f1f;
+      --fg:#fafafa;
+      --muted:#8a8a8a;
+      --line:#2b2b2b;
+      --line-subtle:#232323;
+      --primary:#f5252d;
+      --primary-hover:#ff3d44;
+      --primary-surface:#2a1215;
+      --primary-line:#4d1f23;
+      --ok:#86efac;
+      --okbg:#10251a;
+      --okline:#1f4430;
+      --warn:#fcd34d;
+      --warnbg:#2a1f08;
+      --warnline:#4d3a10;
+    }
   }
   * { box-sizing:border-box; }
-  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px;
-         background:var(--bg); color:var(--fg);
-         font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
-  .card { width:100%; max-width:26rem; background:var(--card); border:1px solid var(--line);
-          border-radius:14px; padding:28px; box-shadow:0 1px 2px rgba(16,24,40,.04),0 12px 32px -12px rgba(16,24,40,.14); }
-  .badge { display:inline-flex; align-items:center; gap:7px; padding:5px 11px; border-radius:999px;
-           font-size:12.5px; font-weight:600; letter-spacing:.01em;
-           color:var(--ok); background:var(--okbg); }
-  .badge.warn { color:var(--warn); background:var(--warnbg); }
+  body {
+    margin:0;
+    min-height:100vh;
+    background:var(--bg);
+    color:var(--fg);
+    font:14px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  .page { width:min(100%,72rem); margin:0 auto; padding:28px 24px; }
+  .brand { display:flex; align-items:center; gap:10px; width:max-content; color:var(--fg); text-decoration:none; }
+  .brand-mark { display:grid; place-items:center; width:30px; height:30px; border-radius:8px; background:var(--primary); color:#fff;
+                box-shadow:inset 0 1px 0 rgba(255,255,255,.28),inset 0 -1px 0 rgba(0,0,0,.18),0 3px 8px -2px rgba(0,0,0,.2); }
+  .brand-mark svg { width:17px; height:17px; }
+  .brand-copy { display:flex; flex-direction:column; line-height:1.05; }
+  .brand-name { font-size:13px; font-weight:800; letter-spacing:.08em; }
+  .brand-product { margin-top:4px; color:var(--muted); font-size:10px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; }
+  .card { margin-top:52px; overflow:hidden; background:var(--surface); border:1px solid var(--line); border-radius:16px;
+          box-shadow:0 1px 2px rgba(16,24,40,.05),0 18px 50px -24px rgba(16,24,40,.24); }
+  .hero { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; padding:32px; }
+  .eyebrow { margin:0 0 8px; color:var(--primary); font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; }
+  h1 { margin:0; max-width:34rem; font-size:clamp(24px,4vw,36px); line-height:1.12; letter-spacing:-.035em; }
+  .detail { margin:10px 0 0; color:var(--muted); font-size:13px; }
+  .badge { display:inline-flex; flex:none; align-items:center; gap:7px; padding:6px 10px; border:1px solid var(--okline); border-radius:999px;
+           color:var(--ok); background:var(--okbg); font-size:11px; font-weight:700; white-space:nowrap; }
+  .badge.warn { color:var(--warn); background:var(--warnbg); border-color:var(--warnline); }
   .dot { width:7px; height:7px; border-radius:50%; background:currentColor; }
-  h1 { margin:18px 0 6px; font-size:21px; letter-spacing:-.015em; }
-  p { margin:0; color:var(--muted); font-size:13.5px; }
-  dl { margin:22px 0 0; border-top:1px solid var(--line); }
-  .row { display:flex; justify-content:space-between; gap:16px; padding:11px 0; border-bottom:1px solid var(--line); }
-  dt { color:var(--muted); font-size:13px; }
-  dd { margin:0; font-size:13px; font-weight:500; text-align:right; }
-  a.back { display:block; margin-top:24px; padding:11px 16px; border-radius:9px; text-align:center;
-           background:var(--accent); color:var(--card); text-decoration:none; font-weight:600; font-size:14px; }
-  .note { margin-top:14px; text-align:center; font-size:12.5px; color:var(--muted); }
+  .status-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1px; margin:0; padding:1px 0 0; background:var(--line-subtle); border-top:1px solid var(--line-subtle); }
+  .status-item { min-width:0; padding:20px 24px; background:var(--surface); }
+  dt { color:var(--muted); font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
+  dd { margin:7px 0 0; overflow-wrap:anywhere; font-size:13px; font-weight:600; }
+  .actions { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:18px 24px; border-top:1px solid var(--line-subtle); background:var(--surface-subtle); }
+  .note { margin:0; color:var(--muted); font-size:12px; }
+  a.back { flex:none; display:inline-flex; align-items:center; justify-content:center; min-height:40px; padding:10px 16px; border:1px solid rgba(197,16,27,.8);
+           border-radius:8px; background:var(--primary); color:var(--primary-on); text-decoration:none; font-size:13px; font-weight:700;
+           box-shadow:inset 0 1px 0 rgba(255,255,255,.25),inset 0 -1px 0 rgba(0,0,0,.18),0 1px 2px rgba(0,0,0,.16),0 3px 8px -2px rgba(0,0,0,.18); }
+  a.back:hover { background:var(--primary-hover); }
+  a.back:focus-visible { outline:3px solid var(--primary-line); outline-offset:2px; }
+  .footer { margin:18px 0 0; color:var(--muted); font-size:11px; text-align:center; }
+  @media (max-width:640px) {
+    .page { padding:20px 16px; }
+    .card { margin-top:32px; }
+    .hero { flex-direction:column-reverse; padding:24px 20px; }
+    .status-grid { grid-template-columns:1fr; }
+    .status-item { padding:16px 20px; }
+    .actions { align-items:stretch; flex-direction:column; padding:18px 20px; }
+    a.back { width:100%; }
+  }
 </style>
 </head>
 <body>
-  <main class="card">
-    <span class="badge${state.tone === "warn" ? " warn" : ""}"><span class="dot"></span>${escapeHtml(state.label)}</span>
-    <h1>Ralli Wolf API</h1>
-    <p>${escapeHtml(state.detail)}</p>
-    <dl>
-      <div class="row"><dt>Service</dt><dd>Online</dd></div>
-      <div class="row"><dt>Database</dt><dd>${databaseReachable ? "Connected" : "Unreachable"}</dd></div>
-      <div class="row"><dt>Checked</dt><dd>${escapeHtml(new Date().toUTCString())}</dd></div>
-    </dl>
-    ${
-      appOrigin
-        ? `<a class="back" href="${escapeHtml(appOrigin)}">Back to Ralli Wolf</a>
-    <p class="note">The server is awake. You can close this tab and sign in.</p>`
-        : `<p class="note" style="margin-top:24px">The server is awake. You can close this tab and return to the app.</p>`
-    }
-  </main>
+  <div class="page">
+    <a class="brand" ${appOrigin ? `href="${escapeHtml(appOrigin)}"` : 'href="/"'} aria-label="Ralli Wolf Operations">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M6 5h12v4H9.5v2H17v4H9.5v4H6V5Z" fill="currentColor"/></svg>
+      </span>
+      <span class="brand-copy"><span class="brand-name">RALLI WOLF</span><span class="brand-product">Operations</span></span>
+    </a>
+
+    <main class="card">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Infrastructure status</p>
+          <h1>${databaseReachable ? "API server is ready" : "API server needs attention"}</h1>
+          <p class="detail">${escapeHtml(state.detail)}</p>
+        </div>
+        <span class="badge${state.tone === "warn" ? " warn" : ""}"><span class="dot"></span>${escapeHtml(state.label)}</span>
+      </section>
+
+      <dl class="status-grid">
+        <div class="status-item"><dt>API service</dt><dd>Online</dd></div>
+        <div class="status-item"><dt>Database</dt><dd>${databaseReachable ? "Connected" : "Unreachable"}</dd></div>
+        <div class="status-item"><dt>Last checked</dt><dd>${escapeHtml(new Date().toUTCString())}</dd></div>
+      </dl>
+
+      <section class="actions">
+        <p class="note">The server is awake. You can safely return to the application.</p>
+        ${appOrigin ? `<a class="back" href="${escapeHtml(appOrigin)}">Return to Ralli Wolf</a>` : ""}
+      </section>
+    </main>
+    <p class="footer">Ralli Wolf Operations · Secure API status</p>
+  </div>
 </body>
 </html>`;
 }

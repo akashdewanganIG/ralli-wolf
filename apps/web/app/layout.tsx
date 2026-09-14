@@ -10,6 +10,7 @@ import { SalesRouteGuard } from "@/components/guards/sales-route-guard";
 import { PasswordChangeGate } from "@/components/guards/password-change-gate";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider, themeInitScript } from "@/components/theme-provider";
+import { ApiReadinessMonitor } from "@/components/api-readiness-monitor";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -70,6 +71,7 @@ export default function RootLayout({
             </AuthProvider>
           </QueryProvider>
 
+          <ApiReadinessMonitor />
           <Toaster
             position="bottom-right"
             closeButton={true}

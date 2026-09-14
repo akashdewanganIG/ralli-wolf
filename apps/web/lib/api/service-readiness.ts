@@ -32,7 +32,7 @@ function directApiOrigin(): string | null {
 
 export function manualApiWakeUrl(): string {
   const origin = directApiOrigin();
-  return origin ? `${origin}/health` : "/api/health";
+  return origin ? `${origin}/` : "/api/health";
 }
 
 function triggerDirectWakeup(): void {
@@ -105,10 +105,13 @@ async function pollUntilReady(): Promise<void> {
   throw new ApiReadinessError();
 }
 
-export function ensureApiReady(): Promise<void> {
-  if (Date.now() < readyUntil) return Promise.resolve();
+export function ensureApiReady({
+  force = false,
+}: { force?: boolean } = {}): Promise<void> {
+  if (!force && Date.now() < readyUntil) return Promise.resolve();
   if (readinessPromise) return readinessPromise;
 
+  readyUntil = 0;
   readinessPromise = pollUntilReady().finally(() => {
     readinessPromise = null;
   });
