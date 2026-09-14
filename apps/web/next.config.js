@@ -28,20 +28,6 @@ const nextConfig = {
 
   rewrites,
 
-  /*
-   * The browser normally only ever sees /api/* on this app's own origin, so it
-   * has no way to reach the API host directly. Exposing the origin lets the UI
-   * offer a "start the server" link when the hosted API is asleep — waking it
-   * needs a request that goes to the API itself, not through the proxy.
-   *
-   * Derived from API_PROXY_TARGET so there is no second variable to configure,
-   * and inlined at build time like any other public value.
-   */
-  env: {
-    NEXT_PUBLIC_API_ORIGIN:
-      process.env.API_PROXY_TARGET?.trim().replace(/\/+$/, "") || "",
-  },
-
   transpilePackages: ["@repo/ui"],
 
   experimental: {

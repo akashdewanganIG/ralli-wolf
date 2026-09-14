@@ -11,7 +11,10 @@ import { cn } from "@repo/ui/lib/utils";
 import ralliWolfLogo from "../app/assets/images/logos/ralli-wolf-logo.png";
 import { useAuth } from "../contexts/auth-context";
 import type { ApiError } from "../lib/api/types";
-import { healthService } from "../lib/api/services";
+import {
+  ApiReadinessError,
+  ensureApiReady,
+} from "../lib/api/service-readiness";
 import { validateEmailBasic } from "../lib/validation";
 import { toast } from "@/lib/toast";
 import LoginShowcase from "./login-showcase";
@@ -177,6 +180,8 @@ export function LoginForm({
   const [factor, setFactor] = useState<Factor>("email");
   const [availableFactors, setAvailableFactors] = useState<Factor[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isWaitingForApi, setIsWaitingForApi] = useState(true);
+  const [apiStartupFailed, setApiStartupFailed] = useState(false);
   const [resendIn, setResendIn] = useState(0);
   const otpInputRef = useRef<HTMLInputElement>(null);
   const {
@@ -215,17 +220,26 @@ export function LoginForm({
   }, [step]);
 
   /**
-   * Fire-and-forget: touching the API is what boots a hibernating host, so this
-   * gets the cold start under way while the user is still reading the form. It
-   * deliberately renders nothing — a request that arrives mid-boot is retried
-   * transparently by the API client, so there is no state here worth showing.
+   * Start the API as soon as the form mounts. The health request travels through
+   * the same-origin proxy, reaches Render as inbound traffic, and waits until a
+   * real JSON health response confirms that both the API and database are ready.
    */
   useEffect(() => {
-    const controller = new AbortController();
-    void healthService
-      .checkHealth({ signal: controller.signal })
-      .catch(() => undefined);
-    return () => controller.abort();
+    let active = true;
+    void ensureApiReady()
+      .then(() => {
+        if (!active) return;
+        setApiStartupFailed(false);
+        setIsWaitingForApi(false);
+      })
+      .catch(() => {
+        if (!active) return;
+        setApiStartupFailed(true);
+        setIsWaitingForApi(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const returnToCredentials = () => {
@@ -240,8 +254,12 @@ export function LoginForm({
   const submitCredentials = async () => {
     const normalizedEmail = email.trim().toLowerCase();
     setIsSubmitting(true);
+    setIsWaitingForApi(true);
+    setApiStartupFailed(false);
     clearError();
     try {
+      await ensureApiReady();
+      setIsWaitingForApi(false);
       const challenge = await login({ email: normalizedEmail, password });
       if (!challenge.mfaRequired) {
         toast.success("Welcome back", {
@@ -271,6 +289,15 @@ export function LoginForm({
         });
       }
     } catch (error) {
+      setIsWaitingForApi(false);
+      if (error instanceof ApiReadinessError) {
+        setApiStartupFailed(true);
+        toast.error("The server is taking longer than expected", {
+          description:
+            "Wait a moment and press Retry server. You do not need to open the API separately.",
+        });
+        return;
+      }
       const { title, description } = describeLoginError(error);
       toast.error(title, { description });
     } finally {
@@ -333,12 +360,26 @@ export function LoginForm({
 
   if (isLoading && !isSubmitting) {
     return (
-      <div className="flex min-h-svh items-center justify-center bg-background"></div>
+      <div className="flex min-h-svh items-center justify-center bg-background px-6 text-center">
+        <div role="status" aria-live="polite">
+          <p className="text-sm font-medium text-foreground">
+            {isWaitingForApi
+              ? "Starting the secure server…"
+              : "Checking your session…"}
+          </p>
+          {isWaitingForApi ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Free hosting can take about a minute to wake up.
+            </p>
+          ) : null}
+        </div>
+      </div>
     );
   }
 
   const submitDisabled =
     isSubmitting ||
+    isWaitingForApi ||
     (step === "credentials" ? !!emailError || !email : otp.length !== 6);
 
   const canFallBackToEmail =
@@ -396,7 +437,21 @@ export function LoginForm({
               >
                 {step === "credentials" ? (
                   <>
-                    <LoginProviders disabled={isSubmitting} />
+                    <LoginProviders
+                      disabled={isSubmitting || isWaitingForApi}
+                    />
+
+                    {isWaitingForApi || apiStartupFailed ? (
+                      <p
+                        role="status"
+                        aria-live="polite"
+                        className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground"
+                      >
+                        {isWaitingForApi
+                          ? "Starting the secure server automatically…"
+                          : "The server is taking longer than expected. Press Retry server to continue."}
+                      </p>
+                    ) : null}
 
                     <div className="space-y-1.5">
                       <label
@@ -536,12 +591,16 @@ export function LoginForm({
                   className="mt-1 h-10 w-full rounded-md text-sm font-semibold"
                 >
                   {isSubmitting
-                    ? step === "credentials"
-                      ? "Checking…"
-                      : "Signing in…"
-                    : step === "credentials"
-                      ? "Continue"
-                      : "Verify and sign in"}
+                    ? isWaitingForApi
+                      ? "Starting server…"
+                      : step === "credentials"
+                        ? "Checking…"
+                        : "Signing in…"
+                    : apiStartupFailed && step === "credentials"
+                      ? "Retry server"
+                      : step === "credentials"
+                        ? "Continue"
+                        : "Verify and sign in"}
                 </Button>
 
                 {step === "code" ? (
