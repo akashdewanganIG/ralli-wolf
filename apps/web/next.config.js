@@ -28,6 +28,18 @@ const nextConfig = {
 
   rewrites,
 
+  /*
+   * Render can rate-limit requests from one sleeping free service to another
+   * before they reach the API. The browser uses this public origin only for an
+   * unauthenticated health request that starts the API; application traffic
+   * continues through the same-origin /api/* proxy so session cookies remain
+   * same-site.
+   */
+  env: {
+    NEXT_PUBLIC_API_ORIGIN:
+      process.env.API_PROXY_TARGET?.trim().replace(/\/+$/, "") || "",
+  },
+
   transpilePackages: ["@repo/ui"],
 
   experimental: {

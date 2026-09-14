@@ -23,6 +23,35 @@ function delay(ms: number): Promise<void> {
   return new Promise(resolve => window.setTimeout(resolve, ms));
 }
 
+function directApiOrigin(): string | null {
+  const exposedOrigin = process.env.NEXT_PUBLIC_API_ORIGIN?.trim();
+  if (exposedOrigin) return exposedOrigin.replace(/\/+$/, "");
+  if (/^https?:\/\//i.test(config.apiUrl)) return config.apiUrl;
+  return null;
+}
+
+export function manualApiWakeUrl(): string {
+  const origin = directApiOrigin();
+  return origin ? `${origin}/health` : "/api/health";
+}
+
+function triggerDirectWakeup(): void {
+  const origin = directApiOrigin();
+  if (!origin) return;
+
+  const wakeUrl = new URL("/health", origin);
+  wakeUrl.searchParams.set("wake", Date.now().toString());
+
+  // This deliberately bypasses the same-origin proxy. Render can answer proxy-
+  // originated requests with `hibernate-rate-limited`, while a request from
+  // the user's browser starts the free API service. `no-cors` keeps the wake-up
+  // effective even while Render's temporary response lacks CORS headers.
+  void fetch(wakeUrl, {
+    cache: "no-store",
+    mode: "no-cors",
+  }).catch(() => undefined);
+}
+
 async function probeApi(timeoutMs: number): Promise<boolean> {
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), timeoutMs);
@@ -54,6 +83,7 @@ async function probeApi(timeoutMs: number): Promise<boolean> {
 
 async function pollUntilReady(): Promise<void> {
   const deadline = Date.now() + API_WAKE_TIMEOUT_MS;
+  triggerDirectWakeup();
 
   while (Date.now() < deadline) {
     const remainingBeforeRequest = deadline - Date.now();

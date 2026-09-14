@@ -50,6 +50,9 @@ export const toast = {
   loading(title: string, options: ToastOptions = {}) {
     return sonner.loading(title, options);
   },
+  custom(...args: Parameters<typeof sonner.custom>) {
+    return sonner.custom(...args);
+  },
   dismiss(id?: string | number) {
     return sonner.dismiss(id);
   },
